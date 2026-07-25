@@ -1,7 +1,9 @@
-import { render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { WORKFLOW_STARTERS, WorkflowStarters } from "./WorkflowStarters";
+
+afterEach(cleanup);
 
 describe("WorkflowStarters", () => {
   it("renders one card per starter workflow", () => {

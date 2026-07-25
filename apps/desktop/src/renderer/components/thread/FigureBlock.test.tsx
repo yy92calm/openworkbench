@@ -1,8 +1,10 @@
-import { render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { FigureBlock as FigureBlockT } from "@workbench/shared";
 import { FigureBlock } from "./FigureBlock";
+
+afterEach(cleanup);
 
 const block: FigureBlockT = {
   kind: "figure",
@@ -30,7 +32,7 @@ describe("FigureBlock", () => {
     render(<FigureBlock block={block} onComment={onComment} />);
 
     await userEvent.click(screen.getByAltText("atlas_fig1a.png"));
-    const input = await screen.findByLabelText("Annotation note");
+    const input = await screen.findByLabelText("标注备注");
     await userEvent.type(input, "add a scale bar");
     await userEvent.click(screen.getByRole("button", { name: "Send" }));
 

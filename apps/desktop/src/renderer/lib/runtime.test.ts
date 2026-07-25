@@ -182,8 +182,9 @@ describe("historyToThread", () => {
       },
     ];
     const t = historyToThread(msgs);
-    expect(t.blocks.map((b) => b.kind)).toEqual(["user", "agent", "tool-call"]);
-    expect(t.blocks[2]).toMatchObject({ kind: "tool-call", status: "success" });
+    // Each user turn is now preceded by a turn-divider block (intended).
+    expect(t.blocks.map((b) => b.kind)).toEqual(["turn-divider", "user", "agent", "tool-call"]);
+    expect(t.blocks[3]).toMatchObject({ kind: "tool-call", status: "success" });
   });
 
   it("renders a user-run '!' shell turn like the live path: '! cmd' + inline output", () => {
@@ -207,7 +208,8 @@ describe("historyToThread", () => {
     const t = historyToThread(msgs);
     expect(t.blocks).toEqual([
       { kind: "user", text: "! pwd" },
-      { kind: "tool-call", title: "pwd", status: "success", outputSummary: "/ws/here" },
+      // A shell tool call now also carries shellCommand (intended).
+      { kind: "tool-call", title: "pwd", status: "success", outputSummary: "/ws/here", shellCommand: "pwd" },
     ]);
   });
 
@@ -238,8 +240,9 @@ describe("historyToThread", () => {
       },
     ];
     const t = historyToThread(msgs);
-    expect(t.blocks[1]).toMatchObject({ kind: "tool-call", status: "pending" });
+    // turn-divider(0), user "explore"(1), then the two frozen tool steps.
     expect(t.blocks[2]).toMatchObject({ kind: "tool-call", status: "pending" });
+    expect(t.blocks[3]).toMatchObject({ kind: "tool-call", status: "pending" });
     const last = t.blocks[t.blocks.length - 1];
     expect(last).toMatchObject({ kind: "status-line", tone: "error" });
   });
@@ -256,8 +259,9 @@ describe("historyToThread", () => {
     const t = historyToThread(msgs, [
       { name: "growth-marketing", source: "skill", template },
     ]);
-    expect(t.blocks[0]).toEqual({ kind: "user", text: "/growth-marketing" });
-    expect(t.blocks[2]).toEqual({ kind: "user", text: "/growth-marketing 帮我设计增长方式" });
+    // turn-divider precedes each user message (intended).
+    expect(t.blocks[1]).toEqual({ kind: "user", text: "/growth-marketing" });
+    expect(t.blocks[4]).toEqual({ kind: "user", text: "/growth-marketing 帮我设计增长方式" });
   });
 
   it("leaves a long pasted user text alone when it matches no template", () => {
@@ -265,7 +269,8 @@ describe("historyToThread", () => {
       { role: "user", parts: [{ type: "text", text: "a genuinely long pasted question…" }] },
     ];
     const t = historyToThread(msgs, [{ name: "init", template: "something else" }]);
-    expect(t.blocks[0]).toEqual({ kind: "user", text: "a genuinely long pasted question…" });
+    // turn-divider precedes the user message (intended).
+    expect(t.blocks[1]).toEqual({ kind: "user", text: "a genuinely long pasted question…" });
   });
 
   it("adds no interrupted line when every step finished", () => {

@@ -7,7 +7,7 @@ describe("Composer", () => {
   it("appends a prepared draft below text the user was already typing", () => {
     useUiStore.setState({ composerDraft: null });
     render(<Composer onSend={vi.fn()} />);
-    const input = screen.getByLabelText<HTMLTextAreaElement>("Ask anything");
+    const input = screen.getByLabelText<HTMLTextAreaElement>("有什么想问的？");
     fireEvent.change(input, { target: { value: "half-written thought" } });
 
     act(() => useUiStore.getState().setComposerDraft("Reproduce `fig/plot.py`…"));
@@ -23,7 +23,7 @@ describe("Composer", () => {
   it("sends on Enter but never during IME composition", () => {
     const onSend = vi.fn();
     render(<Composer onSend={onSend} />);
-    const input = screen.getByLabelText("Ask anything");
+    const input = screen.getByLabelText("有什么想问的？");
     fireEvent.change(input, { target: { value: "ni hao" } });
 
     // Enter while composing (picking a pinyin candidate) must not send.
@@ -42,7 +42,7 @@ describe("Composer", () => {
   it("does not send when empty or disabled", () => {
     const onSend = vi.fn();
     const { rerender } = render(<Composer onSend={onSend} />);
-    const input = screen.getByLabelText("Ask anything");
+    const input = screen.getByLabelText("有什么想问的？");
     fireEvent.keyDown(input, { key: "Enter" });
     expect(onSend).not.toHaveBeenCalled();
 
@@ -57,13 +57,13 @@ describe("Composer", () => {
     const { rerender } = render(<Composer onSend={vi.fn()} disabled working onStop={onStop} />);
     // The send arrow is gone; in its place a live Stop button (the composer
     // itself stays disabled while the agent works).
-    expect(screen.queryByLabelText("Send")).toBeNull();
-    fireEvent.click(screen.getByLabelText("Stop"));
+    expect(screen.queryByLabelText("发送")).toBeNull();
+    fireEvent.click(screen.getByLabelText("停止"));
     expect(onStop).toHaveBeenCalledTimes(1);
 
     rerender(<Composer onSend={vi.fn()} onStop={onStop} />);
-    expect(screen.queryByLabelText("Stop")).toBeNull();
-    expect(screen.getByLabelText("Send")).toBeInTheDocument();
+    expect(screen.queryByLabelText("停止")).toBeNull();
+    expect(screen.getByLabelText("发送")).toBeInTheDocument();
   });
 });
 
@@ -77,7 +77,7 @@ describe("Composer '!' shell mode", () => {
     const onSend = vi.fn();
     const onRunShell = vi.fn();
     render(<Composer onSend={onSend} onRunShell={onRunShell} />);
-    const input = screen.getByLabelText<HTMLTextAreaElement>("Ask anything");
+    const input = screen.getByLabelText<HTMLTextAreaElement>("有什么想问的？");
     fireEvent.change(input, { target: { value: "!pwd && ls" } });
     expect(screen.getByText("shell")).toBeInTheDocument(); // mode is visible
     fireEvent.keyDown(input, { key: "Enter" });
@@ -89,7 +89,7 @@ describe("Composer '!' shell mode", () => {
   it("a bare '!' runs nothing", () => {
     const onRunShell = vi.fn();
     render(<Composer onSend={vi.fn()} onRunShell={onRunShell} />);
-    const input = screen.getByLabelText("Ask anything");
+    const input = screen.getByLabelText("有什么想问的？");
     fireEvent.change(input, { target: { value: "!  " } });
     fireEvent.keyDown(input, { key: "Enter" });
     expect(onRunShell).not.toHaveBeenCalled();
@@ -98,7 +98,7 @@ describe("Composer '!' shell mode", () => {
   it("stays a plain prompt when no shell handler is provided (mock sessions)", () => {
     const onSend = vi.fn();
     render(<Composer onSend={onSend} />);
-    const input = screen.getByLabelText("Ask anything");
+    const input = screen.getByLabelText("有什么想问的？");
     fireEvent.change(input, { target: { value: "!pwd" } });
     expect(screen.queryByText("shell")).toBeNull();
     fireEvent.keyDown(input, { key: "Enter" });
@@ -109,7 +109,7 @@ describe("Composer '!' shell mode", () => {
 describe("Composer '/' command palette", () => {
   it("opens on '/', filters while typing, and Enter commits the pick into a chip", () => {
     render(<Composer onSend={vi.fn()} onRunCommand={vi.fn()} commands={COMMANDS} />);
-    const input = screen.getByLabelText<HTMLTextAreaElement>("Ask anything");
+    const input = screen.getByLabelText<HTMLTextAreaElement>("有什么想问的？");
     fireEvent.change(input, { target: { value: "/ana" } });
     expect(screen.getByRole("listbox")).toBeInTheDocument();
     expect(screen.getAllByRole("option")).toHaveLength(1);
@@ -124,7 +124,7 @@ describe("Composer '/' command palette", () => {
     const onSend = vi.fn();
     const onRunCommand = vi.fn();
     render(<Composer onSend={onSend} onRunCommand={onRunCommand} commands={COMMANDS} />);
-    const input = screen.getByLabelText("Ask anything");
+    const input = screen.getByLabelText("有什么想问的？");
     fireEvent.change(input, { target: { value: "/init focus on tests" } });
     fireEvent.keyDown(input, { key: "Enter" });
     expect(onRunCommand).toHaveBeenCalledWith("init", "focus on tests");
@@ -133,7 +133,7 @@ describe("Composer '/' command palette", () => {
 
   it("arrow keys move the selection; Escape closes the palette", () => {
     render(<Composer onSend={vi.fn()} onRunCommand={vi.fn()} commands={COMMANDS} />);
-    const input = screen.getByLabelText("Ask anything");
+    const input = screen.getByLabelText("有什么想问的？");
     fireEvent.change(input, { target: { value: "/" } });
     const options = screen.getAllByRole("option");
     expect(options).toHaveLength(2);
@@ -148,7 +148,7 @@ describe("Composer '/' command palette", () => {
     const onSend = vi.fn();
     const onRunCommand = vi.fn();
     render(<Composer onSend={onSend} onRunCommand={onRunCommand} commands={COMMANDS} />);
-    const input = screen.getByLabelText("Ask anything");
+    const input = screen.getByLabelText("有什么想问的？");
     fireEvent.change(input, { target: { value: "/etc/hosts looks wrong" } });
     fireEvent.keyDown(input, { key: "Enter" });
     expect(onSend).toHaveBeenCalledWith("/etc/hosts looks wrong");
@@ -160,7 +160,7 @@ describe("Composer command chip", () => {
   it("typing a known '/name' plus space commits it into a chip; Enter runs it with args", () => {
     const onRunCommand = vi.fn();
     render(<Composer onSend={vi.fn()} onRunCommand={onRunCommand} commands={COMMANDS} />);
-    const input = screen.getByLabelText<HTMLTextAreaElement>("Ask anything");
+    const input = screen.getByLabelText<HTMLTextAreaElement>("有什么想问的？");
     fireEvent.change(input, { target: { value: "/init " } });
     expect(screen.getByText("/init")).toBeInTheDocument(); // the chip
     expect(input.value).toBe("");
@@ -173,7 +173,7 @@ describe("Composer command chip", () => {
   it("a chipped command runs with no arguments", () => {
     const onRunCommand = vi.fn();
     render(<Composer onSend={vi.fn()} onRunCommand={onRunCommand} commands={COMMANDS} />);
-    const input = screen.getByLabelText("Ask anything");
+    const input = screen.getByLabelText("有什么想问的？");
     fireEvent.change(input, { target: { value: "/init " } });
     fireEvent.keyDown(input, { key: "Enter" });
     expect(onRunCommand).toHaveBeenCalledWith("init", "");
@@ -181,7 +181,7 @@ describe("Composer command chip", () => {
 
   it("an unknown '/name' plus space never chips", () => {
     render(<Composer onSend={vi.fn()} onRunCommand={vi.fn()} commands={COMMANDS} />);
-    const input = screen.getByLabelText<HTMLTextAreaElement>("Ask anything");
+    const input = screen.getByLabelText<HTMLTextAreaElement>("有什么想问的？");
     fireEvent.change(input, { target: { value: "/etc/hosts " } });
     expect(input.value).toBe("/etc/hosts ");
   });
@@ -189,10 +189,10 @@ describe("Composer command chip", () => {
   it("pasting '/name args' chips the command and keeps the args (multi-line too)", () => {
     const onRunCommand = vi.fn();
     render(<Composer onSend={vi.fn()} onRunCommand={onRunCommand} commands={COMMANDS} />);
-    const input = screen.getByLabelText<HTMLTextAreaElement>("Ask anything");
+    const input = screen.getByLabelText<HTMLTextAreaElement>("有什么想问的？");
     // A paste arrives as one change event with the full text already in place.
     fireEvent.change(input, { target: { value: "/init focus on tests\nand the docs" } });
-    expect(screen.getByLabelText("Remove command")).toBeInTheDocument(); // the chip
+    expect(screen.getByLabelText("移除命令")).toBeInTheDocument(); // the chip
     expect(input.value).toBe("focus on tests\nand the docs");
     fireEvent.keyDown(input, { key: "Enter" });
     expect(onRunCommand).toHaveBeenCalledWith("init", "focus on tests\nand the docs");
@@ -200,19 +200,19 @@ describe("Composer command chip", () => {
 
   it("pasting an unknown '/path args' stays a plain prompt", () => {
     render(<Composer onSend={vi.fn()} onRunCommand={vi.fn()} commands={COMMANDS} />);
-    const input = screen.getByLabelText<HTMLTextAreaElement>("Ask anything");
+    const input = screen.getByLabelText<HTMLTextAreaElement>("有什么想问的？");
     fireEvent.change(input, { target: { value: "/etc/hosts looks wrong" } });
-    expect(screen.queryByLabelText("Remove command")).toBeNull();
+    expect(screen.queryByLabelText("移除命令")).toBeNull();
     expect(input.value).toBe("/etc/hosts looks wrong");
   });
 
   it("Backspace on an empty input un-chips back to editable text", () => {
     render(<Composer onSend={vi.fn()} onRunCommand={vi.fn()} commands={COMMANDS} />);
-    const input = screen.getByLabelText<HTMLTextAreaElement>("Ask anything");
+    const input = screen.getByLabelText<HTMLTextAreaElement>("有什么想问的？");
     fireEvent.change(input, { target: { value: "/init " } });
-    expect(screen.getByLabelText("Remove command")).toBeInTheDocument(); // the chip
+    expect(screen.getByLabelText("移除命令")).toBeInTheDocument(); // the chip
     fireEvent.keyDown(input, { key: "Backspace" });
-    expect(screen.queryByLabelText("Remove command")).toBeNull();
+    expect(screen.queryByLabelText("移除命令")).toBeNull();
     expect(input.value).toBe("/init"); // name editable again, palette reopens
   });
 });
@@ -226,7 +226,7 @@ describe("Composer input history (↑/↓)", () => {
   it("ArrowUp recalls sent inputs newest-first; ArrowDown returns to the draft", () => {
     window.localStorage.clear();
     render(<Composer onSend={vi.fn()} />);
-    const input = screen.getByLabelText<HTMLTextAreaElement>("Ask anything");
+    const input = screen.getByLabelText<HTMLTextAreaElement>("有什么想问的？");
     send(input, "first message");
     send(input, "second message");
 
@@ -251,7 +251,7 @@ describe("Composer input history (↑/↓)", () => {
     render(
       <Composer onSend={vi.fn()} onRunShell={onRunShell} onRunCommand={onRunCommand} commands={COMMANDS} />,
     );
-    const input = screen.getByLabelText<HTMLTextAreaElement>("Ask anything");
+    const input = screen.getByLabelText<HTMLTextAreaElement>("有什么想问的？");
     send(input, "!pwd");
     fireEvent.change(input, { target: { value: "/init " } }); // chips
     fireEvent.change(input, { target: { value: "focus" } });
@@ -267,7 +267,7 @@ describe("Composer input history (↑/↓)", () => {
   it("does not navigate history while the caret is mid-text or the palette is open", () => {
     window.localStorage.clear();
     render(<Composer onSend={vi.fn()} onRunCommand={vi.fn()} commands={COMMANDS} />);
-    const input = screen.getByLabelText<HTMLTextAreaElement>("Ask anything");
+    const input = screen.getByLabelText<HTMLTextAreaElement>("有什么想问的？");
     send(input, "older entry");
 
     fireEvent.change(input, { target: { value: "typing" } });

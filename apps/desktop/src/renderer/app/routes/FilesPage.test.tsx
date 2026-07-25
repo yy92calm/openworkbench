@@ -1,8 +1,10 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DirEntry } from "@/lib/artifactFile";
 import { FilesPage } from "./FilesPage";
+
+afterEach(cleanup);
 
 const listDir = vi.fn();
 vi.mock("@/lib/artifactFile", () => ({

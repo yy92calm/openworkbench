@@ -1,8 +1,10 @@
-import { render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { ArtifactInspector as ArtifactInspectorT } from "@workbench/shared";
 import { ArtifactInspector } from "./ArtifactInspector";
+
+afterEach(cleanup);
 
 const data: ArtifactInspectorT = {
   variant: "artifact",

@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { RefreshCw } from "lucide-react";
 import type { ArtifactBlock } from "@workbench/shared";
 import { fileInspectorFromBlock } from "@/lib/artifacts";
@@ -39,6 +39,12 @@ export function WorkbenchDock({
   const { targetRef, handleProps, isDragging } = useResizable(480, 320, Infinity, true);
   const [paneKey, setPaneKey] = useState(0);
   const refreshPane = useCallback(() => setPaneKey((k) => k + 1), []);
+  // Terminal stays mounted once first opened so its PTY + scrollback survive
+  // tab switches (mirrors the BrowserPanel keep-alive pattern below).
+  const [terminalEverOpened, setTerminalEverOpened] = useState(false);
+  useEffect(() => {
+    if (tab === "terminal") setTerminalEverOpened(true);
+  }, [tab]);
   const showArtifact = !!artifact;
 
   return (
@@ -72,16 +78,28 @@ export function WorkbenchDock({
         {!showArtifact && (
           <>
             {/* Browser: always mounted for MCP command responsiveness */}
-            <div className={tab === "browser" ? "h-full" : "hidden h-full"}>
+            <div
+              className={tab === "browser" ? "h-full" : "hidden h-full"}
+              aria-hidden={tab !== "browser" ? "true" : undefined}
+              tabIndex={tab !== "browser" ? -1 : undefined}
+            >
               <BrowserPanel
                 url={browserUrl}
                 onUrlChange={onBrowserUrlChange}
                 onClose={onCloseBrowser}
               />
             </div>
-            {/* Other panels: rendered only when active */}
+            {/* Other panels: rendered only when active (terminal keeps alive) */}
             {tab === "context" && <ContextPanel onClose={() => {}} />}
-            {tab === "terminal" && <TerminalPanel id="main" onClose={onCloseTerminal} />}
+            {terminalEverOpened && (
+              <div
+                className={tab === "terminal" ? "h-full" : "hidden h-full"}
+                aria-hidden={tab !== "terminal" ? "true" : undefined}
+                tabIndex={tab !== "terminal" ? -1 : undefined}
+              >
+                <TerminalPanel onClose={onCloseTerminal} />
+              </div>
+            )}
             {tab === "files" && <FileBrowserPanel onClose={onCloseFileBrowser} />}
           </>
         )}

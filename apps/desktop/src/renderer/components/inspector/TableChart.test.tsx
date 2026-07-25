@@ -1,8 +1,10 @@
-import { render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { TableChart } from "./TableChart";
 import type { ParsedTable } from "@/lib/csv";
+
+afterEach(cleanup);
 
 const T: ParsedTable = {
   columns: ["month", "sales", "returns"],

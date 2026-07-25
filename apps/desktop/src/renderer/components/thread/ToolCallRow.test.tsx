@@ -1,15 +1,20 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { cleanup, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { afterEach, describe, expect, it } from "vitest";
 import type { ToolCallStatus } from "@workbench/shared";
 import { ToolCallRow } from "./ToolCallRow";
 
+afterEach(cleanup);
+
+// Status badge labels moved to Chinese (see STATUS table in ToolCallRow.tsx);
+// the badge's accessible name now lives on the wrapping <span aria-label>.
 const STATUSES: [ToolCallStatus, string][] = [
-  ["pending", "Pending"],
-  ["running", "Running"],
-  ["waiting-approval", "Waiting"],
-  ["success", "Success"],
-  ["warning", "Warning"],
-  ["failed", "Failed"],
+  ["pending", "等待中"],
+  ["running", "运行中"],
+  ["waiting-approval", "待审批"],
+  ["success", "成功"],
+  ["warning", "警告"],
+  ["failed", "失败"],
 ];
 
 describe("ToolCallRow", () => {
@@ -18,7 +23,7 @@ describe("ToolCallRow", () => {
       <ToolCallRow block={{ kind: "tool-call", title: "Run tool", status }} />,
     );
     expect(container.querySelector(`[data-status="${status}"]`)).toBeInTheDocument();
-    expect(screen.getByRole("img", { name: label })).toBeInTheDocument();
+    expect(screen.getByLabelText(label)).toBeInTheDocument();
   });
 
   it("shows the right-aligned meta", () => {
@@ -50,7 +55,7 @@ describe("ToolCallRow", () => {
     expect(screen.queryByText("python3 analyze slide-03.jpg")).not.toBeInTheDocument();
   });
 
-  it("shows the inline output of a user-run shell command", () => {
+  it("shows the output of a user-run shell command when expanded", async () => {
     render(
       <ToolCallRow
         block={{
@@ -61,6 +66,9 @@ describe("ToolCallRow", () => {
         }}
       />,
     );
+    // The collapsed row only shows input/error previews; output lives in the
+    // expandable body (Output block), so expand the row to reveal it.
+    await userEvent.click(screen.getByRole("button", { name: /pwd/ }));
     expect(screen.getByText("/ws/2026-07-04-1030")).toBeInTheDocument();
   });
 });

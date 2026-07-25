@@ -1,8 +1,53 @@
 import "@testing-library/jest-dom/vitest";
+import { cleanup } from "@testing-library/react";
+import { afterEach } from "vitest";
 
-// DOM stubs — only in a browser-like (jsdom) environment. The node-env tests
+// Reset the rendered DOM between tests so queries don't leak across cases
+// (@testing-library/react's auto-cleanup only runs under globals: true, which
+// this config does not enable). Skipped in node-env tests (no DOM).
+afterEach(() => {
+  if (typeof window !== "undefined") cleanup();
+});
+
+// DOM stubs - only in a browser-like (jsdom) environment. The node-env tests
 // (e.g. the OpenCode integration test) skip these.
 if (typeof window !== "undefined") {
+  // Some vitest/jsdom combinations expose `window.localStorage` as an empty
+  // object whose Storage methods (getItem/setItem/...) are undefined, breaking
+  // any module that reads localStorage at load time (e.g. store.ts' theme
+  // init). Polyfill a working in-memory Storage when the native one is broken.
+  const makeStorage = (): Storage => {
+    const store = new Map<string, string>();
+    return {
+      get length() {
+        return store.size;
+      },
+      key: (i: number) => Array.from(store.keys())[i] ?? null,
+      getItem: (k: string) => (store.has(k) ? (store.get(k) as string) : null),
+      setItem: (k: string, v: string) => {
+        store.set(k, String(v));
+      },
+      removeItem: (k: string) => {
+        store.delete(k);
+      },
+      clear: () => {
+        store.clear();
+      },
+    };
+  };
+  const defineStorage = (prop: "localStorage" | "sessionStorage") => {
+    const native = (window as unknown as Record<string, unknown>)[prop] as Storage | undefined;
+    if (typeof native?.getItem !== "function") {
+      Object.defineProperty(window, prop, {
+        value: makeStorage(),
+        configurable: true,
+        writable: true,
+      });
+    }
+  };
+  defineStorage("localStorage");
+  defineStorage("sessionStorage");
+
   if (!("ResizeObserver" in globalThis)) {
     (globalThis as unknown as { ResizeObserver: unknown }).ResizeObserver = class {
       observe() {}

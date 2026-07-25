@@ -11,14 +11,14 @@ describe("CommandPalette", () => {
     const user = userEvent.setup();
     renderAt("/skills");
 
-    expect(screen.queryByPlaceholderText("Type a command…")).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText("输入命令…")).not.toBeInTheDocument();
 
     await user.keyboard("{Meta>}k{/Meta}");
-    const input = await screen.findByPlaceholderText("Type a command…");
+    const input = await screen.findByPlaceholderText("输入命令…");
     expect(input).toBeInTheDocument();
 
-    await user.type(input, "audit");
-    expect(screen.getByText("Audit a report (traceability review)")).toBeInTheDocument();
-    expect(screen.queryByText("Open notebooks")).not.toBeInTheDocument();
+    await user.type(input, "审核");
+    expect(screen.getByText("报告审核（可追溯审查）")).toBeInTheDocument();
+    expect(screen.queryByText("打开笔记本")).not.toBeInTheDocument();
   });
 });

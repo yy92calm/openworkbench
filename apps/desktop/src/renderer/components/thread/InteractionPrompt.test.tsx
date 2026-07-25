@@ -1,8 +1,10 @@
-import { render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { PermissionAskedEvent, QuestionAskedEvent } from "@workbench/sdk";
 import { InteractionPrompt } from "./InteractionPrompt";
+
+afterEach(cleanup);
 
 const singleQ: QuestionAskedEvent = {
   type: "question.asked",
@@ -43,14 +45,14 @@ describe("InteractionPrompt — question", () => {
     await userEvent.click(screen.getByText("atlas.csv"));
     await userEvent.click(screen.getByText("export.csv"));
     expect(onAnswer).not.toHaveBeenCalled();
-    await userEvent.click(screen.getByRole("button", { name: "Submit" }));
+    await userEvent.click(screen.getByRole("button", { name: "提交" }));
     expect(onAnswer).toHaveBeenCalledWith("que_2", [["atlas.csv", "export.csv"]]);
   });
 
   it("skips a question via reject", async () => {
     const onReject = vi.fn();
     render(<InteractionPrompt question={singleQ} onAnswer={noop} onReject={onReject} onPermission={noop} />);
-    await userEvent.click(screen.getByText("Skip"));
+    await userEvent.click(screen.getByText("跳过"));
     expect(onReject).toHaveBeenCalledWith("que_1");
   });
 });
@@ -69,11 +71,11 @@ describe("InteractionPrompt — permission", () => {
     render(<InteractionPrompt permission={perm} onAnswer={noop} onReject={noop} onPermission={onPermission} />);
     expect(screen.getByText("rm -rf build/")).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole("button", { name: "Allow once" }));
+    await userEvent.click(screen.getByRole("button", { name: "允许一次" }));
     expect(onPermission).toHaveBeenCalledWith("per_1", "once");
-    await userEvent.click(screen.getByRole("button", { name: "Always allow" }));
+    await userEvent.click(screen.getByRole("button", { name: "始终允许" }));
     expect(onPermission).toHaveBeenCalledWith("per_1", "always");
-    await userEvent.click(screen.getByRole("button", { name: "Reject" }));
+    await userEvent.click(screen.getByRole("button", { name: "拒绝" }));
     expect(onPermission).toHaveBeenCalledWith("per_1", "reject");
   });
 });

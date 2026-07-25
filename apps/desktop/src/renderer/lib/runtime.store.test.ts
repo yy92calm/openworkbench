@@ -112,6 +112,9 @@ vi.mock("@workbench/sdk", () => {
     async replyPermission(requestId: string, reply: string) {
       mocks.replyPermission(requestId, reply);
     }
+    async getPermissionMode() {
+      return "auto";
+    }
     async abortSession(sid: string) {
       mocks.abortSession(sid);
     }
@@ -145,6 +148,10 @@ beforeEach(async () => {
     permissions: [],
     sessionParents: {},
     panes: {},
+    // connect() returns early (offline) when serverUrl is empty - the bundled
+    // mode waits for bootstrap() to supply the dynamic port. Tests drive
+    // connect() directly, so seed a URL the mock client will accept.
+    serverUrl: "http://127.0.0.1:1",
   });
   await useRuntimeStore.getState().connect();
   expect(useRuntimeStore.getState().status).toBe("ready");
@@ -206,16 +213,20 @@ describe("per-session workspace folders", () => {
   it("echoes the first message instantly into the draft, then grafts it onto the session", async () => {
     const p = useRuntimeStore.getState().sendPrompt("hi");
     // Synchronously (before any await resolves): the message is visible and
-    // the composer is locked — the user is never staring at an unchanged page.
+    // the composer is locked - the user is never staring at an unchanged page.
     expect(useRuntimeStore.getState().sending).toBe(true);
-    expect(useRuntimeStore.getState().threads[DRAFT_KEY]?.blocks).toEqual([
-      { kind: "user", text: "hi" },
-    ]);
+    // A turn-divider now precedes the user echo, and the user block carries a
+    // timestamp (intended). Verify the structure + text; timestamp is non-deterministic.
+    const draftBlocks = useRuntimeStore.getState().threads[DRAFT_KEY]?.blocks ?? [];
+    expect(draftBlocks.map((b) => b.kind)).toEqual(["turn-divider", "user"]);
+    expect(draftBlocks[1]).toMatchObject({ kind: "user", text: "hi" });
+    expect(typeof (draftBlocks[1] as { timestamp?: unknown }).timestamp).toBe("number");
     await p;
     const s = useRuntimeStore.getState();
     expect(s.currentId).toBe("ses_new");
     expect(s.threads[DRAFT_KEY]).toBeUndefined();
-    expect(s.threads["ses_new"].blocks).toEqual([{ kind: "user", text: "hi" }]);
+    expect(s.threads["ses_new"].blocks.map((b) => b.kind)).toEqual(["turn-divider", "user"]);
+    expect(s.threads["ses_new"].blocks[1]).toMatchObject({ kind: "user", text: "hi" });
     expect(s.sending).toBe(false);
     expect(s.runningSessions["ses_new"]).toBe(true); // turn active until idle
   });
@@ -226,7 +237,11 @@ describe("per-session workspace folders", () => {
     expect(second).toBe(null);
     await p;
     expect(useRuntimeStore.getState().threads[DRAFT_KEY] ?? undefined).toBeUndefined();
-    expect(useRuntimeStore.getState().threads["ses_new"].blocks).toHaveLength(1);
+    // The second ("hi again") send was dropped: exactly one user block ("hi")
+    // survives (the turn-divider is structural, not a user message).
+    const users = useRuntimeStore.getState().threads["ses_new"].blocks.filter((b) => b.kind === "user");
+    expect(users).toHaveLength(1);
+    expect((users[0] as { text?: string }).text).toBe("hi");
   });
 
   it("session.idle ends the turn: running cleared, done line folded in", async () => {
@@ -284,8 +299,10 @@ describe("per-session workspace folders", () => {
     expect(id).toBe("ses_new");
     expect(mocks.runShell).toHaveBeenCalledWith("ses_new", "pwd", "build");
     const s = useRuntimeStore.getState();
-    expect(s.threads["ses_new"].blocks[0]).toEqual({ kind: "user", text: "! pwd" });
-    // The sync endpoint resolves after session.idle already fired — the
+    // The "! cmd" echo now follows a turn-divider; toMatchObject ignores the
+    // non-deterministic timestamp on the user block (intended).
+    expect(s.threads["ses_new"].blocks[1]).toMatchObject({ kind: "user", text: "! pwd" });
+    // The sync endpoint resolves after session.idle already fired - the
     // running lock must not stick (it was set before the POST, cleared after).
     expect(s.runningSessions["ses_new"]).toBeUndefined();
     expect(s.shellTurns["ses_new"]).toBeUndefined();
@@ -302,7 +319,7 @@ describe("per-session workspace folders", () => {
     expect(bash).toMatchObject({ title: "pwd", status: "success", outputSummary: "/ws/mock" });
   });
 
-  it("an agent bash step (no shell turn) stays a quiet line without inline output", async () => {
+  it("an agent bash step (no shell turn) shows only a one-line output preview, not the full inline output", async () => {
     await useRuntimeStore.getState().sendPrompt("hi");
     mocks.fireEvent({
       type: "tool.updated",
@@ -312,13 +329,17 @@ describe("per-session workspace folders", () => {
       status: "success",
       title: "install deps",
       input: { command: "pip install numpy" },
-      output: "lots of pip noise",
+      // Multi-line output: an agent bash step (no synthetic marker) now shows
+      // only the FIRST line as a preview (intended) - unlike a user "!" shell
+      // turn, which inlines the full output. extractOutputSummary returns the
+      // first line for bash/shell.
+      output: "lots of pip noise\nCollecting numpy\nDownloading...",
     });
     const bash = useRuntimeStore
       .getState()
       .threads["ses_new"].blocks.find((b) => b.kind === "tool-call");
     expect(bash).toMatchObject({ title: "install deps", status: "success" });
-    expect((bash as { outputSummary?: string }).outputSummary).toBeUndefined();
+    expect((bash as { outputSummary?: string }).outputSummary).toBe("lots of pip noise");
   });
 
   it("runShell failure lands as a red line and unlocks the composer", async () => {
@@ -339,7 +360,9 @@ describe("per-session workspace folders", () => {
     expect(id).toBe("ses_new");
     expect(mocks.runCommand).toHaveBeenCalledWith("ses_new", "init", "focus on tests");
     const s = useRuntimeStore.getState();
-    expect(s.threads["ses_new"].blocks[0]).toEqual({ kind: "user", text: "/init focus on tests" });
+    // The "/name args" echo now follows a turn-divider; toMatchObject ignores
+    // the non-deterministic timestamp on the user block (intended).
+    expect(s.threads["ses_new"].blocks[1]).toMatchObject({ kind: "user", text: "/init focus on tests" });
     expect(s.runningSessions["ses_new"]).toBeUndefined();
   });
 
@@ -541,7 +564,16 @@ describe("per-session right pane", () => {
     useRuntimeStore.setState({ currentId: "ses_1" });
     useRuntimeStore.getState().openArtifact(artifact("report.pdf"));
     useRuntimeStore.getState().setShowFiles(true);
-    expect(useRuntimeStore.getState().panes["ses_1"]).toEqual({ artifact: null, showFiles: true });
+    // PaneState now carries showTerminal/showFileBrowser in addition to the
+    // original artifact/showFiles/browserUrl fields (intended). setShowFiles
+    // clears the artifact and the other panes, leaving only the Files browser.
+    expect(useRuntimeStore.getState().panes["ses_1"]).toEqual({
+      artifact: null,
+      showFiles: true,
+      browserUrl: "",
+      showTerminal: false,
+      showFileBrowser: false,
+    });
     useRuntimeStore.getState().openArtifact(artifact("report.pdf"));
     expect(useRuntimeStore.getState().panes["ses_1"]?.showFiles).toBe(false);
   });

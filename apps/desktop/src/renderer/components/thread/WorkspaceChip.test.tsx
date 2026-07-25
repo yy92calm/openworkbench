@@ -1,8 +1,10 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useRuntimeStore } from "@/lib/runtime";
 import { WorkspaceChip } from "./WorkspaceChip";
+
+afterEach(cleanup);
 
 // workspacePath reflects the folder setWorkspace last persisted, like the real bridge.
 const mocks = vi.hoisted(() => ({ pickedFolder: null as string | null, activePath: "/ws/base" }));
@@ -53,7 +55,7 @@ describe("WorkspaceChip", () => {
   beforeEach(() => {
     mocks.pickedFolder = null;
     mocks.activePath = "/ws/base";
-    useRuntimeStore.setState({ currentId: null, workspacePinned: false, workspace: "/ws/base" });
+    useRuntimeStore.setState({ currentId: null, workspacePinned: false, workspace: "/ws/base", serverUrl: "http://127.0.0.1:1" });
   });
 
   it("is a bare folder icon for a fresh draft (dated folder is the default)", () => {
