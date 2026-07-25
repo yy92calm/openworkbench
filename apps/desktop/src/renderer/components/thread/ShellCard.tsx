@@ -1,11 +1,15 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Check, ChevronRight, X } from "lucide-react";
 import type { ToolCallBlock } from "@workbench/shared";
 import { cn } from "@/lib/cn";
 import { useUiStore } from "@/lib/store";
 
 export function ShellCard({ block }: { block: ToolCallBlock }) {
-  const [expanded, setExpanded] = useState(useUiStore((s) => s.expandThreadDetails));
+  const expandDefault = useUiStore((s) => s.expandThreadDetails);
+  const [expanded, setExpanded] = useState(expandDefault);
+  useEffect(() => {
+    setExpanded(expandDefault);
+  }, [expandDefault]);
   const isSuccess = block.status === "success";
   const isFailed = block.status === "failed";
   const isRunning = block.status === "running";

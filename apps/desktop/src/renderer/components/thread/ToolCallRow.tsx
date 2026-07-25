@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AlertTriangle, Check, ChevronRight, Clock, Loader2, ShieldQuestion, X, ChevronDown } from "lucide-react";
 import type { ToolCallBlock, ToolCallStatus } from "@workbench/shared";
 import { cn } from "@/lib/cn";
@@ -19,7 +19,11 @@ const STATUS: Record<
 /** Tool call card with status icon, expandable body, error display. */
 export function ToolCallRow({ block, activity }: { block: ToolCallBlock; activity?: string }) {
   const s = STATUS[block.status];
-  const [expanded, setExpanded] = useState(useUiStore((st) => st.expandThreadDetails));
+  const expandDefault = useUiStore((st) => st.expandThreadDetails);
+  const [expanded, setExpanded] = useState(expandDefault);
+  useEffect(() => {
+    setExpanded(expandDefault);
+  }, [expandDefault]);
 
   const isRunning = block.status === "running";
   const isError = block.status === "failed" || block.status === "warning";
@@ -38,7 +42,13 @@ export function ToolCallRow({ block, activity }: { block: ToolCallBlock; activit
       data-status={block.status}
       className={cn(
         "rounded-lg border transition-colors",
-        isError ? "border-warn/30 bg-surface" : isWaiting ? "border-warn/25 bg-surface" : "border-border-soft bg-surface/60",
+        isRunning
+          ? "border-accent/30 bg-surface"
+          : isError
+            ? "border-warn/30 bg-surface"
+            : isWaiting
+              ? "border-warn/25 bg-surface"
+              : "border-border-soft bg-surface/60",
       )}
     >
       <button

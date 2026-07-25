@@ -77,10 +77,14 @@ export function UserMessage({ block, onEdit }: { block: UserMessageBlock; onEdit
 export function AgentMessage({
   markdown,
   timestamp,
+  streaming,
   onOpenArtifact,
 }: {
   markdown: string;
   timestamp?: number;
+  /** True while the message is still streaming (no timestamp yet). Shows a
+   *  blinking caret at the end of the text. */
+  streaming?: boolean;
   onOpenArtifact?: (a: ArtifactBlock) => void;
 }) {
   const { copied, onCopy } = useCopy(markdown);
@@ -114,6 +118,9 @@ export function AgentMessage({
       <div className="min-w-0 flex-1 flex flex-col gap-2">
         <div className="text-[15px] leading-[1.65] text-text">
           <MarkdownViewer>{markdown}</MarkdownViewer>
+          {streaming && (
+            <span className="ml-0.5 inline-block h-[1.05em] w-[3px] translate-y-[2px] animate-pulse rounded-sm bg-accent align-text-bottom" />
+          )}
         </div>
         {refs.length > 0 && (
           <div className="mt-1 flex flex-wrap gap-2">

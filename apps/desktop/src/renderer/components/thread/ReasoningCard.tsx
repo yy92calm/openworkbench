@@ -1,15 +1,18 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Brain, ChevronRight, Loader2 } from "lucide-react";
 import type { ReasoningBlock } from "@workbench/shared";
 import { cn } from "@/lib/cn";
 import { useUiStore } from "@/lib/store";
 
 export function ReasoningCard({ block }: { block: ReasoningBlock }) {
-  // Default to the global collapse setting; streaming still auto-expands so the
-  // user can watch progress, and the card can always be toggled by hand.
+  // Default fold follows the global setting; streaming does not auto-expand.
+  // Setting changes apply immediately (re-folds the card to the new default).
   const expandDefault = useUiStore((s) => s.expandThreadDetails);
   const isStreaming = !!block.streaming;
-  const [expanded, setExpanded] = useState(expandDefault || isStreaming);
+  const [expanded, setExpanded] = useState(expandDefault);
+  useEffect(() => {
+    setExpanded(expandDefault);
+  }, [expandDefault]);
 
   return (
     <div className="relative flex">

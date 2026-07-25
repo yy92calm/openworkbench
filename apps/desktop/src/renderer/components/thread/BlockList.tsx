@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
-import { BookOpen, Check, ChevronRight, Code, Cpu, GitBranch, Terminal, X } from "lucide-react";
-import type { ArtifactBlock, FigureAnnotation, ThreadBlock, ToolCallBlock } from "@workbench/shared";
+import { useEffect, useMemo, useState } from "react";
+import { Brain, Check, ChevronRight, Loader2, X } from "lucide-react";
+import type { ArtifactBlock, FigureAnnotation, ReasoningBlock, ThreadBlock, ToolCallBlock } from "@workbench/shared";
 import { cn } from "@/lib/cn";
 import { useUiStore } from "@/lib/store";
 import { AgentMessage, DataTable, RunningJobsOverlay, StatusLine, UserMessage } from "./atoms";
@@ -23,28 +23,28 @@ export interface BlockHandlers {
   onUserMessageEdit?: (text: string) => void;
 }
 
-/** A renderable item: either a single block or a group of consecutive tool-call blocks. */
+/** A renderable item: either a single block or a merged group of consecutive
+ *  reasoning + tool-call blocks (a "step" run). */
 type RenderItem =
   | { type: "block"; block: ThreadBlock; key: number }
-  | { type: "tool-group"; blocks: ThreadBlock[]; key: number };
+  | { type: "step-group"; blocks: ThreadBlock[]; key: number };
 
-/** Pre-process blocks: group consecutive tool-calls (>=3) into collapsible groups. */
+/** Pre-process blocks: merge consecutive reasoning + tool-call blocks into a
+ *  single collapsible group so thinking and tools fold together. A lone block
+ *  (only one in the run) renders on its own. */
 function prepareItems(blocks: ThreadBlock[]): RenderItem[] {
   const items: RenderItem[] = [];
   let i = 0;
   while (i < blocks.length) {
     const b = blocks[i];
-    // Collect consecutive tool-call blocks
-    if (b.kind === "tool-call") {
+    if (b.kind === "reasoning" || b.kind === "tool-call") {
       const start = i;
-      while (i < blocks.length && blocks[i].kind === "tool-call") i++;
-      const count = i - start;
-      if (count >= 3) {
-        items.push({ type: "tool-group", blocks: blocks.slice(start, i), key: start });
+      while (i < blocks.length && (blocks[i].kind === "reasoning" || blocks[i].kind === "tool-call")) i++;
+      const run = blocks.slice(start, i);
+      if (run.length >= 2) {
+        items.push({ type: "step-group", blocks: run, key: start });
       } else {
-        for (let j = start; j < i; j++) {
-          items.push({ type: "block", block: blocks[j], key: j });
-        }
+        items.push({ type: "block", block: run[0], key: start });
       }
     } else {
       items.push({ type: "block", block: b, key: i });
@@ -93,6 +93,7 @@ export function renderBlock(block: ThreadBlock, i: number, handlers?: BlockHandl
           <AgentMessage
             markdown={block.markdown}
             timestamp={block.timestamp}
+            streaming={!block.timestamp}
             onOpenArtifact={handlers?.onArtifactOpen}
           />
         </div>
@@ -143,17 +144,17 @@ export function BlockList({
       {items.map((item, idx) => {
         if (item.type === "block") {
           const prevKind = idx > 0
-            ? (items[idx - 1].type === "tool-group" ? "tool-call" as const : (items[idx - 1] as { type: "block"; block: ThreadBlock }).block.kind)
+            ? (items[idx - 1].type === "step-group" ? "tool-call" as const : (items[idx - 1] as { type: "block"; block: ThreadBlock }).block.kind)
             : undefined;
           return renderBlock(item.block, item.key, handlers, prevKind);
         }
-        // Tool group
+        // Step group (reasoning + tool calls merged)
         const prevKind = idx > 0
-          ? (items[idx - 1].type === "tool-group" ? "tool-call" as const : (items[idx - 1] as { type: "block"; block: ThreadBlock }).block.kind)
+          ? (items[idx - 1].type === "step-group" ? "tool-call" as const : (items[idx - 1] as { type: "block"; block: ThreadBlock }).block.kind)
           : undefined;
         return (
           <div key={item.key} className={prevKind ? spacingBefore("tool-call") : ""}>
-            <ToolGroup blocks={item.blocks} handlers={handlers} />
+            <StepGroup blocks={item.blocks} handlers={handlers} />
           </div>
         );
       })}
@@ -161,49 +162,72 @@ export function BlockList({
   );
 }
 
-/** Tool categories and their identifying tool name patterns. */
-const TOOL_CATEGORIES = [
-  { id: "explore", label: "Explore", icon: <BookOpen size={13} />, color: "text-link", tools: ["read", "ls", "grep", "glob", "web_fetch", "search"] },
-  { id: "modify", label: "Modify", icon: <Code size={13} />, color: "text-ok", tools: ["write", "edit", "move", "delete", "rename"] },
-  { id: "delegate", label: "Delegate", icon: <GitBranch size={13} />, color: "text-accent", tools: ["task", "run_skill", "explore", "research", "review"] },
-  { id: "shell", label: "Shell", icon: <Terminal size={13} />, color: "text-warn", tools: ["bash", "shell", "terminal"] },
-  { id: "other", label: "Tools", icon: <Cpu size={13} />, color: "text-muted", tools: [] },
-] as const;
-
-function categoryOf(title: string): typeof TOOL_CATEGORIES[number] {
-  const lower = title.toLowerCase();
-  for (const cat of TOOL_CATEGORIES) {
-    if (cat.tools.some((t) => lower.startsWith(t) || lower.includes(t))) return cat;
-  }
-  return TOOL_CATEGORIES[TOOL_CATEGORIES.length - 1];
+/** A collapsed view of a single reasoning block, shown inline inside an
+ *  expanded StepGroup (no nested fold - the group already owns the fold).
+ *  Streaming shows the animated accent + "思考中…" label. */
+function ReasoningInline({ block }: { block: ReasoningBlock }) {
+  const isStreaming = !!block.streaming;
+  return (
+    <div className="relative flex">
+      <div
+        className={cn(
+          "w-[2px] shrink-0 rounded-full bg-purple-500/20 mr-3 transition-all duration-300",
+          isStreaming && "bg-gradient-to-b from-purple-400 via-violet-500 to-transparent bg-[length:2px_200%] animate-[gradient-shimmer_2s_linear_infinite]",
+        )}
+      />
+      <div
+        className={cn(
+          "min-w-0 flex-1 rounded-lg border transition-colors",
+          isStreaming ? "border-purple-500/20 bg-purple-500/[0.03]" : "border-border-soft bg-surface/60",
+        )}
+      >
+        <div className="flex items-center gap-2 px-3 py-1.5 text-[12px] font-medium text-purple-300">
+          {isStreaming ? <Loader2 size={12} className="animate-spin" /> : <Brain size={12} />}
+          <span>{isStreaming ? "思考中…" : "思考过程"}</span>
+        </div>
+        <pre className="max-h-64 overflow-y-auto whitespace-pre-wrap break-words px-3 pb-2.5 pt-0.5 font-mono text-[12px] leading-[1.65] text-text-dim">
+          {block.text}
+        </pre>
+      </div>
+    </div>
+  );
 }
 
-function ToolGroup({
+/** Merged reasoning + tool-call run. Collapsed by default (thinking and tools
+ *  fold together); expanding shows the reasoning text inline plus each tool
+ *  row (which still has its own detail fold). Auto-expands while streaming so
+ *  live thinking/running tools stay visible. */
+function StepGroup({
   blocks,
   handlers,
 }: {
   blocks: ThreadBlock[];
   handlers?: BlockHandlers;
 }) {
-  const [expanded, setExpanded] = useState(useUiStore((s) => s.expandThreadDetails));
-  const toolBlocks = blocks.filter((b): b is ToolCallBlock => b.kind === "tool-call");
-  const count = toolBlocks.length;
-  const done = toolBlocks.filter((b) => b.status === "success" || b.status === "failed" || b.status === "warning").length;
-  const failed = toolBlocks.filter((b) => b.status === "failed").length;
-  const allDone = done === count;
+  const isStreaming =
+    blocks.some((b) => b.kind === "reasoning" && b.streaming) ||
+    blocks.some((b) => b.kind === "tool-call" && b.status === "running");
+  // Default fold follows the global setting; streaming does NOT auto-expand -
+  // the user opted into collapsed, so a live indicator on the header is enough
+  // and they can expand by hand. Setting changes apply immediately (re-folds
+  // every group to the new default).
+  const expandDefault = useUiStore((s) => s.expandThreadDetails);
+  const [expanded, setExpanded] = useState(expandDefault);
+  useEffect(() => {
+    setExpanded(expandDefault);
+  }, [expandDefault]);
 
-  // Categorize by most common category
-  const cats = toolBlocks.map((b) => categoryOf(b.title));
-  const primaryCat = cats.sort((a, b) => cats.filter((c) => c === a).length - cats.filter((c) => c === b).length).pop() ?? TOOL_CATEGORIES[TOOL_CATEGORIES.length - 1];
-  const catCounts = new Map<string, number>();
-  for (const c of cats) {
-    catCounts.set(c.id, (catCounts.get(c.id) ?? 0) + 1);
-  }
-  const summary = [...catCounts.entries()]
-    .filter(([, n]) => n > 0)
-    .sort((a, b) => b[1] - a[1])
-    .map(([id, n]) => `${n} ${TOOL_CATEGORIES.find((c) => c.id === id)?.label ?? id}`)
-    .join(", ");
+  const reasoningCount = blocks.filter((b) => b.kind === "reasoning").length;
+  const toolBlocks = blocks.filter((b): b is ToolCallBlock => b.kind === "tool-call");
+  const toolCount = toolBlocks.length;
+  const failed = toolBlocks.filter((b) => b.status === "failed").length;
+  const allDone =
+    toolCount > 0 && toolBlocks.every((b) => b.status === "success" || b.status === "failed" || b.status === "warning");
+
+  const parts: string[] = [];
+  if (reasoningCount) parts.push(`思考过程${reasoningCount > 1 ? ` ×${reasoningCount}` : ""}`);
+  if (toolCount) parts.push(`${toolCount} 个工具`);
+  const summary = parts.join(" · ") || "步骤";
 
   return (
     <div className="rounded-lg border border-border-soft bg-surface/40">
@@ -216,16 +240,30 @@ function ToolGroup({
         <ChevronRight
           className={cn("h-3.5 w-3.5 shrink-0 transition-transform duration-150", expanded && "rotate-90")}
         />
-        <span className={cn("flex shrink-0 items-center", primaryCat.color)}>{primaryCat.icon}</span>
-        {allDone && !failed && <Check size={13} className="shrink-0 text-ok" />}
-        {failed > 0 && <X size={13} className="shrink-0 text-error" />}
-        <span className={cn("flex-1 truncate", allDone ? "text-text-dim" : "text-muted")}>
-          {summary || `${count} tools`}
+        {/* Streaming pulse / done / failed marker */}
+        {isStreaming ? (
+          <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-accent animate-pulse" />
+        ) : allDone && !failed ? (
+          <Check size={13} className="shrink-0 text-ok" />
+        ) : failed > 0 ? (
+          <X size={13} className="shrink-0 text-error" />
+        ) : null}
+        <span className={cn("flex-1 truncate", isStreaming ? "text-text" : allDone ? "text-text-dim" : "text-muted")}>
+          {summary}
         </span>
+        {isStreaming && (
+          <Loader2 size={12} className="shrink-0 animate-spin text-accent" />
+        )}
       </button>
       {expanded && (
         <div className="flex flex-col gap-1.5 border-t border-border-soft px-2 py-2">
-          {toolBlocks.map((b, i) => renderBlock(b, i, handlers))}
+          {blocks.map((b, i) =>
+            b.kind === "reasoning" ? (
+              <ReasoningInline key={i} block={b} />
+            ) : (
+              renderBlock(b, i, handlers)
+            ),
+          )}
         </div>
       )}
     </div>
