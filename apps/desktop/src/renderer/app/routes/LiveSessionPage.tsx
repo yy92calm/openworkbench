@@ -1,15 +1,19 @@
 import { useEffect, useRef, useState, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { FolderOpen, Loader2, NotebookPen, PlugZap, ArrowDown } from "lucide-react";
+import type { ArtifactBlock, FileRoot } from "@workbench/shared";
 import { DRAFT_KEY, rootSessionOf, subagentActivity, useRuntimeStore } from "@/lib/runtime";
 import { useScrollMemory } from "@/lib/scrollMemory";
 import { useWorkspaceFiles } from "@/lib/useWorkspaceFiles";
+import { fileInspectorFromBlock } from "@/lib/artifacts";
 import { BlockList, type BlockHandlers } from "@/components/thread/BlockList";
 import { JumpBar } from "@/components/thread/JumpBar";
 import { DecisionSurface } from "@/components/thread/DecisionSurface";
+import { TabBar } from "@/components/thread/TabBar";
 import { Topicbar } from "@/components/thread/Topicbar";
 import { baseName } from "@/components/thread/WorkspaceChip";
 import { WorkflowStarters } from "@/components/thread/WorkflowStarters";
+import { InspectorShell } from "@/components/inspector/InspectorShell";
 import { WorkbenchDock } from "@/components/inspector/WorkbenchDock";
 import { cn } from "@/lib/cn";
 import { useUiStore } from "@/lib/store";
@@ -41,7 +45,6 @@ export function LiveSessionPage() {
     sendPrompt,
     runShell,
     runCommand,
-    openArtifact,
     closeArtifact,
     setBrowserUrl,
     answerQuestion,
@@ -62,12 +65,23 @@ export function LiveSessionPage() {
 
   useEffect(() => {
     if (sessionId) void openSession(sessionId);
-    else startDraft(); // blank draft — no session created yet (#3)
+    else startDraft(); // blank draft - no session created yet (#3)
   }, [sessionId, openSession, startDraft]);
+
+  // NOTE: the tab bar is NOT auto-synced to the route. Historical sessions do
+  // not get a tab by default - a tab opens only when the user picks a session
+  // in the sidebar (Sidebar) or starts a new one. The draft tab is converted
+  // to the real session tab in afterTurn below (its first message creates it).
 
   // All three composer paths reflect a freshly-created session in the URL.
   const afterTurn = (id: string | null) => {
-    if (id && !sessionId) navigate(`/live/${id}`);
+    if (id && !sessionId) {
+      navigate(`/live/${id}`);
+      // Convert the draft tab into the real session tab (the session was just
+      // created by the first message). Not an auto-open - the tab already
+      // exists from startNew; only its sessionId updates.
+      openSessionTab(id);
+    }
   };
   const onSend = async (text: string) => {
     // Browser commands: browser:go <url>, browser:content [url], browser:js <code>
@@ -104,8 +118,14 @@ export function LiveSessionPage() {
 
   // Interactions from the thread/inspector fold back into the conversation as follow-up prompts.
   const setComposerDraft = useUiStore((s) => s.setComposerDraft);
+  const openFileTab = useUiStore((s) => s.openFileTab);
+  const closeTab = useUiStore((s) => s.closeTab);
+  const openSessionTab = useUiStore((s) => s.openSessionTab);
+  // The active main-area tab. A file tab replaces the conversation in the main
+  // area (the right dock stays); a session tab drives the conversation below.
+  const activeTab = useUiStore((s) => s.tabs.find((t) => t.id === s.activeTabId) ?? null);
   const handlers: BlockHandlers = {
-    onArtifactOpen: openArtifact,
+    onArtifactOpen: openFileTab,
     onFigureComment: (a, title) =>
       void sendPrompt(`On the figure ${title}, at (${a.x.toFixed(0)}%, ${a.y.toFixed(0)}%): ${a.note}`),
     // Subagent events fold into their own thread; a running task row reads
@@ -261,14 +281,22 @@ export function LiveSessionPage() {
     );
     if (agentNb) {
       autoOpened.current.add(agentNb.path);
-      openArtifact(agentNb);
+      // Open the notebook as a background tab - it must not steal the
+      // conversation view while the agent is still working.
+      openFileTab(agentNb, undefined, false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [uniqueNotebooks.length]);
 
   return (
-    <div className="flex h-full min-w-0">
+    <div className="flex h-full min-w-0 flex-col">
+      <TabBar />
+      <div className="flex h-full min-w-0">
       <div className="flex h-full min-w-0 flex-1 flex-col">
+        {activeTab?.kind === "file" ? (
+          <FilePreviewTab artifact={activeTab.artifact} root={activeTab.root} onClose={() => closeTab(activeTab.id)} onEvaluate={onEvaluate} />
+        ) : (
+        <>
         <Topicbar
           title={title}
           rightPanelOpen={rightPanelOpen || !!activeArtifact}
@@ -289,7 +317,7 @@ export function LiveSessionPage() {
               {uniqueNotebooks.map((nb) => (
                 <button
                   key={nb.path}
-                  onClick={() => openArtifact(nb)}
+                  onClick={() => openFileTab(nb)}
                   className={cn(
                     "flex items-center gap-1 rounded-full px-2 py-0.5 font-mono text-[11px] transition-colors",
                     activeArtifact?.path === nb.path ? "bg-surface-2 text-text" : "text-muted hover:bg-surface-2 hover:text-text",
@@ -418,6 +446,8 @@ export function LiveSessionPage() {
             />
           </div>
         </div>
+        </>
+        )}
       </div>
 
       <WorkbenchDock
@@ -432,6 +462,27 @@ export function LiveSessionPage() {
         onCloseFileBrowser={() => setRightPanelOpen(false)}
         onEvaluate={onEvaluate}
       />
+      </div>
+    </div>
+  );
+}
+
+/** A file preview shown as a main-area tab (replaces the conversation while
+ *  active). Wraps the same InspectorShell the dock used, full-width. */
+function FilePreviewTab({
+  artifact,
+  root,
+  onClose,
+  onEvaluate,
+}: {
+  artifact: ArtifactBlock;
+  root?: FileRoot;
+  onClose: () => void;
+  onEvaluate?: (expr: string) => void;
+}) {
+  return (
+    <div className="h-full">
+      <InspectorShell inspector={{ ...fileInspectorFromBlock(artifact), root }} onClose={onClose} onEvaluate={onEvaluate} />
     </div>
   );
 }

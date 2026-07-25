@@ -2,6 +2,7 @@ import { useState } from "react";
 import { AlertTriangle, Check, ChevronRight, Clock, Loader2, ShieldQuestion, X, ChevronDown } from "lucide-react";
 import type { ToolCallBlock, ToolCallStatus } from "@workbench/shared";
 import { cn } from "@/lib/cn";
+import { useUiStore } from "@/lib/store";
 
 const STATUS: Record<
   ToolCallStatus,
@@ -18,7 +19,7 @@ const STATUS: Record<
 /** Tool call card with status icon, expandable body, error display. */
 export function ToolCallRow({ block, activity }: { block: ToolCallBlock; activity?: string }) {
   const s = STATUS[block.status];
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(useUiStore((st) => st.expandThreadDetails));
 
   const isRunning = block.status === "running";
   const isError = block.status === "failed" || block.status === "warning";

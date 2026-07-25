@@ -39,10 +39,13 @@ export function WorkbenchDock({
   const { targetRef, handleProps, isDragging } = useResizable(480, 320, Infinity, true);
   const [paneKey, setPaneKey] = useState(0);
   const refreshPane = useCallback(() => setPaneKey((k) => k + 1), []);
-  // Terminal stays mounted once first opened so its PTY + scrollback survive
-  // tab switches (mirrors the BrowserPanel keep-alive pattern below).
+  // Browser and terminal stay mounted once first opened so their state
+  // survives tab switches, but neither is mounted up front - the conversation
+  // starts free of the browser webview until the user (or an MCP open) needs it.
+  const [browserEverOpened, setBrowserEverOpened] = useState(false);
   const [terminalEverOpened, setTerminalEverOpened] = useState(false);
   useEffect(() => {
+    if (tab === "browser") setBrowserEverOpened(true);
     if (tab === "terminal") setTerminalEverOpened(true);
   }, [tab]);
   const showArtifact = !!artifact;
@@ -77,18 +80,21 @@ export function WorkbenchDock({
         )}
         {!showArtifact && (
           <>
-            {/* Browser: always mounted for MCP command responsiveness */}
-            <div
-              className={tab === "browser" ? "h-full" : "hidden h-full"}
-              aria-hidden={tab !== "browser" ? "true" : undefined}
-              tabIndex={tab !== "browser" ? -1 : undefined}
-            >
-              <BrowserPanel
-                url={browserUrl}
-                onUrlChange={onBrowserUrlChange}
-                onClose={onCloseBrowser}
-              />
-            </div>
+            {/* Browser: mounted on first use (user switches to it or an MCP
+                open does), then kept alive across tab switches. */}
+            {browserEverOpened && (
+              <div
+                className={tab === "browser" ? "h-full" : "hidden h-full"}
+                aria-hidden={tab !== "browser" ? "true" : undefined}
+                tabIndex={tab !== "browser" ? -1 : undefined}
+              >
+                <BrowserPanel
+                  url={browserUrl}
+                  onUrlChange={onBrowserUrlChange}
+                  onClose={onCloseBrowser}
+                />
+              </div>
+            )}
             {/* Other panels: rendered only when active (terminal keeps alive) */}
             {tab === "context" && <ContextPanel onClose={() => {}} />}
             {terminalEverOpened && (

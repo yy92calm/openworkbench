@@ -21,6 +21,8 @@ export function SettingsPage() {
   const setLocale = useUiStore((s) => s.setLocale);
   const agentRuntimeKind = useUiStore((s) => s.agentRuntimeKind);
   const setAgentRuntimeKind = useUiStore((s) => s.setAgentRuntimeKind);
+  const expandThreadDetails = useUiStore((s) => s.expandThreadDetails);
+  const setExpandThreadDetails = useUiStore((s) => s.setExpandThreadDetails);
   const { status, serverUrl, setServerUrl, connect, disconnect, defaultModel, providers, loadProviders, setDefaultModel } = useRuntimeStore();
   const connected = status === "ready";
   const [wsPath, setWsPath] = useState<string | null>(null);
@@ -156,6 +158,31 @@ export function SettingsPage() {
                 {th}
               </button>
             ))}
+          </div>
+
+          {/* Default expand for reasoning + tool-call cards. Off (collapsed)
+              by default; turning it on expands them when first rendered. */}
+          <div className="mt-4 flex items-center justify-between gap-4">
+            <div className="min-w-0">
+              <div className="text-[13px] font-medium text-text">默认展开思考与工具</div>
+              <div className="text-[12px] text-muted">关闭时思考过程与工具调用默认折叠，可逐个点击展开</div>
+            </div>
+            <button
+              role="switch"
+              aria-checked={expandThreadDetails}
+              onClick={() => setExpandThreadDetails(!expandThreadDetails)}
+              className={cn(
+                "relative h-5 w-9 shrink-0 rounded-full transition-colors",
+                expandThreadDetails ? "bg-accent" : "bg-surface-2",
+              )}
+            >
+              <span
+                className={cn(
+                  "absolute top-0.5 h-4 w-4 rounded-full bg-surface shadow transition-transform",
+                  expandThreadDetails ? "left-[18px]" : "left-0.5",
+                )}
+              />
+            </button>
           </div>
         </Card>
 

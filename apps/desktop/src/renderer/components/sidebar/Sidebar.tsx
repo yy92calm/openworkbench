@@ -24,9 +24,11 @@ export function Sidebar({ project }: { project: Project }) {
   const { sessions, hiddenExamples, startDraft, deleteSession, hideExample } = useRuntimeStore();
   const sidebarCollapsed = useUiStore((s) => s.sidebarCollapsed);
   const toggleSidebar = useUiStore((s) => s.toggleSidebar);
+  const openSessionTab = useUiStore((s) => s.openSessionTab);
 
   const startNew = () => {
     startDraft();
+    openSessionTab(null, "新会话");
     navigate("/live");
   };
 
@@ -112,6 +114,9 @@ export function Sidebar({ project }: { project: Project }) {
           <div key={row.to} className="group relative">
             <NavLink
               to={row.to}
+              onClick={() => {
+                if (row.kind === "session") openSessionTab(row.id, row.title);
+              }}
               className={cn(
                 "relative flex items-center gap-1.5 rounded-input py-0.5 pl-2.5 pr-7 text-sm transition-colors duration-150 hover:bg-surface-2",
                 location.pathname === row.to ? "bg-surface-2 text-text" : "text-text/90",

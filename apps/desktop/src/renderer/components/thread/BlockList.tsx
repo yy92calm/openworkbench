@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { BookOpen, Check, ChevronRight, Code, Cpu, GitBranch, Terminal, X } from "lucide-react";
 import type { ArtifactBlock, FigureAnnotation, ThreadBlock, ToolCallBlock } from "@workbench/shared";
 import { cn } from "@/lib/cn";
+import { useUiStore } from "@/lib/store";
 import { AgentMessage, DataTable, RunningJobsOverlay, StatusLine, UserMessage } from "./atoms";
 import { ToolCallRow } from "./ToolCallRow";
 import { StepSummaryRow } from "./StepSummaryRow";
@@ -184,7 +185,7 @@ function ToolGroup({
   blocks: ThreadBlock[];
   handlers?: BlockHandlers;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(useUiStore((s) => s.expandThreadDetails));
   const toolBlocks = blocks.filter((b): b is ToolCallBlock => b.kind === "tool-call");
   const count = toolBlocks.length;
   const done = toolBlocks.filter((b) => b.status === "success" || b.status === "failed" || b.status === "warning").length;

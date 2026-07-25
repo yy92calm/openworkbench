@@ -3,9 +3,9 @@ import { ChevronRight, FileText, Folder, Image as ImageIcon, Loader2, NotebookPe
 import { listDir, type DirEntry } from "@/lib/artifactFile";
 import { isTauri, workspaceBase } from "@/lib/tauri";
 import { baseName } from "@/components/thread/WorkspaceChip";
+import { refToArtifactBlock } from "@/lib/artifacts";
+import { useUiStore } from "@/lib/store";
 import { cn } from "@/lib/cn";
-import { extOf, extToKind, previewKindForName, type PreviewKind } from "@/lib/artifacts";
-import { FilePreviewInspector } from "@/components/inspector/FilePreviewInspector";
 
 function iconFor(entry: DirEntry) {
   if (entry.isDir) return <Folder size={14} className="text-accent" />;
@@ -22,20 +22,18 @@ function humanSize(n: number): string {
   return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-const EXT_LANG: Record<string, string> = {
-  py: "python", r: "r", jl: "julia", sh: "bash", tex: "latex", md: "markdown",
-};
-
 /**
  * File browser panel for the right sidebar.
- * Browses from the workspace base folder and supports file preview.
+ * Browses from the workspace base folder. Clicking a file opens it as a
+ * main-area preview tab (not an in-dock preview) so md/text/images show in the
+ * main surface alongside the conversation.
  */
 export function FileBrowserPanel({ onClose }: { onClose: () => void }) {
   const [dir, setDir] = useState("");
   const [entries, setEntries] = useState<DirEntry[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [basePath, setBasePath] = useState<string | null>(null);
-  const [preview, setPreview] = useState<DirEntry | null>(null);
+  const openFileTab = useUiStore((s) => s.openFileTab);
 
   useEffect(() => {
     void workspaceBase().then(setBasePath).catch(() => {});
@@ -44,7 +42,6 @@ export function FileBrowserPanel({ onClose }: { onClose: () => void }) {
   const load = useCallback(async (rel: string) => {
     setEntries(null);
     setError(null);
-    setPreview(null);
     try {
       setEntries(await listDir(rel, "base"));
     } catch (e) {
@@ -59,41 +56,10 @@ export function FileBrowserPanel({ onClose }: { onClose: () => void }) {
 
   const crumbs = dir ? dir.split("/") : [];
 
-  // Preview mode
-  if (preview) {
-    const ext = extOf(preview.name);
-    const kind: PreviewKind = previewKindForName(preview.name);
-    return (
-      <div className="flex h-full flex-col bg-surface">
-        <div className="flex items-center gap-1 border-b border-border px-2 py-1.5">
-          <button
-            onClick={() => setPreview(null)}
-            className="rounded px-1.5 py-0.5 text-[11px] text-muted hover:bg-surface-2 hover:text-text"
-          >
-            ← 返回
-          </button>
-          <span className="truncate text-[11px] text-text">{preview.name}</span>
-          <span className="flex-1" />
-          <button onClick={onClose} className="rounded p-1 text-muted hover:bg-surface-2 hover:text-text">
-            <X size={13} />
-          </button>
-        </div>
-        <div className="min-h-0 flex-1">
-          <FilePreviewInspector
-            data={{
-              variant: "file",
-              path: preview.path,
-              filename: preview.name,
-              artifact: extToKind(ext),
-              language: EXT_LANG[ext] ?? (kind === "text" ? ext : undefined),
-              root: "base",
-            }}
-            onClose={() => setPreview(null)}
-          />
-        </div>
-      </div>
-    );
-  }
+  const openEntry = (entry: DirEntry) => {
+    if (entry.isDir) setDir(entry.path);
+    else openFileTab(refToArtifactBlock(entry.path), "base");
+  };
 
   return (
     <div className="flex h-full flex-col bg-surface">
@@ -143,7 +109,7 @@ export function FileBrowserPanel({ onClose }: { onClose: () => void }) {
         {entries?.map((entry) => (
           <button
             key={entry.path}
-            onClick={() => entry.isDir ? setDir(entry.path) : setPreview(entry)}
+            onClick={() => openEntry(entry)}
             className="flex w-full items-center gap-2 rounded-input px-2 py-1.5 text-left text-xs hover:bg-surface-2"
           >
             {iconFor(entry)}
