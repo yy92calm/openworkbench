@@ -4,7 +4,7 @@ import type { ArtifactBlock } from "@workbench/shared";
 import { fileInspectorFromBlock } from "@/lib/artifacts";
 import { InspectorShell } from "@/components/inspector/InspectorShell";
 import { ContextPanel } from "@/components/inspector/ContextPanel";
-import { BrowserPanel } from "@/components/inspector/BrowserPanel";
+import { BrowserPanel } from "@fafawork/browser-mcp/panel";
 import { TerminalPanel } from "@/components/inspector/TerminalPanel";
 import { FileBrowserPanel } from "@/components/inspector/FileBrowserPanel";
 import { useResizable } from "@/lib/useResizable";
@@ -17,6 +17,7 @@ export function WorkbenchDock({
   artifact,
   browserUrl,
   tab,
+  dockVisible,
   onCloseArtifact,
   onBrowserUrlChange,
   onCloseBrowser,
@@ -27,6 +28,7 @@ export function WorkbenchDock({
   artifact: ArtifactBlock | null;
   browserUrl: string;
   tab: "context" | "browser" | "terminal" | "files";
+  dockVisible: boolean;
   onCloseArtifact: () => void;
   onBrowserUrlChange: (url: string) => void;
   onCloseBrowser: () => void;
@@ -43,11 +45,11 @@ export function WorkbenchDock({
     <>
       <div
         {...handleProps}
-        className="w-1 shrink-0 cursor-col-resize hover:bg-accent/30 active:bg-accent/50 transition-colors"
+        className={dockVisible ? "w-1 shrink-0 cursor-col-resize hover:bg-accent/30 active:bg-accent/50 transition-colors" : "hidden"}
       />
-<div
+      <div
         ref={targetRef as React.RefObject<HTMLDivElement>}
-        className="hidden shrink-0 lg:block"
+        className={dockVisible ? "hidden h-full shrink-0 overflow-hidden lg:block" : "hidden"}
         style={{ width: 480, contentVisibility: isDragging ? "hidden" : undefined }}
       >
         {showArtifact && (
@@ -67,21 +69,21 @@ export function WorkbenchDock({
             />
           </div>
         )}
-        {!showArtifact && tab === "context" && (
-          <ContextPanel onClose={() => {}} />
-        )}
-        {!showArtifact && tab === "browser" && (
-          <BrowserPanel
-            url={browserUrl}
-            onUrlChange={onBrowserUrlChange}
-            onClose={onCloseBrowser}
-          />
-        )}
-        {!showArtifact && tab === "terminal" && (
-          <TerminalPanel id="main" onClose={onCloseTerminal} />
-        )}
-        {!showArtifact && tab === "files" && (
-          <FileBrowserPanel onClose={onCloseFileBrowser} />
+        {!showArtifact && (
+          <>
+            {/* Browser: always mounted for MCP command responsiveness */}
+            <div className={tab === "browser" ? "h-full" : "hidden h-full"}>
+              <BrowserPanel
+                url={browserUrl}
+                onUrlChange={onBrowserUrlChange}
+                onClose={onCloseBrowser}
+              />
+            </div>
+            {/* Other panels: rendered only when active */}
+            {tab === "context" && <ContextPanel onClose={() => {}} />}
+            {tab === "terminal" && <TerminalPanel id="main" onClose={onCloseTerminal} />}
+            {tab === "files" && <FileBrowserPanel onClose={onCloseFileBrowser} />}
+          </>
         )}
       </div>
     </>

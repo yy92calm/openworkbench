@@ -2,11 +2,11 @@ import { app } from "electron";
 import contextMenu from "electron-context-menu";
 import { homedir } from "node:os";
 import { CHANNEL, APP_NAMES, APP_IDS } from "./constants";
-import { registerIpcHandlers, startBrowserApi } from "./ipc";
+import { registerIpcHandlers } from "./ipc";
 import { getLogger } from "./logging";
 import { createMainWindow, setDockIcon, getMainWindow } from "./windows";
 import { setupAutoUpdater } from "./updater";
-import { stopSidecar, deployBundledProfile } from "./server";
+import { stopSidecar, deployBundledProfile, getBrowserMcp } from "./server";
 import { killAllKernels } from "./kernel";
 import { stopPreviewServer, startPreviewServer } from "./preview_server";
 import { cronEngine, stopSchedulerApi } from "./scheduler";
@@ -75,7 +75,7 @@ void app.whenReady().then(async () => {
   app.setPath("userData", app.getPath("appData") + "/" + APP_IDS[CHANNEL]);
 
   registerIpcHandlers();
-  startBrowserApi();
+  getBrowserMcp().start();
   setDockIcon();
 
   deployBundledProfile();

@@ -1,8 +1,15 @@
 import { X } from "lucide-react";
 import { TokenUsage } from "./TokenUsage";
+import { AutoContext } from "./AutoContext";
 
 /**
- * Right-side context panel showing token usage and session info.
+ * Right-side context panel — what the model can actually see in this session.
+ *
+ * Two sections:
+ *   1. Context window — token usage ring + per-category breakdown.
+ *   2. Auto context — the `.opencode/` profile's always-injected capabilities
+ *      (skills, agents, MCP servers), read-only, so the user knows the model's
+ *      default reach.
  */
 export function ContextPanel({ onClose }: { onClose: () => void }) {
   return (
@@ -19,6 +26,7 @@ export function ContextPanel({ onClose }: { onClose: () => void }) {
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto">
         <TokenUsage />
+        <AutoContext />
       </div>
     </div>
   );

@@ -1,6 +1,8 @@
 import { contextBridge, ipcRenderer } from "electron";
+import { browserMcpPreload } from "@fafawork/browser-mcp/preload";
 
 const api = {
+  ...browserMcpPreload,
   // Channel
   channelName: () => ipcRenderer.invoke("channel-name"),
   appIdentifier: () => ipcRenderer.invoke("app-identifier"),
@@ -89,6 +91,14 @@ const api = {
   // Browser command response (renderer → main process)
   browserCommandResponse: (requestId: string, result: unknown) =>
     ipcRenderer.invoke("browser:command-response", requestId, result),
+
+  // Browser recording control (for UI buttons)
+  browserRecordStart: () => ipcRenderer.invoke("browser:record-start"),
+  browserRecordStop: () => ipcRenderer.invoke("browser:record-stop"),
+  browserRecordState: () => ipcRenderer.invoke("browser:record-state"),
+  browserRecordSave: (name: string, description?: string) => ipcRenderer.invoke("browser:record-save", name, description),
+  browserRecordList: () => ipcRenderer.invoke("browser:record-list"),
+  browserRecordReplay: (name: string, delay?: number) => ipcRenderer.invoke("browser:record-replay", name, delay),
 
   // Terminal (event-based streaming)
   on: (channel: string, callback: (...args: unknown[]) => void) => {

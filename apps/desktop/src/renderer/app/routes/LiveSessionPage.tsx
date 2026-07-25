@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { FolderOpen, Loader2, NotebookPen, PlugZap, ArrowDown } from "lucide-react";
 import { DRAFT_KEY, rootSessionOf, subagentActivity, useRuntimeStore } from "@/lib/runtime";
 import { useScrollMemory } from "@/lib/scrollMemory";
+import { useWorkspaceFiles } from "@/lib/useWorkspaceFiles";
 import { BlockList, type BlockHandlers } from "@/components/thread/BlockList";
 import { JumpBar } from "@/components/thread/JumpBar";
 import { DecisionSurface } from "@/components/thread/DecisionSurface";
@@ -122,15 +123,21 @@ export function LiveSessionPage() {
   const historyLoading = connected && !!sessionId && !thread?.loaded;
   const title = sessions.find((s) => s.id === currentId)?.title;
   const isEmpty = !thread || thread.blocks.length === 0;
-  // Extract file paths from thread blocks for @ mention suggestions
+  // @ mention candidates: workspace files first (what the user can actually
+  // reference), then artifact-derived paths the agent produced — merged, unique.
+  const { files: workspaceFiles } = useWorkspaceFiles();
   const fileSuggestions = useMemo(() => {
-    if (!thread) return [];
-    const paths = new Set<string>();
-    for (const b of thread.blocks) {
-      if (b.kind === "artifact") paths.add(b.path);
+    const ordered: string[] = [...workspaceFiles];
+    if (thread) {
+      for (const b of thread.blocks) {
+        if (b.kind === "artifact") {
+          const name = b.path.split(/[\\/]/).pop() ?? b.path;
+          ordered.push(name);
+        }
+      }
     }
-    return Array.from(paths);
-  }, [thread]);
+    return Array.from(new Set(ordered));
+  }, [thread, workspaceFiles]);
   // The turn lifecycle: `sending` covers click → POST accepted (incl. the
   // dated-folder setup on a first message); `running` covers the agent
   // working until session.idle. Together they lock the composer and show the
@@ -413,32 +420,18 @@ export function LiveSessionPage() {
         </div>
       </div>
 
-      {rightPanelOpen && !activeArtifact && (
-        <WorkbenchDock
-          artifact={null}
-          browserUrl={browserUrl}
-          tab={rightPanelTab}
-          onCloseArtifact={() => {}}
-          onBrowserUrlChange={setBrowserUrl}
-          onCloseBrowser={() => setRightPanelOpen(false)}
-          onCloseTerminal={() => setRightPanelOpen(false)}
-          onCloseFileBrowser={() => setRightPanelOpen(false)}
-          onEvaluate={onEvaluate}
-        />
-      )}
-      {activeArtifact && (
-        <WorkbenchDock
-          artifact={activeArtifact}
-          browserUrl=""
-          tab={rightPanelTab}
-          onCloseArtifact={closeArtifact}
-          onBrowserUrlChange={() => {}}
-          onCloseBrowser={() => {}}
-          onCloseTerminal={() => {}}
-          onCloseFileBrowser={() => {}}
-          onEvaluate={onEvaluate}
-        />
-      )}
+      <WorkbenchDock
+        artifact={activeArtifact}
+        browserUrl={browserUrl}
+        tab={rightPanelTab}
+        dockVisible={rightPanelOpen || !!activeArtifact}
+        onCloseArtifact={closeArtifact}
+        onBrowserUrlChange={setBrowserUrl}
+        onCloseBrowser={() => setRightPanelOpen(false)}
+        onCloseTerminal={() => setRightPanelOpen(false)}
+        onCloseFileBrowser={() => setRightPanelOpen(false)}
+        onEvaluate={onEvaluate}
+      />
     </div>
   );
 }

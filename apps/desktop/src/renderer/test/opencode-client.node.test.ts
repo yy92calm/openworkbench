@@ -66,6 +66,14 @@ describe("OpenCodeClient ↔ OpenCode server", () => {
     expect(commands[1].source).toBe("skill");
   });
 
+  it("parses the model context window from /config/providers", async () => {
+    const client = new OpenCodeClient({ baseUrl: `http://127.0.0.1:${server.port}` });
+    const providers = await client.listProviders();
+    const model = providers.find((p) => p.id === "mock")?.models[0];
+    expect(model?.id).toBe("mock-model");
+    expect(model?.contextLimit).toBe(200_000);
+  });
+
   it("runs a shell command: bash tool part + session.idle stream back", async () => {
     const events: OpenCodeEvent[] = [];
     const client = new OpenCodeClient({ baseUrl: `http://127.0.0.1:${server.port}` });

@@ -29,7 +29,7 @@ const config: Configuration = {
     {
       from: "out/main",
       to: "out/main",
-      filter: ["browser-mcp-server.js"],
+      filter: ["browser-mcp-server.mjs"],
     },
   ],
   mac: {

@@ -18,6 +18,29 @@ function estimateTokens(text: string): number {
   return Math.ceil(text.length / 4);
 }
 
+/** Conservative fallback when the provider reports no window for the model. */
+const DEFAULT_CONTEXT_WINDOW = 128_000;
+
+/**
+ * Resolve the context window for "provider/model": prefer the provider-reported
+ * value, fall back to a conservative default. Never hard-coded per model.
+ */
+function resolveContextWindow(
+  defaultModel: string | null,
+  providers: import("@workbench/sdk").ProviderInfo[],
+): number {
+  if (defaultModel) {
+    const slash = defaultModel.indexOf("/");
+    const providerId = slash > 0 ? defaultModel.slice(0, slash) : "";
+    const modelId = slash > 0 ? defaultModel.slice(slash + 1) : defaultModel;
+    const found = providers
+      .find((p) => p.id === providerId)
+      ?.models.find((m) => m.id === modelId);
+    if (found?.contextLimit) return found.contextLimit;
+  }
+  return DEFAULT_CONTEXT_WINDOW;
+}
+
 function countBlocks(blocks: import("@workbench/shared").ThreadBlock[]): TokenEstimate[] {
   let userChars = 0;
   let agentChars = 0;
@@ -53,8 +76,7 @@ function countBlocks(blocks: import("@workbench/shared").ThreadBlock[]): TokenEs
   ];
 }
 
-/** Context window capacity in tokens (conservative estimate for most models). */
-const CONTEXT_WINDOW = 128_000;
+/** Thresholds for the ring color (fraction of the context window). */
 const WARNING_AT = 0.7;
 const DANGER_AT = 0.9;
 
@@ -95,10 +117,15 @@ export function TokenUsage() {
   const threads = useRuntimeStore((s) => s.threads);
   const sessions = useRuntimeStore((s) => s.sessions);
   const defaultModel = useRuntimeStore((s) => s.defaultModel);
+  const providers = useRuntimeStore((s) => s.providers);
   const thread = currentId ? threads[currentId] : threads[DRAFT_KEY];
   const session = sessions.find((s) => s.id === currentId);
   const modelName = defaultModel ? defaultModel.split("/").pop()! : null;
 
+  const contextWindow = useMemo(
+    () => resolveContextWindow(defaultModel, providers),
+    [defaultModel, providers],
+  );
   const estimates = useMemo(() => countBlocks(thread?.blocks ?? []), [thread]);
   const totals = useMemo(() => {
     let tokens = 0;
@@ -111,7 +138,7 @@ export function TokenUsage() {
   }, [estimates]);
   const totalTokens = totals.tokens;
   const totalChars = totals.chars;
-  const pct = Math.min(totalTokens / CONTEXT_WINDOW, 1);
+  const pct = Math.min(totalTokens / contextWindow, 1);
   const safePct = Number.isFinite(pct) ? pct : 0;
   const tone = safePct >= DANGER_AT ? "text-error" : safePct >= WARNING_AT ? "text-warn" : "text-ok";
 
@@ -151,7 +178,7 @@ export function TokenUsage() {
         <div className="text-[11px] text-muted">预估 Token 数</div>
         {totalTokens > 0 && (
           <div className="text-[11px] text-muted">
-            上下文窗口上限 {CONTEXT_WINDOW.toLocaleString()}
+            上下文窗口上限 {contextWindow.toLocaleString()}
           </div>
         )}
       </div>

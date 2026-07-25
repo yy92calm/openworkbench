@@ -197,6 +197,8 @@ export interface OpenCodeClientOptions {
 export interface ProviderModelInfo {
   id: string;
   name: string;
+  /** The model's context window in tokens, when the provider reports it. */
+  contextLimit?: number;
 }
 
 /** A provider OpenCode can use right now (auth present or public). */

@@ -1,7 +1,6 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { BookOpen, FolderOpen, Globe, PanelRightClose, Terminal, X } from "lucide-react";
 import { useRuntimeStore } from "@/lib/runtime";
-import { DRAFT_KEY } from "@/lib/runtime";
 import { cn } from "@/lib/cn";
 import { ShortcutsCheatsheet } from "@/components/command-palette/ShortcutsCheatsheet";
 
@@ -19,10 +18,6 @@ const TABS = [
   { id: "files" as const, label: "文件", icon: <FolderOpen size={14} /> },
 ];
 
-function estimateTokens(text: string): number {
-  return Math.ceil(text.length / 4);
-}
-
 export function Topicbar({
   title,
   rightPanelOpen,
@@ -37,28 +32,7 @@ export function Topicbar({
   onClosePanel: () => void;
 }) {
   const status = useRuntimeStore((s) => s.status);
-  const currentId = useRuntimeStore((s) => s.currentId);
-  const threads = useRuntimeStore((s) => s.threads);
-  const thread = currentId ? threads[currentId] : threads[DRAFT_KEY];
   const [showShortcuts, setShowShortcuts] = useState(false);
-
-  const totalTokens = useMemo(() => {
-    if (!thread) return 0;
-    let n = 0;
-    for (const b of thread.blocks) {
-      switch (b.kind) {
-        case "user": n += b.text.length; break;
-        case "agent": n += b.markdown.length; break;
-        case "reasoning": n += b.text.length; break;
-        case "tool-call": {
-          n += b.inputSummary?.length ?? 0;
-          n += b.outputSummary?.length ?? 0;
-          break;
-        }
-      }
-    }
-    return Math.ceil(n / 4);
-  }, [thread]);
 
   return (
     <header className="topicbar flex h-9 shrink-0 items-center gap-2 border-b border-border bg-surface px-3">
@@ -94,11 +68,6 @@ export function Topicbar({
         >
           <PanelRightClose size={14} />
         </button>
-      )}
-      {totalTokens > 0 && (
-        <span className="rounded bg-surface-2 px-1.5 py-0.5 font-mono text-[10px] text-muted" title="会话中预估 Token 数">
-          ~{totalTokens >= 1000 ? `${(totalTokens / 1000).toFixed(1)}k` : totalTokens}
-        </span>
       )}
       <ShortcutsCheatsheet open={showShortcuts} onClose={() => setShowShortcuts(false)} />
     </header>

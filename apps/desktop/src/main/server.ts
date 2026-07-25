@@ -8,13 +8,29 @@ import { app } from "electron";
 import type { ChildProcess } from "node:child_process";
 import { spawn } from "node:child_process";
 import { deploySchedulerProfile, startSchedulerApi, stopSchedulerApi } from "./scheduler";
-import { deployBrowserProfile } from "./browser";
+import { createBrowserMcp, type BrowserMcpPlugin } from "@fafawork/browser-mcp";
 import { enrichedPath } from "./shell_env";
 
 let child: ChildProcess | null = null;
 let currentUrl: string | null = null;
 let currentPort: number | null = null;
 let serverPassword = "";
+
+// Browser MCP plugin instance (lazy-initialized)
+let browserMcpInstance: BrowserMcpPlugin | null = null;
+export function getBrowserMcp(): BrowserMcpPlugin {
+  if (!browserMcpInstance) {
+    browserMcpInstance = createBrowserMcp({
+      workspaceDir: () => workspaceDir(),
+      logger: {
+        info: (...a: unknown[]) => log("browser-mcp", "info", a.map(String).join(" ")),
+        warn: (...a: unknown[]) => log("browser-mcp", "warn", a.map(String).join(" ")),
+        error: (...a: unknown[]) => log("browser-mcp", "error", a.map(String).join(" ")),
+      },
+    });
+  }
+  return browserMcpInstance;
+}
 
 export function getServerPassword(): string {
   if (!serverPassword) serverPassword = randomUUID();
@@ -225,7 +241,7 @@ export async function startSidecar(): Promise<string> {
   deploySchedulerProfile(cfg, mcpSchedulerScriptPath(), apiInfo);
 
   // Deploy browser MCP server (auto-register with agent runtime)
-  deployBrowserProfile(cfg);
+  getBrowserMcp().deploy(cfg);
 
   const env: Record<string, string> = {
     OPENCODE_SERVER_PASSWORD: password,

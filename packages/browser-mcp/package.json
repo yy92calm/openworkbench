@@ -1,0 +1,21 @@
+{
+  "name": "@fafawork/browser-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/main/index.ts",
+  "types": "src/main/index.ts",
+  "exports": {
+    ".": "./src/main/index.ts",
+    "./panel": "./src/renderer/BrowserPanel.tsx",
+    "./preload": "./src/preload.ts",
+    "./mcp-server": "./src/main/browser-mcp-server.ts"
+  },
+  "dependencies": {
+    "lucide-react": "^0.454.0",
+    "react": "^18.3.1"
+  },
+  "peerDependencies": {
+    "electron": ">=28"
+  }
+}

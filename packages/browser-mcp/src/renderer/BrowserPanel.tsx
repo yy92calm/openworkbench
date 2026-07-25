@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-import { ArrowLeft, ArrowRight, Globe, RefreshCw, Terminal, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Globe, RefreshCw, Terminal, X, Circle, Square, Save, Play, ChevronRight } from "lucide-react";
 
 /**
  * Browser panel using Electron's <webview> for full browser automation.
@@ -19,6 +19,7 @@ interface WebviewElement extends HTMLElement {
   canGoBack: () => boolean;
   canGoForward: () => boolean;
   capturePage: () => Promise<{ toDataURL: () => string }>;
+  getWebContentsId: () => number;
   addEventListener: (event: string, handler: (...args: unknown[]) => void) => void;
   removeEventListener: (event: string, handler: (...args: unknown[]) => void) => void;
 }
@@ -38,7 +39,70 @@ export function BrowserPanel({
   const [showJsConsole, setShowJsConsole] = useState(false);
   const [jsInput, setJsInput] = useState("");
   const [jsResult, setJsResult] = useState("");
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordCount, setRecordCount] = useState(0);
+  const [showSaveInput, setShowSaveInput] = useState(false);
+  const [saveName, setSaveName] = useState("");
+  const [showReplayList, setShowReplayList] = useState(false);
+  const [replayList, setReplayList] = useState<{ name: string; steps: number; created: string }[]>([]);
+  const [isReplaying, setIsReplaying] = useState(false);
   const webviewRef = useRef<WebviewElement | null>(null);
+
+  // Sync recording state with main process on mount
+  useEffect(() => {
+    window.electronAPI.browserRecordState().then((state: unknown) => {
+      const s = state as { isRecording: boolean; count: number };
+      setIsRecording(s.isRecording);
+      setRecordCount(s.count);
+    });
+  }, []);
+
+  const toggleRecordStart = async () => {
+    await window.electronAPI.browserRecordStart();
+    setIsRecording(true);
+    setRecordCount(0);
+  };
+
+  const toggleRecordStop = async () => {
+    const result = await window.electronAPI.browserRecordStop() as { count: number };
+    setIsRecording(false);
+    setRecordCount(result.count);
+    setJsResult(`录制结束，共 ${result.count} 步`);
+    setShowJsConsole(true);
+  };
+
+  const handleSave = async () => {
+    if (!saveName.trim()) return;
+    const result = await window.electronAPI.browserRecordSave(saveName.trim()) as { ok: boolean; count: number; error?: string };
+    if (result.ok) {
+      setJsResult(`已保存录制 "${saveName.trim()}"（${result.count} 步）`);
+    } else {
+      setJsResult(`保存失败: ${result.error}`);
+    }
+    setShowJsConsole(true);
+    setShowSaveInput(false);
+    setSaveName("");
+  };
+
+  const handleShowReplayList = async () => {
+    const list = await window.electronAPI.browserRecordList() as { name: string; steps: number; created: string }[];
+    setReplayList(list);
+    setShowReplayList(!showReplayList);
+  };
+
+  const handleReplay = async (name: string) => {
+    setShowReplayList(false);
+    setIsReplaying(true);
+    setJsResult(`正在回放 "${name}"…`);
+    setShowJsConsole(true);
+    const result = await window.electronAPI.browserRecordReplay(name) as { ok: boolean; count: number; results: string[]; error?: string };
+    setIsReplaying(false);
+    if (result.ok) {
+      setJsResult(`回放完成（${result.count} 步）:\n${result.results.join("\n")}`);
+    } else {
+      setJsResult(`回放失败: ${result.error}`);
+    }
+  };
 
   const currentUrl = history[historyIndex] || "about:blank";
 
@@ -71,9 +135,22 @@ export function BrowserPanel({
     };
     wv.addEventListener("did-navigate", onNavigate);
     wv.addEventListener("did-navigate-in-page", onNavigate);
+
+    // Prevent links from opening in external browser — redirect into the webview
+    const onDidAttach = () => {
+      try {
+        const wcId = wv.getWebContentsId();
+        void window.electronAPI.invoke("browser:setup-webview", wcId);
+      } catch { /* webview not ready yet */ }
+    };
+    wv.addEventListener("did-attach", onDidAttach);
+    // Also try immediately in case did-attach already fired
+    onDidAttach();
+
     return () => {
       wv.removeEventListener("did-navigate", onNavigate);
       wv.removeEventListener("did-navigate-in-page", onNavigate);
+      wv.removeEventListener("did-attach", onDidAttach);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [history, historyIndex, onUrlChange]);
@@ -340,7 +417,7 @@ export function BrowserPanel({
   const canGoForward = historyIndex < history.length - 1;
 
   return (
-    <div className="flex h-full flex-col bg-surface">
+    <div className="flex h-full flex-col overflow-hidden bg-surface">
       {/* URL bar */}
       <div className="flex items-center gap-1 border-b border-border px-2 py-1.5">
         <button onClick={goBack} disabled={!canGoBack} className="rounded p-1 text-muted hover:bg-surface-2 hover:text-text disabled:opacity-30" title="后退">
@@ -363,7 +440,64 @@ export function BrowserPanel({
           />
         </div>
         <button
-          onClick={() => setShowJsConsole(!showJsConsole)}
+          onClick={toggleRecordStart}
+          disabled={isRecording}
+          className={isRecording
+            ? "rounded p-1 text-error opacity-40"
+            : "rounded p-1 text-muted hover:bg-surface-2 hover:text-error"}
+          title="开始录制"
+        >
+          <Circle size={13} />
+        </button>
+        <button
+          onClick={toggleRecordStop}
+          disabled={!isRecording}
+          className={!isRecording
+            ? "rounded p-1 text-muted opacity-30"
+            : "rounded p-1 text-error animate-pulse hover:bg-surface-2"}
+          title="停止录制"
+        >
+          <Square size={13} />
+        </button>
+        <button
+          onClick={() => { setShowSaveInput(!showSaveInput); setShowReplayList(false); }}
+          disabled={isRecording || recordCount === 0}
+          className="rounded p-1 text-muted hover:bg-surface-2 hover:text-text disabled:opacity-30"
+          title="保存录制"
+        >
+          <Save size={13} />
+        </button>
+        <div className="relative">
+          <button
+            onClick={handleShowReplayList}
+            disabled={isReplaying}
+            className={showReplayList ? "rounded p-1 text-accent" : "rounded p-1 text-muted hover:bg-surface-2 hover:text-text disabled:opacity-30"}
+            title="回放录制"
+          >
+            <Play size={13} />
+          </button>
+          {showReplayList && (
+            <div className="absolute right-0 top-full z-dropdown mt-1 w-52 rounded-card border border-border bg-surface shadow-pop">
+              {replayList.length === 0 ? (
+                <div className="px-3 py-2 text-[11px] text-muted">暂无保存的录制</div>
+              ) : (
+                replayList.map((r) => (
+                  <button
+                    key={r.name}
+                    onClick={() => handleReplay(r.name)}
+                    className="flex w-full items-center gap-2 border-b border-border-soft px-3 py-1.5 text-left text-[11px] text-text last:border-0 hover:bg-surface-2"
+                  >
+                    <ChevronRight size={11} className="shrink-0 text-muted" />
+                    <span className="min-w-0 flex-1 truncate">{r.name}</span>
+                    <span className="shrink-0 text-muted">{r.steps}步</span>
+                  </button>
+                ))
+              )}
+            </div>
+          )}
+        </div>
+        <button
+          onClick={() => { setShowJsConsole(!showJsConsole); setShowSaveInput(false); setShowReplayList(false); }}
           className={showJsConsole ? "rounded p-1 text-accent" : "rounded p-1 text-muted hover:text-text"}
           title="JavaScript 控制台"
         >
@@ -373,6 +507,25 @@ export function BrowserPanel({
           <X size={13} />
         </button>
       </div>
+
+      {/* Save recording input */}
+      {showSaveInput && (
+        <div className="border-b border-border px-2 py-1.5">
+          <div className="flex gap-1">
+            <input
+              value={saveName}
+              onChange={(e) => setSaveName(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleSave(); } }}
+              placeholder="输入录制名称…"
+              autoFocus
+              className="flex-1 rounded-input border border-border bg-bg px-2 py-1 text-[11px] text-text outline-none placeholder:text-muted focus:border-accent/40"
+            />
+            <button onClick={handleSave} className="rounded-input bg-accent px-2 py-1 text-[11px] text-accent-fg hover:opacity-90">
+              保存
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* JS Console */}
       {showJsConsole && (

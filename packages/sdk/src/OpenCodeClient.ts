@@ -301,12 +301,20 @@ export class OpenCodeClient {
     });
     if (!res.ok) throw new Error(`Failed to list providers (${res.status})`);
     const body = (await res.json()) as {
-      providers?: Array<{ id: string; name?: string; models?: Record<string, { name?: string }> }>;
+      providers?: Array<{
+        id: string;
+        name?: string;
+        models?: Record<string, { name?: string; limit?: { context?: number } }>;
+      }>;
     };
     return (body.providers ?? []).map((p) => ({
       id: p.id,
       name: p.name ?? p.id,
-      models: Object.entries(p.models ?? {}).map(([id, m]) => ({ id, name: m.name ?? id })),
+      models: Object.entries(p.models ?? {}).map(([id, m]) => ({
+        id,
+        name: m.name ?? id,
+        contextLimit: typeof m.limit?.context === "number" ? m.limit.context : undefined,
+      })),
     }));
   }
 
