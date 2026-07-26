@@ -139,29 +139,6 @@ export function SettingsPage() {
                       </button>
                     ))}
                   </div>
-
-                  <div className="mt-4 flex items-center justify-between gap-4">
-                    <div className="min-w-0">
-                      <div className="text-[13px] font-medium text-text">{t("settings.expandDetails")}</div>
-                      <div className="text-[12px] text-muted">{t("settings.expandDetailsHint")}</div>
-                    </div>
-                    <button
-                      role="switch"
-                      aria-checked={expandThreadDetails}
-                      onClick={() => setExpandThreadDetails(!expandThreadDetails)}
-                      className={cn(
-                        "relative h-5 w-9 shrink-0 rounded-full transition-colors",
-                        expandThreadDetails ? "bg-accent" : "bg-surface-2",
-                      )}
-                    >
-                      <span
-                        className={cn(
-                          "absolute top-0.5 h-4 w-4 rounded-full bg-surface shadow transition-transform",
-                          expandThreadDetails ? "left-[18px]" : "left-0.5",
-                        )}
-                      />
-                    </button>
-                  </div>
                 </Card>
               </>
             )}
@@ -251,6 +228,31 @@ export function SettingsPage() {
                       </optgroup>
                     ))}
                   </select>
+                </Card>
+
+                <Card title={t("settings.display")} hint={t("settings.displayHint")}>
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="min-w-0">
+                      <div className="text-[13px] font-medium text-text">{t("settings.expandDetails")}</div>
+                      <div className="text-[12px] text-muted">{t("settings.expandDetailsHint")}</div>
+                    </div>
+                    <button
+                      role="switch"
+                      aria-checked={expandThreadDetails}
+                      onClick={() => setExpandThreadDetails(!expandThreadDetails)}
+                      className={cn(
+                        "relative h-5 w-9 shrink-0 rounded-full transition-colors",
+                        expandThreadDetails ? "bg-accent" : "bg-surface-2",
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          "absolute top-0.5 h-4 w-4 rounded-full bg-surface shadow transition-transform",
+                          expandThreadDetails ? "left-[18px]" : "left-0.5",
+                        )}
+                      />
+                    </button>
+                  </div>
                 </Card>
               </>
             )}
