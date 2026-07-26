@@ -67,6 +67,54 @@ provider、模型、skills、agents、命令、MCP、权限全部由打包时的
 | `runtime/kernel/` | Python 与 R kernel 桥 |
 | `scripts/dev/` | sidecar 拉取脚本（opencode） |
 
+## 架构
+
+三个相互隔离的 Electron 进程（main / preload / renderer）加共享的 workspace
+包。依赖单向流动：renderer -> preload（contextBridge 白名单）-> main ->
+`packages/sdk` -> 运行时。主进程按「一文件一能力」拆分，每个模块持有自己的
+状态，由 `src/main/index.ts` 统一编排启停。
+
+### 基础 app 内容（外壳本身）
+
+桌面外壳离不开这些模块：
+
+| 模块 | 路径 | 职责 |
+| --- | --- | --- |
+| 生命周期 | `apps/desktop/src/main/index.ts` | `app.whenReady` / `before-quit` 编排 |
+| 渠道常量 | `apps/desktop/src/main/constants.ts` | dev/beta/prod 命名与 ID |
+| 窗口管理 | `apps/desktop/src/main/windows.ts` | 主窗口 + 状态持久化 |
+| IPC 注册中心 | `apps/desktop/src/main/ipc.ts` | 所有 `ipcMain.handle` 注册 |
+| KV 存储 | `apps/desktop/src/main/store.ts` | electron-store，带 scope 缓存 |
+| 日志 | `apps/desktop/src/main/logging.ts` | 统一日志与导出 |
+| Shell 环境 | `apps/desktop/src/main/shell_env.ts` | shell/工具探测、PATH |
+| 自动更新 | `apps/desktop/src/main/updater.ts` | electron-updater |
+| 桥接层 | `apps/desktop/src/preload/index.ts` | contextBridge 白名单暴露 |
+| SDK | `packages/sdk` | 与 agent 运行时的唯一边界（`AgentRuntime` + factory） |
+| 共享类型 | `packages/shared` | main 与 renderer 共享的领域类型 |
+| 外壳 UI | `apps/desktop/src/renderer/{app,components/{sidebar,thread,inspector,command-palette,settings,ui}}` | 布局、路由、外壳组件 |
+
+### 能力域模块（可裁剪）
+
+每个是独立能力，通过 `ipc.ts` 的分块注册接入，由 `index.ts` 编排启停：
+
+| 模块 | Main 文件 | 关联包 | 能力 |
+| --- | --- | --- | --- |
+| Sidecar 运行时 | `src/main/server.ts` | `packages/sdk` | spawn `opencode serve`、部署 profile、多后端（opencode / claude-code） |
+| 工作区文件 | `src/main/artifact_file.ts` | - | 文件读写、artifact 解析、目录列表 |
+| 代码内核 | `src/main/kernel.ts` | - | Python/R 子进程执行 |
+| 终端 | `src/main/terminal.ts` | `packages/terminal` | node-pty 会话（xterm 前端） |
+| 定时任务 | `src/main/scheduler.ts` | `packages/scheduler` | CronEngine + 内部 HTTP API + MCP 桥接 |
+| 溯源 | `src/main/provenance.ts` | - | JSONL provenance + env lockfile |
+| 预览服务 | `src/main/preview_server.ts` | - | 本地静态文件 HTTP 服务（token 鉴权） |
+| 网页抓取 | `src/main/browser.ts` | - | HTTP 抓取 + HTML 转文本 |
+| 浏览器 MCP | `src/main/browser-mcp-server.ts` | `packages/browser-mcp` | 独立 MCP server + preload/panel 注入 |
+
+### 打包者配置（非 app 代码）
+
+`app-config/.opencode/` 与 `app-config/.claude/` 由打包者提供，每次启动由
+`server.ts:deployBundledProfile()` 部署到 app 私有配置目录。app 运行时不内置
+任何 skill/agent/command--换一份 profile 就是另一个产品。
+
 ## 安全默认
 
 - agent 只能访问当前工作区。

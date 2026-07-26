@@ -74,6 +74,57 @@ rebrand for your product, change `appId` / `productName` in
 | `runtime/kernel/` | Python and R kernel bridges |
 | `scripts/dev/` | Sidecar fetcher (opencode) |
 
+## Architecture
+
+Three isolated Electron processes (main / preload / renderer) plus shared
+workspace packages. Dependencies flow one way: renderer -> preload
+(contextBridge allowlist) -> main -> `packages/sdk` -> runtime. The main
+process is split into one-file-per-capability, each owning its state and
+started/stopped from `src/main/index.ts`.
+
+### Base app (the shell itself)
+
+The desktop shell cannot run without these:
+
+| Module | Path | Role |
+| --- | --- | --- |
+| Lifecycle | `apps/desktop/src/main/index.ts` | `app.whenReady` / `before-quit` orchestration |
+| Channels | `apps/desktop/src/main/constants.ts` | dev/beta/prod naming and IDs |
+| Windows | `apps/desktop/src/main/windows.ts` | main window + state persistence |
+| IPC registry | `apps/desktop/src/main/ipc.ts` | all `ipcMain.handle` registrations |
+| KV store | `apps/desktop/src/main/store.ts` | electron-store with scoped cache |
+| Logging | `apps/desktop/src/main/logging.ts` | unified logs and export |
+| Shell env | `apps/desktop/src/main/shell_env.ts` | shell/tool detection, PATH |
+| Updater | `apps/desktop/src/main/updater.ts` | electron-updater |
+| Preload | `apps/desktop/src/preload/index.ts` | contextBridge allowlist |
+| SDK | `packages/sdk` | sole boundary to the agent runtime (`AgentRuntime` + factory) |
+| Shared types | `packages/shared` | domain types shared by main + renderer |
+| Shell UI | `apps/desktop/src/renderer/{app,components/{sidebar,thread,inspector,command-palette,settings,ui}}` | layout, routing, shell components |
+
+### Capability modules (removable)
+
+Each is an independent capability wired in via `ipc.ts` blocks and
+started/stopped from `index.ts`:
+
+| Module | Main file | Package | Capability |
+| --- | --- | --- | --- |
+| Sidecar runtime | `src/main/server.ts` | `packages/sdk` | spawn `opencode serve`, deploy profile, multi-backend (opencode / claude-code) |
+| Workspace files | `src/main/artifact_file.ts` | - | file IO, artifact resolve, dir listing |
+| Code kernel | `src/main/kernel.ts` | - | Python/R subprocess execution |
+| Terminal | `src/main/terminal.ts` | `packages/terminal` | node-pty sessions (xterm front-end) |
+| Scheduler | `src/main/scheduler.ts` | `packages/scheduler` | CronEngine + internal HTTP API + MCP bridge |
+| Provenance | `src/main/provenance.ts` | - | JSONL provenance + env lockfile |
+| Preview server | `src/main/preview_server.ts` | - | local static file HTTP server (token auth) |
+| Web fetch | `src/main/browser.ts` | - | HTTP fetch + HTML-to-text |
+| Browser MCP | `src/main/browser-mcp-server.ts` | `packages/browser-mcp` | standalone MCP server + preload/panel |
+
+### Packager profile (not app code)
+
+`app-config/.opencode/` and `app-config/.claude/` are packager-owned and
+deployed to the app-private config dir on every startup
+(`server.ts:deployBundledProfile()`). The app ships no skill/agent/command at
+runtime - swap the profile to get a different product.
+
 ## Safety defaults
 
 - The agent may only access the current workspace.
