@@ -61,6 +61,7 @@ function countBlocks(blocks: import("@workbench/shared").ThreadBlock[]): TokenEs
         break;
       case "tool-call": {
         toolInputChars += b.inputSummary?.length ?? 0;
+        toolInputChars += b.title?.length ?? 0;
         toolOutputChars += b.outputSummary?.length ?? 0;
         break;
       }

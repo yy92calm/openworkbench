@@ -1309,13 +1309,16 @@ export function historyToThread(messages: HistoryMessage[], commands?: CommandIn
           const userShell = shellTurn && p.tool === "bash";
           const isShell = p.tool === "bash" || p.tool === "shell";
           if (userShell) blocks.push({ kind: "user", text: `! ${command}` });
+          const toolInput = userShell ? undefined : extractInputSummary(p.tool ?? "", p.state?.input);
+          const toolOutput = userShell && p.state?.output?.trim()
+            ? p.state.output.replace(/\s+$/, "")
+            : extractOutputSummary(p.tool ?? "", p.state?.output, p.state?.input);
           blocks.push({
             kind: "tool-call",
             title: tidyToolTitle(p.state?.title?.trim() || command || filePath || p.tool || "tool"),
             status: frozen ? "pending" : status,
-            ...(userShell && p.state?.output?.trim()
-              ? { outputSummary: p.state.output.replace(/\s+$/, "") }
-              : {}),
+            ...(toolInput ? { inputSummary: toolInput } : {}),
+            ...(toolOutput ? { outputSummary: toolOutput } : {}),
             ...(isShell && command ? { shellCommand: command } : {}),
           });
           const artifact = deriveArtifact({
