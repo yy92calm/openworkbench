@@ -1,4 +1,4 @@
-import { ipcMain, dialog, BrowserWindow } from "electron";
+import { app, ipcMain, dialog, BrowserWindow } from "electron";
 import { createAgentRuntime, type AgentRuntime, type AgentRuntimeEvent } from "@workbench/sdk/agent-runtime";
 import { CHANNEL, APP_NAMES, APP_IDS } from "./constants";
 import { getStore, removeStoreFile } from "./store";
@@ -21,6 +21,7 @@ export function registerIpcHandlers(): void {
   // ---- Channel ----
   ipcMain.handle("channel-name", () => CHANNEL);
   ipcMain.handle("app-identifier", () => APP_IDS[CHANNEL]);
+  ipcMain.handle("app-version", () => app.getVersion());
 
   // ---- Runtime (sidecar) ----
   // `kind` selects the engine: "opencode" (default) spawns the opencode serve

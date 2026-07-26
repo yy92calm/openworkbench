@@ -6,6 +6,7 @@ const api = {
   // Channel
   channelName: () => ipcRenderer.invoke("channel-name"),
   appIdentifier: () => ipcRenderer.invoke("app-identifier"),
+  appVersion: () => ipcRenderer.invoke("app-version"),
 
   // Runtime (sidecar)
   startRuntime: (kind?: string) => ipcRenderer.invoke("start-runtime", kind),

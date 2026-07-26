@@ -125,6 +125,44 @@ export async function logDebug(message: string): Promise<void> {
   } catch { /* never break the app on diagnostics */ }
 }
 
+export async function checkForUpdates(alertOnUpToDate?: boolean): Promise<void> {
+  try {
+    await api().checkForUpdates(alertOnUpToDate);
+  } catch { /* ignore */ }
+}
+
+export async function exportLogs(): Promise<string | null> {
+  try {
+    return await api().exportLogs();
+  } catch {
+    return null;
+  }
+}
+
+export async function channelName(): Promise<string | null> {
+  try {
+    return await api().channelName();
+  } catch {
+    return null;
+  }
+}
+
+export async function appIdentifier(): Promise<string | null> {
+  try {
+    return await api().appIdentifier();
+  } catch {
+    return null;
+  }
+}
+
+export async function appVersion(): Promise<string | null> {
+  try {
+    return await api().appVersion();
+  } catch {
+    return null;
+  }
+}
+
 // ---- Scheduler ----
 
 export interface ScheduledTask {

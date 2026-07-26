@@ -2,7 +2,7 @@ import { create } from "zustand";
 import type { ArtifactBlock, FileRoot } from "@workbench/shared";
 import { loadLocale, persistLocale, type Locale } from "./i18n";
 
-export type Theme = "light" | "dark";
+export type Theme = "light" | "dark" | "system";
 export type AgentRuntimeKind = "opencode" | "claude-code";
 
 /** A main-area tab. Session tabs switch the active conversation (single
@@ -21,7 +21,7 @@ const EXPAND_DETAILS_KEY = "workbench.expandThreadDetails";
 function initialTheme(): Theme {
   if (typeof window === "undefined") return "light";
   const saved = window.localStorage.getItem(THEME_KEY);
-  if (saved === "light" || saved === "dark") return saved;
+  if (saved === "light" || saved === "dark" || saved === "system") return saved;
   const prefersDark = window.matchMedia?.("(prefers-color-scheme: dark)").matches;
   return prefersDark ? "dark" : "light";
 }
