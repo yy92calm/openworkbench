@@ -15,8 +15,8 @@ export function DataFlowCard({ model, workspace }: { model: string | null; works
         <h2 className="font-serif text-[15px] text-text">{t("settings.dataFlow.title")}</h2>
         <p className="mt-0.5 text-xs text-muted">{t("settings.dataFlow.subtitle")}</p>
       </header>
-      <div className="grid gap-5 px-5 py-4 sm:grid-cols-2">
-        <div>
+      <div className="space-y-5 px-5 py-4">
+        <div className="border-l-2 border-ok pl-4">
           <div className="flex items-center gap-1.5 text-[13px] font-medium text-text">
             <HardDrive size={14} className="text-ok" /> {t("settings.dataFlow.local")}
           </div>
@@ -30,8 +30,9 @@ export function DataFlowCard({ model, workspace }: { model: string | null; works
             <li>{t("settings.dataFlow.local4")}</li>
           </ul>
         </div>
-        <div>
-          <div className="flex items-center gap-1.5 text-[13px] font-medium text-text">
+
+        <div className="border-l-2 border-warn pl-4">
+          <div className="flex flex-wrap items-center gap-1.5 text-[13px] font-medium text-text">
             <Send size={14} className="text-warn" /> {t("settings.dataFlow.sent")}
             <span className="rounded bg-surface-2 px-1.5 py-0.5 font-mono text-xs text-muted">
               {model ?? t("settings.dataFlow.noModel")}
