@@ -73,14 +73,15 @@ export function Sidebar({ project }: { project: Project }) {
       {overlayTitlebar && <div className="h-10 shrink-0 drag-region" />}
       <div className={cn("px-3 pb-2", overlayTitlebar ? "pt-1" : "pt-3")}>
         <div className="flex items-center gap-1.5">
-          <img src={logo} alt="" className="h-[14px] w-auto" />
+          <img src={logo} alt="" className="h-[18px] w-auto" />
+          <span className="font-serif text-[15px] font-medium text-text">Workbench</span>
         </div>
       </div>
 
       <nav className="flex flex-col px-2">
-        <NavRow icon={<Plus size={14} />} label={t("sidebar.new")} onClick={startNew} />
-        <NavRow icon={<CalendarClock size={14} />} label={t("sidebar.tasks")} onClick={() => navigate("/tasks")} />
-        <NavRow icon={<FolderTree size={14} />} label={t("sidebar.skills")} onClick={() => navigate("/skills")} />
+        <NavRow icon={<Plus size={16} />} label={t("sidebar.new")} onClick={startNew} />
+        <NavRow icon={<CalendarClock size={16} />} label={t("sidebar.tasks")} onClick={() => navigate("/tasks")} />
+        <NavRow icon={<FolderTree size={16} />} label={t("sidebar.skills")} onClick={() => navigate("/skills")} />
       </nav>
 
       <div className="mt-3 flex-1 overflow-y-auto px-2 pb-2">
@@ -92,7 +93,7 @@ export function Sidebar({ project }: { project: Project }) {
               className="rounded p-0.5 text-muted hover:bg-surface-2 hover:text-text"
               aria-label="搜索会话"
             >
-              {searchOpen ? <X size={11} /> : <Search size={11} />}
+              {searchOpen ? <X size={13} /> : <Search size={13} />}
             </button>
           </div>
           {searchOpen && (
@@ -157,7 +158,7 @@ export function Sidebar({ project }: { project: Project }) {
             onClick={() => navigate("/settings")}
             aria-label="设置"
           >
-            <Settings size={13} />
+            <Settings size={16} />
             <span>{t("sidebar.settings")}</span>
           </button>
           <span className="flex-1" />
@@ -167,7 +168,7 @@ export function Sidebar({ project }: { project: Project }) {
             aria-label={sidebarCollapsed ? "展开侧边栏" : "折叠侧边栏"}
             title={sidebarCollapsed ? "展开侧边栏" : "折叠侧边栏"}
           >
-            {sidebarCollapsed ? <PanelLeft size={14} /> : <PanelLeftClose size={14} />}
+            {sidebarCollapsed ? <PanelLeft size={16} /> : <PanelLeftClose size={16} />}
           </button>
         </div>
       </div>
