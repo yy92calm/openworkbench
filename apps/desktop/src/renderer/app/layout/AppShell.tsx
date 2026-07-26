@@ -64,9 +64,12 @@ export function AppShell() {
     document.body.style.userSelect = "none";
   };
 
+  // Inline --sidebar-width must respect the collapsed state, otherwise it
+  // overrides the CSS class's 0px and the sidebar keeps occupying space (the
+  // expand trigger then sits over a transparent but non-zero column).
   const layoutStyle = useMemo(
-    () => ({ "--sidebar-width": `${sidebarWidth}px` }) as React.CSSProperties,
-    [sidebarWidth],
+    () => ({ "--sidebar-width": sidebarCollapsed ? "0px" : `${sidebarWidth}px` }) as React.CSSProperties,
+    [sidebarWidth, sidebarCollapsed],
   );
 
 return (

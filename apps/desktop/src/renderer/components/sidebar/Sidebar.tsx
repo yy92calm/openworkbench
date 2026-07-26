@@ -70,7 +70,7 @@ export function Sidebar({ project }: { project: Project }) {
 
   return (
     <aside className="flex h-full w-full shrink-0 flex-col border-r border-border bg-surface">
-      {overlayTitlebar && <div className="h-8 shrink-0 drag-region" />}
+      {overlayTitlebar && <div className="h-10 shrink-0 drag-region" />}
       <div className={cn("px-3 pb-2", overlayTitlebar ? "pt-1" : "pt-3")}>
         <div className="flex items-center gap-1.5">
           <img src={logo} alt="" className="h-[14px] w-auto" />
