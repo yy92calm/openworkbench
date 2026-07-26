@@ -82,6 +82,8 @@ const api = {
   schedulerToggle: (id: string, enabled: boolean) => ipcRenderer.invoke("scheduler:toggle", id, enabled),
   schedulerFireNow: (id: string) => ipcRenderer.invoke("scheduler:fire-now", id),
   schedulerHistory: (taskId?: string, limit?: number) => ipcRenderer.invoke("scheduler:history", taskId, limit),
+  schedulerDeleteExecution: (id: string) => ipcRenderer.invoke("scheduler:delete-execution", id),
+  schedulerClearHistory: (taskId?: string) => ipcRenderer.invoke("scheduler:clear-history", taskId),
 
   // Window
   openExternal: (url: string) => ipcRenderer.invoke("open-url", url),

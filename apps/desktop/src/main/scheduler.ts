@@ -297,6 +297,24 @@ export class CronEngine {
     return records.slice(0, limit);
   }
 
+  deleteExecution(id: string): void {
+    const store = getStore(STORE_SCOPE);
+    const raw = store.get("executions");
+    const records: ExecutionRecord[] = Array.isArray(raw) ? raw : [];
+    store.set("executions", records.filter((r) => r.id !== id));
+  }
+
+  clearHistory(taskId?: string): void {
+    const store = getStore(STORE_SCOPE);
+    if (taskId) {
+      const raw = store.get("executions");
+      const records: ExecutionRecord[] = Array.isArray(raw) ? raw : [];
+      store.set("executions", records.filter((r) => r.taskId !== taskId));
+    } else {
+      store.set("executions", []);
+    }
+  }
+
   private saveTasks(tasks: ScheduledTask[]): void {
     const store = getStore(STORE_SCOPE);
     store.set("tasks", tasks);

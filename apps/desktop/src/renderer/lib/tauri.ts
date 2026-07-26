@@ -29,6 +29,8 @@ export {
   schedulerToggle,
   schedulerFireNow,
   schedulerHistory,
+  schedulerDeleteExecution,
+  schedulerClearHistory,
 } from "./electron";
 export type {
   JupyterStatus,

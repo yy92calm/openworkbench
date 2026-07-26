@@ -231,6 +231,8 @@ export function registerIpcHandlers(): void {
   ipcMain.handle("scheduler:toggle", (_e, id: string, enabled: boolean) => cronEngine.toggleTask(id, enabled));
   ipcMain.handle("scheduler:fire-now", (_e, id: string) => cronEngine.fireNow(id));
   ipcMain.handle("scheduler:history", (_e, taskId?: string, limit?: number) => cronEngine.getHistory(taskId, limit));
+  ipcMain.handle("scheduler:delete-execution", (_e, id: string) => cronEngine.deleteExecution(id));
+  ipcMain.handle("scheduler:clear-history", (_e, taskId?: string) => cronEngine.clearHistory(taskId));
 
   log.info("IPC handlers registered");
   registerTerminalHandlers();

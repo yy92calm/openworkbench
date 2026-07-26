@@ -263,3 +263,15 @@ export async function schedulerHistory(taskId?: string, limit?: number): Promise
     return [];
   }
 }
+
+export async function schedulerDeleteExecution(id: string): Promise<void> {
+  try {
+    await api().schedulerDeleteExecution(id);
+  } catch { /* ignore */ }
+}
+
+export async function schedulerClearHistory(taskId?: string): Promise<void> {
+  try {
+    await api().schedulerClearHistory(taskId);
+  } catch { /* ignore */ }
+}

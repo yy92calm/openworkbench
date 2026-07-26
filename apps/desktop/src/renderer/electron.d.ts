@@ -56,6 +56,17 @@ export interface ElectronAPI {
 
   openExternal: (url: string) => Promise<void>;
 
+  // Scheduler
+  schedulerList: () => Promise<unknown[]>;
+  schedulerCreate: (task: unknown) => Promise<unknown>;
+  schedulerUpdate: (id: string, patch: unknown) => Promise<unknown>;
+  schedulerDelete: (id: string) => Promise<void>;
+  schedulerToggle: (id: string, enabled: boolean) => Promise<unknown>;
+  schedulerFireNow: (id: string) => Promise<unknown>;
+  schedulerHistory: (taskId?: string, limit?: number) => Promise<unknown[]>;
+  schedulerDeleteExecution: (id: string) => Promise<void>;
+  schedulerClearHistory: (taskId?: string) => Promise<void>;
+
   /** Fetch page content from a URL (browser service). */
   browserFetch: (url: string) => Promise<string | null>;
 
