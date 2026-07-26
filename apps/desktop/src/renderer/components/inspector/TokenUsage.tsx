@@ -114,11 +114,10 @@ function Ring({ pct }: { pct: number }) {
  */
 export function TokenUsage() {
   const currentId = useRuntimeStore((s) => s.currentId);
-  const threads = useRuntimeStore((s) => s.threads);
+  const thread = useRuntimeStore((s) => (s.currentId ? s.threads[s.currentId] : s.threads[DRAFT_KEY]));
   const sessions = useRuntimeStore((s) => s.sessions);
   const defaultModel = useRuntimeStore((s) => s.defaultModel);
   const providers = useRuntimeStore((s) => s.providers);
-  const thread = currentId ? threads[currentId] : threads[DRAFT_KEY];
   const session = sessions.find((s) => s.id === currentId);
   const modelName = defaultModel ? defaultModel.split("/").pop()! : null;
 
@@ -126,18 +125,13 @@ export function TokenUsage() {
     () => resolveContextWindow(defaultModel, providers),
     [defaultModel, providers],
   );
-  const estimates = useMemo(() => countBlocks(thread?.blocks ?? []), [thread]);
-  const totals = useMemo(() => {
-    let tokens = 0;
-    let chars = 0;
-    for (const e of estimates) {
-      tokens += Number.isFinite(e.tokens) ? e.tokens : 0;
-      chars += Number.isFinite(e.chars) ? e.chars : 0;
-    }
-    return { tokens, chars };
-  }, [estimates]);
-  const totalTokens = totals.tokens;
-  const totalChars = totals.chars;
+  const estimates = countBlocks(thread?.blocks ?? []);
+  let totalTokens = 0;
+  let totalChars = 0;
+  for (const e of estimates) {
+    totalTokens += Number.isFinite(e.tokens) ? e.tokens : 0;
+    totalChars += Number.isFinite(e.chars) ? e.chars : 0;
+  }
   const pct = Math.min(totalTokens / contextWindow, 1);
   const safePct = Number.isFinite(pct) ? pct : 0;
   const tone = safePct >= DANGER_AT ? "text-error" : safePct >= WARNING_AT ? "text-warn" : "text-ok";
