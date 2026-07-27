@@ -439,44 +439,48 @@ export function BrowserPanel({
             className="w-full rounded-input border border-border bg-bg py-1 pl-7 pr-2 text-[11px] text-text outline-none placeholder:text-muted focus:border-accent/40"
           />
         </div>
-        <button
-          onClick={toggleRecordStart}
-          disabled={isRecording}
-          className={isRecording
-            ? "rounded p-1 text-error opacity-40"
-            : "rounded p-1 text-muted hover:bg-surface-2 hover:text-error"}
-          title="开始录制"
-        >
-          <Circle size={13} />
-        </button>
-        <button
-          onClick={toggleRecordStop}
-          disabled={!isRecording}
-          className={!isRecording
-            ? "rounded p-1 text-muted opacity-30"
-            : "rounded p-1 text-error animate-pulse hover:bg-surface-2"}
-          title="停止录制"
-        >
-          <Square size={13} />
-        </button>
+        {/* 录制控制：录制/停止切换 */}
+        {isRecording ? (
+          <button
+            onClick={toggleRecordStop}
+            className="flex items-center gap-1 rounded-input bg-error px-2 py-1 text-[11px] font-medium text-white animate-pulse hover:opacity-90"
+            title="停止录制"
+          >
+            <Square size={12} className="fill-current" /> 停止{recordCount > 0 ? ` ${recordCount}` : ""}
+          </button>
+        ) : (
+          <button
+            onClick={toggleRecordStart}
+            className="flex items-center gap-1 rounded-input border border-error/40 px-2 py-1 text-[11px] font-medium text-error hover:bg-error/10"
+            title="开始录制"
+          >
+            <Circle size={12} className="fill-current" /> 录制
+          </button>
+        )}
         <button
           onClick={() => { setShowSaveInput(!showSaveInput); setShowReplayList(false); }}
           disabled={isRecording || recordCount === 0}
-          className="rounded p-1 text-muted hover:bg-surface-2 hover:text-text disabled:opacity-30"
+          className="flex items-center gap-1 rounded-input border border-border px-2 py-1 text-[11px] text-text hover:bg-surface-2 disabled:opacity-30 disabled:hover:bg-transparent"
           title="保存录制"
         >
-          <Save size={13} />
+          <Save size={12} /> 保存
         </button>
         <div className="relative">
           <button
             onClick={handleShowReplayList}
             disabled={isReplaying}
-            className={showReplayList ? "rounded p-1 text-accent" : "rounded p-1 text-muted hover:bg-surface-2 hover:text-text disabled:opacity-30"}
+            className={
+              isReplaying
+                ? "flex items-center gap-1 rounded-input border border-accent/40 px-2 py-1 text-[11px] text-accent"
+                : showReplayList
+                  ? "flex items-center gap-1 rounded-input border border-accent/40 px-2 py-1 text-[11px] text-accent"
+                  : "flex items-center gap-1 rounded-input border border-border px-2 py-1 text-[11px] text-text hover:bg-surface-2 disabled:opacity-30"
+            }
             title="回放录制"
           >
-            <Play size={13} />
+            {isReplaying ? <RefreshCw size={12} className="animate-spin" /> : <Play size={12} />} 回放
           </button>
-          {showReplayList && (
+          {showReplayList && !isReplaying && (
             <div className="absolute right-0 top-full z-dropdown mt-1 w-52 rounded-card border border-border bg-surface shadow-pop">
               {replayList.length === 0 ? (
                 <div className="px-3 py-2 text-[11px] text-muted">暂无保存的录制</div>
@@ -498,12 +502,12 @@ export function BrowserPanel({
         </div>
         <button
           onClick={() => { setShowJsConsole(!showJsConsole); setShowSaveInput(false); setShowReplayList(false); }}
-          className={showJsConsole ? "rounded p-1 text-accent" : "rounded p-1 text-muted hover:text-text"}
+          className={showJsConsole ? "rounded-input bg-accent/10 p-1 text-accent" : "rounded-input p-1 text-muted hover:bg-surface-2 hover:text-text"}
           title="JavaScript 控制台"
         >
           <Terminal size={13} />
         </button>
-        <button onClick={onClose} className="rounded p-1 text-muted hover:bg-surface-2 hover:text-text" title="关闭浏览器">
+        <button onClick={onClose} className="rounded-input p-1 text-muted hover:bg-surface-2 hover:text-text" title="关闭浏览器">
           <X size={13} />
         </button>
       </div>
