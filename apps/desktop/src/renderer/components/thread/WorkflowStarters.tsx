@@ -58,7 +58,7 @@ export function WorkflowStarters({ onPick }: { onPick: (prompt: string) => void 
           <div className="mt-4 text-[10.5px] font-medium uppercase tracking-[0.2em] text-muted">
             新会话
           </div>
-          <h2 className="mt-2.5 font-serif text-[26px] leading-tight text-text">
+          <h2 className="mt-2.5 text-[26px] font-semibold leading-tight tracking-tight text-text">
             今天想做什么？
           </h2>
           <p className="mt-2 text-sm leading-relaxed text-muted">

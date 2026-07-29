@@ -12,7 +12,7 @@ export function DataFlowCard({ model, workspace }: { model: string | null; works
   return (
     <section className="mt-5 rounded-card border border-border bg-surface shadow-card">
       <header className="border-b border-border px-5 py-3">
-        <h2 className="font-serif text-[15px] text-text">{t("settings.dataFlow.title")}</h2>
+        <h2 className="text-[15px] font-medium text-text">{t("settings.dataFlow.title")}</h2>
         <p className="mt-0.5 text-xs text-muted">{t("settings.dataFlow.subtitle")}</p>
       </header>
       <div className="space-y-5 px-5 py-4">

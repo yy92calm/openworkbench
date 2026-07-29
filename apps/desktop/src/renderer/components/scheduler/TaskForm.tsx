@@ -98,7 +98,7 @@ export function TaskForm({ task, agents, onSave, onUpdate, onCancel }: Props) {
         className="w-[480px] rounded-card border border-border bg-surface p-5 shadow-card"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="font-serif text-lg text-text">
+        <h2 className="text-lg font-semibold tracking-tight text-text">
           {task ? "编辑定时任务" : "新建定时任务"}
         </h2>
 

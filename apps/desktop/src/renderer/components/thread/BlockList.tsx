@@ -171,21 +171,23 @@ function ReasoningInline({ block }: { block: ReasoningBlock }) {
     <div className="relative flex">
       <div
         className={cn(
-          "w-[2px] shrink-0 rounded-full bg-purple-500/20 mr-3 transition-all duration-300",
-          isStreaming && "bg-gradient-to-b from-purple-400 via-violet-500 to-transparent bg-[length:2px_200%] animate-[gradient-shimmer_2s_linear_infinite]",
+          "w-[2px] shrink-0 rounded-full mr-3 transition-all duration-300",
+          isStreaming
+            ? "bg-gradient-to-b from-accent via-accent/50 to-transparent bg-[length:2px_200%] animate-[gradient-shimmer_2s_linear_infinite]"
+            : "bg-border",
         )}
       />
       <div
         className={cn(
           "min-w-0 flex-1 rounded-lg border transition-colors",
-          isStreaming ? "border-purple-500/20 bg-purple-500/[0.03]" : "border-border-soft bg-surface/60",
+          isStreaming ? "border-accent/20 bg-accent/[0.02]" : "border-border-soft bg-surface/50",
         )}
       >
-        <div className="flex items-center gap-2 px-3 py-1.5 text-[12px] font-medium text-purple-300">
-          {isStreaming ? <Loader2 size={12} className="animate-spin" /> : <Brain size={12} />}
+        <div className="flex items-center gap-2 px-3 py-1.5 text-[12px] font-medium text-text-dim">
+          {isStreaming ? <Loader2 size={12} className="animate-spin text-accent" /> : <Brain size={12} className="text-accent/70" />}
           <span>{isStreaming ? "思考中…" : "思考过程"}</span>
         </div>
-        <pre className="max-h-64 overflow-y-auto whitespace-pre-wrap break-words px-3 pb-2.5 pt-0.5 font-mono text-[12px] leading-[1.65] text-text-dim">
+        <pre className="max-h-64 overflow-y-auto whitespace-pre-wrap break-words px-3 pb-2.5 pt-0.5 font-mono text-[12px] leading-relaxed text-text-dim">
           {block.text}
         </pre>
       </div>
@@ -233,7 +235,7 @@ function StepGroup({
     <div className="rounded-lg border border-border-soft bg-surface/40">
       <button
         type="button"
-        className="flex w-full items-center gap-2 px-3 py-2 text-left text-[13px] transition-colors hover:bg-surface-2/50"
+        className="flex w-full items-center gap-2 px-3 py-2 text-left text-[13px] transition-colors hover:bg-surface-2/40"
         onClick={() => setExpanded(!expanded)}
         aria-expanded={expanded}
       >

@@ -35,22 +35,20 @@ export function UserMessage({ block, onEdit }: { block: UserMessageBlock; onEdit
   const { copied, onCopy } = useCopy(block.text);
   return (
     <div className="flex justify-end">
-      <div className="group max-w-[82%]">
+      <div className="group max-w-[80%]">
         <div
-          className="rounded-[14px] border px-4 py-2.5 text-[15px] leading-[1.65]"
+          className="rounded-2xl px-4 py-2.5 text-[14px] leading-relaxed"
           style={{
             background: "var(--chat-user-bg)",
-            borderColor: "var(--chat-user-border)",
+            border: "1px solid var(--chat-user-border)",
             color: "var(--chat-user-fg)",
-            boxShadow: "var(--chat-user-shadow)",
-            fontWeight: 450,
           }}
         >
           <div className="whitespace-pre-wrap break-words">{block.text}</div>
         </div>
-        <div className="mt-0.5 flex items-center justify-end gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+        <div className="mt-1 flex items-center justify-end gap-1.5 opacity-0 transition-opacity group-hover:opacity-100">
           {block.timestamp && (
-            <span className="text-[10px] text-muted">{formatTime(block.timestamp)}</span>
+            <span className="text-[11px] text-muted">{formatTime(block.timestamp)}</span>
           )}
           {onEdit && (
             <button
@@ -114,12 +112,12 @@ export function AgentMessage({
   return (
     <div className="group flex gap-3">
       {/* Left accent line — subtle agent identifier */}
-      <div className="w-[2px] shrink-0 self-stretch rounded-full bg-accent/20" />
+      <div className="w-[2px] shrink-0 self-stretch rounded-full bg-accent/25" />
       <div className="min-w-0 flex-1 flex flex-col gap-2">
-        <div className="text-[15px] leading-[1.65] text-text">
+        <div className="text-[14px] leading-relaxed text-text">
           <MarkdownViewer>{markdown}</MarkdownViewer>
           {streaming && (
-            <span className="ml-0.5 inline-block h-[1.05em] w-[3px] translate-y-[2px] animate-pulse rounded-sm bg-accent align-text-bottom" />
+            <span className="ml-0.5 inline-block h-[1.05em] w-[2px] translate-y-[2px] animate-pulse rounded-sm bg-accent align-text-bottom" />
           )}
         </div>
         {refs.length > 0 && (

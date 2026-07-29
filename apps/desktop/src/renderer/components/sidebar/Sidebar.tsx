@@ -72,16 +72,16 @@ export function Sidebar({ project }: { project: Project }) {
     <aside className="flex h-full w-full shrink-0 flex-col border-r border-border bg-surface">
       {overlayTitlebar && <div className="h-10 shrink-0 drag-region" />}
       <div className={cn("px-3 pb-2", overlayTitlebar ? "pt-1" : "pt-3")}>
-        <div className="flex items-center gap-1.5">
-          <img src={logo} alt="" className="h-[18px] w-auto" />
-          <span className="font-serif text-[15px] font-medium text-text">Workbench</span>
+        <div className="flex items-center gap-2">
+          <img src={logo} alt="" className="h-[20px] w-auto" />
+          <span className="text-[14px] font-semibold tracking-tight text-text">Workbench</span>
         </div>
       </div>
 
-      <nav className="flex flex-col px-2">
-        <NavRow icon={<Plus size={16} />} label={t("sidebar.new")} onClick={startNew} />
-        <NavRow icon={<CalendarClock size={16} />} label={t("sidebar.tasks")} onClick={() => navigate("/tasks")} />
-        <NavRow icon={<FolderTree size={16} />} label={t("sidebar.skills")} onClick={() => navigate("/skills")} />
+      <nav className="flex flex-col gap-0.5 px-2">
+        <NavRow icon={<Plus size={15} />} label={t("sidebar.new")} onClick={startNew} />
+        <NavRow icon={<CalendarClock size={15} />} label={t("sidebar.tasks")} onClick={() => navigate("/tasks")} />
+        <NavRow icon={<FolderTree size={15} />} label={t("sidebar.skills")} onClick={() => navigate("/skills")} />
       </nav>
 
       <div className="mt-3 flex-1 overflow-y-auto px-2 pb-2">
@@ -194,7 +194,7 @@ function NavRow({ icon, label, onClick }: { icon: React.ReactNode; label: string
   return (
     <button
       onClick={onClick}
-      className="flex items-center gap-1.5 rounded-input px-2 py-0.5 text-sm text-text hover:bg-surface-2"
+      className="flex items-center gap-2 rounded-input px-2.5 py-1.5 text-[13px] text-text-dim transition-colors hover:bg-surface-2 hover:text-text"
     >
       <span className="text-muted">{icon}</span>
       <span>{label}</span>

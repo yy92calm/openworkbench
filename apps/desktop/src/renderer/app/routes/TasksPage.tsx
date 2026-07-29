@@ -88,7 +88,7 @@ export function TasksPage() {
       <div className="mx-auto max-w-3xl px-8 py-8">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="font-serif text-xl text-text">定时任务</h1>
+            <h1 className="text-xl font-semibold tracking-tight text-text">定时任务</h1>
             <p className="mt-1 text-sm text-muted">
               配置周期性 Agent 提示词，自动执行
             </p>
@@ -135,7 +135,7 @@ export function TasksPage() {
 
         {tasks.length > 0 && (
           <div className="mt-8">
-            <h2 className="font-serif text-base text-text mb-3">全部执行记录</h2>
+            <h2 className="text-base font-medium text-text mb-3">全部执行记录</h2>
             <div className="rounded-card border border-border bg-surface px-4 py-3">
               <ExecutionHistory />
             </div>

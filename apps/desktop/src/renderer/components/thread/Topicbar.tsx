@@ -35,9 +35,9 @@ export function Topicbar({
   const [showShortcuts, setShowShortcuts] = useState(false);
 
   return (
-    <header className="topicbar flex h-9 shrink-0 items-center gap-2 border-b border-border bg-surface px-3">
+    <header className="topicbar flex h-10 shrink-0 items-center gap-2 border-b border-border bg-surface px-4">
       <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", STATUS_TONE[status] ?? "bg-muted")} />
-      <h1 className="truncate text-sm font-medium text-text">
+      <h1 className="truncate text-[13px] font-medium text-text">
         {title || "新会话"}
       </h1>
       <div className="flex-1" />

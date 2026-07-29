@@ -1,8 +1,6 @@
 @import "@fontsource/inter/400.css";
 @import "@fontsource/inter/500.css";
 @import "@fontsource/inter/600.css";
-@import "@fontsource/source-serif-4/400.css";
-@import "@fontsource/source-serif-4/600.css";
 @import "@fontsource/jetbrains-mono/400.css";
 @import "@fontsource/jetbrains-mono/500.css";
 
@@ -31,31 +29,31 @@
 }
 
 [data-theme="light"] {
-  --bg: #f7f5ef;
-  --bg-soft: #f2efe7;
+  --bg: #f9f9f9;
+  --bg-soft: #f3f3f3;
   --surface: #ffffff;
-  --surface-2: #f2efe7;
+  --surface-2: #f5f5f5;
   --bg-elev: #ffffff;
-  --bg-elev-2: #f6f4ef;
-  --border: #e7e3da;
-  --border-soft: #ede9e1;
-  --text: #2a2723;
-  --text-dim: #4b4843;
-  --muted: #8c877d;
-  --fg-faint: #a8a49c;
-  --accent: #c15f3c;
+  --bg-elev-2: #fafafa;
+  --border: #e5e5e5;
+  --border-soft: #eeeeee;
+  --text: #1a1a1a;
+  --text-dim: #404040;
+  --muted: #8f8f8f;
+  --fg-faint: #b3b3b3;
+  --accent: #10a37f;
   --accent-fg: #ffffff;
-  --accent-soft: rgba(193, 95, 60, 0.12);
-  --accent-strong: #d07050;
-  --link: #2a6fdb;
-  --warn: #c98a2b;
-  --ok: #4b8b5b;
-  --error: #c0564b;
+  --accent-soft: rgba(16, 163, 127, 0.10);
+  --accent-strong: #0d8c6d;
+  --link: #2563eb;
+  --warn: #d97706;
+  --ok: #16a34a;
+  --error: #dc2626;
   /* Chat bubble tokens */
-  --chat-user-bg: color-mix(in srgb, var(--accent) 9%, var(--bg-elev));
-  --chat-user-border: color-mix(in srgb, var(--accent) 22%, var(--border-soft));
+  --chat-user-bg: #f0f0f0;
+  --chat-user-border: #e5e5e5;
   --chat-user-fg: var(--text);
-  --chat-user-shadow: 0 8px 18px color-mix(in srgb, var(--accent) 8%, transparent);
+  --chat-user-shadow: none;
   /* Chart design system (P1-5) — validated categorical hues + chart chrome,
      the single source of truth shared with @ai4s/shared and the matplotlib
      style. Light surface = --surface (#ffffff). */
@@ -72,31 +70,31 @@
 }
 
 [data-theme="dark"] {
-  --bg: #0e0d12;
-  --bg-soft: #131218;
-  --surface: #1a1920;
-  --surface-2: #22212a;
-  --bg-elev: #1e1d26;
-  --bg-elev-2: #28272f;
-  --border: #2e2d38;
-  --border-soft: #232230;
-  --text: #f0ede6;
-  --text-dim: #c0bdb6;
-  --muted: #8a877f;
-  --fg-faint: #5e5c56;
-  --accent: #d0764f;
-  --accent-fg: #0e0d12;
-  --accent-soft: rgba(208, 118, 79, 0.14);
-  --accent-strong: #e08a65;
-  --link: #7aa5f0;
-  --warn: #d7a24a;
-  --ok: #6bb07d;
-  --error: #d47a70;
+  --bg: #0d0d0d;
+  --bg-soft: #141414;
+  --surface: #1a1a1a;
+  --surface-2: #242424;
+  --bg-elev: #1e1e1e;
+  --bg-elev-2: #2a2a2a;
+  --border: #2e2e2e;
+  --border-soft: #232323;
+  --text: #ececec;
+  --text-dim: #b4b4b4;
+  --muted: #8f8f8f;
+  --fg-faint: #5c5c5c;
+  --accent: #10a37f;
+  --accent-fg: #ffffff;
+  --accent-soft: rgba(16, 163, 127, 0.12);
+  --accent-strong: #1ab892;
+  --link: #7ab3f7;
+  --warn: #f59e0b;
+  --ok: #22c55e;
+  --error: #ef4444;
   /* Chat bubble tokens */
-  --chat-user-bg: color-mix(in srgb, var(--accent) 14%, var(--bg-elev-2));
-  --chat-user-border: color-mix(in srgb, var(--accent) 26%, var(--border-soft));
+  --chat-user-bg: #242424;
+  --chat-user-border: #2e2e2e;
   --chat-user-fg: var(--text);
-  --chat-user-shadow: 0 8px 22px color-mix(in srgb, var(--accent) 10%, transparent);
+  --chat-user-shadow: none;
   /* Same hues stepped for the dark chart surface (--surface #1a1920). */
   --series-1: #3987e5;
   --series-2: #199e70;
@@ -117,7 +115,7 @@ body,
 }
 
 html {
-  font-size: 17px;
+  font-size: 16px;
 }
 
 body {
@@ -129,20 +127,21 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-/* Thin, calm scrollbars to match the paper aesthetic. */
+/* Thin, calm scrollbars — Codex-style minimal. */
 * {
   scrollbar-width: thin;
   scrollbar-color: var(--border) transparent;
 }
 *::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: 6px;
+  height: 6px;
 }
 *::-webkit-scrollbar-thumb {
   background: var(--border);
   border-radius: 999px;
-  border: 3px solid transparent;
-  background-clip: content-box;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 .drag-region {

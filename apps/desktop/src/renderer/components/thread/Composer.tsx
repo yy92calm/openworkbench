@@ -364,20 +364,20 @@ export function Composer({
   return (
     <div
       className={cn(
-        "relative overflow-hidden rounded-card border bg-surface shadow-card transition-colors",
+        "relative overflow-hidden rounded-2xl border bg-surface transition-colors",
         working
           ? "border-accent/40"
           : shellMode
-            ? "border-warn/60"
+            ? "border-warn/50"
             : command
-              ? "border-accent/50"
-              : "border-border",
+              ? "border-accent/40"
+              : "border-border focus-within:border-accent/50",
       )}
     >
       {/* Running status strip */}
       {working && (
-        <div className="flex items-center gap-2 border-b border-border-soft px-3.5 py-1.5 text-[12px] text-accent">
-          <span className="h-[6px] w-[6px] shrink-0 animate-pulse rounded-full bg-accent" />
+        <div className="flex items-center gap-2 border-b border-border-soft px-4 py-1.5 text-[12px] text-accent">
+          <span className="h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-accent" />
           <span className="font-medium">Agent 工作中…</span>
         </div>
       )}
@@ -492,14 +492,14 @@ export function Composer({
               : placeholder
         }
         className={cn(
-          "max-h-[160px] w-full resize-none bg-transparent px-1.5 py-0.5 text-sm leading-6 text-text outline-none placeholder:text-muted",
+          "max-h-[160px] w-full resize-none bg-transparent px-4 py-3 text-[14px] leading-6 text-text outline-none placeholder:text-muted",
           (shellMode || command) && "font-mono",
         )}
         aria-label="有什么想问的？"
       />
       <div className={cn(
-        "flex items-center gap-1.5 pt-1",
-        (value || files.length > 0 || command || shellMode) && "border-t border-border-soft/60 mt-1 pt-2",
+        "flex items-center gap-1.5 px-3 pb-2.5 pt-1",
+        (value || files.length > 0 || command || shellMode) && "border-t border-border-soft/60 mt-0 pt-2",
       )}>
         {command ? (
           <span
@@ -541,22 +541,22 @@ export function Composer({
           // Same spot, same shape, one action: the send button becomes Stop
           // while the agent works — always live, even though the input is not.
           <button
-            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-input bg-accent text-accent-fg hover:opacity-90"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent text-accent-fg transition-opacity hover:opacity-85"
             aria-label="停止"
             title="中断本轮对话（Esc）"
             onClick={onStop}
           >
-            <Square size={11} fill="currentColor" />
+            <Square size={12} fill="currentColor" />
           </button>
         ) : (
           <button
-            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-input bg-accent text-accent-fg transition-transform hover:scale-105 hover:opacity-90 disabled:opacity-40"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent text-accent-fg transition-all hover:opacity-85 disabled:opacity-30"
             aria-label="发送"
             onClick={submit}
             disabled={!canSend}
             title={!canSend ? "输入消息或添加文件后发送" : "发送消息"}
           >
-            <ArrowUp size={15} />
+            <ArrowUp size={16} />
           </button>
         )}
       </div>

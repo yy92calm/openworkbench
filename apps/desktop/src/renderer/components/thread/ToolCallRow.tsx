@@ -43,17 +43,17 @@ export function ToolCallRow({ block, activity }: { block: ToolCallBlock; activit
       className={cn(
         "rounded-lg border transition-colors",
         isRunning
-          ? "border-accent/30 bg-surface"
+          ? "border-accent/25 bg-surface"
           : isError
-            ? "border-warn/30 bg-surface"
+            ? "border-error/20 bg-surface"
             : isWaiting
-              ? "border-warn/25 bg-surface"
-              : "border-border-soft bg-surface/60",
+              ? "border-warn/20 bg-surface"
+              : "border-border-soft bg-surface/50",
       )}
     >
       <button
         type="button"
-        className="flex w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-surface-2/50"
+        className="flex w-full items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-surface-2/40"
         onClick={() => setExpanded(!expanded)}
         aria-expanded={expanded}
       >
@@ -65,7 +65,7 @@ export function ToolCallRow({ block, activity }: { block: ToolCallBlock; activit
         </span>
         {block.meta && <span className="shrink-0 text-[11px] text-muted">{block.meta}</span>}
         {isDone && block.duration && (
-          <span className="shrink-0 text-[11px] text-muted">{block.duration}s</span>
+          <span className="shrink-0 text-[11px] text-fg-faint">{block.duration}s</span>
         )}
         <ChevronRight
           size={13}
