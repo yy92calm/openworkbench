@@ -20,6 +20,16 @@ export async function startRuntime(kind?: "opencode" | "claude-code"): Promise<s
   }
 }
 
+/** Restart the sidecar (stop + start). Used after provider config changes. */
+export async function restartRuntime(kind?: "opencode" | "claude-code"): Promise<string | null> {
+  try {
+    return await api().restartRuntime(kind);
+  } catch (err) {
+    console.error("[restartRuntime] failed:", err);
+    return null;
+  }
+}
+
 export async function runtimePassword(): Promise<string | null> {
   try {
     return await api().runtimePassword();

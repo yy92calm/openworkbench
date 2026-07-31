@@ -154,6 +154,62 @@ export function deployBundledProfile(): void {
   if (existsSync(target)) rmSync(target, { recursive: true, force: true });
   cpSync(source, target, { recursive: true });
   log("profile", "deploy", `deployed ${source} -> ${target}`);
+  // Merge user-configured provider overrides (Settings → Model Config)
+  applyUserProviderConfig(target);
+}
+
+/** Read user's manual provider config from electron-store and patch it into
+ *  the deployed opencode.json. Supports both:
+ *  - Array format: "provider-configs" = [{ id, name, baseUrl, apiKey, modelId, providerName, active }]
+ *  - Legacy single: "provider-config" = { baseUrl, apiKey, modelId, providerName } */
+function applyUserProviderConfig(profileDir: string): void {
+  try {
+    const { getStore } = require("./store");
+    const store = getStore();
+
+    // Try array format first
+    const arr = store.get("provider-configs") as
+      | Array<{ id: string; baseUrl?: string; apiKey?: string; modelId?: string; providerName?: string; active?: boolean }>
+      | undefined;
+    let cfg: { baseUrl?: string; apiKey?: string; modelId?: string; providerName?: string } | undefined;
+    if (arr && Array.isArray(arr) && arr.length > 0) {
+      cfg = arr.find((c) => c.active) ?? arr[0];
+    } else {
+      // Fall back to legacy single-config format
+      cfg = store.get("provider-config") as
+        | { baseUrl?: string; apiKey?: string; modelId?: string; providerName?: string }
+        | undefined;
+    }
+    if (!cfg || (!cfg.baseUrl && !cfg.apiKey && !cfg.modelId)) return;
+
+    const jsonPath = join(profileDir, "opencode.json");
+    if (!existsSync(jsonPath)) return;
+    const json = JSON.parse(readFileSync(jsonPath, "utf-8"));
+
+    const providerId = cfg.providerName || "custom";
+    const modelId = cfg.modelId || "default-model";
+
+    // Build / override the provider entry
+    if (!json.provider) json.provider = {};
+    json.provider[providerId] = {
+      npm: "@ai-sdk/openai-compatible",
+      name: providerId,
+      options: {
+        ...(cfg.baseUrl ? { baseURL: cfg.baseUrl } : {}),
+        ...(cfg.apiKey ? { apiKey: cfg.apiKey } : {}),
+      },
+      models: {
+        [modelId]: { name: modelId },
+      },
+    };
+    // Set as default model
+    json.model = `${providerId}/${modelId}`;
+
+    writeFileSync(jsonPath, JSON.stringify(json, null, 2));
+    log("profile", "provider", `applied user provider config: ${providerId}/${modelId}`);
+  } catch (err) {
+    log("profile", "provider", `failed to apply user config: ${err}`, "warn");
+  }
 }
 
 /** Deploy the bundled .claude profile to the active workspace so Claude Code

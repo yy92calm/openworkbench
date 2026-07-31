@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { Check, Copy, Loader2, Paperclip, Pencil } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Check, Copy, Loader2, Paperclip, Pencil, Volume2, Square } from "lucide-react";
 import type {
   ArtifactBlock,
   DataTableBlock,
@@ -8,6 +8,7 @@ import type {
   UserMessageBlock,
 } from "@workbench/shared";
 import { cn } from "@/lib/cn";
+import { speak, cancelSpeak, loadVoiceConfig, type VoiceConfig } from "@/lib/tts";
 import { MarkdownViewer } from "@/components/markdown-viewer/MarkdownViewer";
 import { extractArtifactRefs, refToArtifactBlock } from "@/lib/artifacts";
 import { resolveArtifactPath } from "@/lib/artifactFile";
@@ -86,6 +87,31 @@ export function AgentMessage({
   onOpenArtifact?: (a: ArtifactBlock) => void;
 }) {
   const { copied, onCopy } = useCopy(markdown);
+  const [speaking, setSpeaking] = useState(false);
+  const voiceCfgRef = useRef<VoiceConfig | null>(null);
+
+  useEffect(() => {
+    void loadVoiceConfig().then((c) => { voiceCfgRef.current = c; });
+  }, []);
+
+  const onSpeak = () => {
+    if (speaking) {
+      cancelSpeak();
+      setSpeaking(false);
+      return;
+    }
+    const cfg = voiceCfgRef.current;
+    if (!cfg?.ttsEnabled) return;
+    speak(markdown, { voiceURI: cfg.voiceURI ?? undefined, rate: cfg.rate, pitch: cfg.pitch });
+    setSpeaking(true);
+    // Poll until speech ends (no onend in speechSynthesis directly).
+    const check = setInterval(() => {
+      if (!window.speechSynthesis?.speaking) {
+        setSpeaking(false);
+        clearInterval(check);
+      }
+    }, 200);
+  };
   // Files the agent mentions (e.g. a PDF produced by running code) become clickable.
   // Each mention is resolved to a real workspace path first — prose often names a
   // bare filename ("index.html") whose file lives in a subdirectory; mentions of
@@ -138,6 +164,24 @@ export function AgentMessage({
         <div className="flex items-center gap-1.5 opacity-0 transition-opacity group-hover:opacity-100">
           {timestamp && (
             <span className="text-[10px] text-muted">{formatTime(timestamp)}</span>
+          )}
+          {voiceCfgRef.current?.ttsEnabled && !streaming && (
+            <button
+              className={cn(
+                "rounded p-0.5 text-muted hover:text-text",
+                speaking && "text-accent",
+              )}
+              title={speaking ? "停止朗读" : "朗读"}
+              onClick={onSpeak}
+            >
+              {speaking ? (
+                <span className="flex h-3 w-3 items-center justify-center">
+                  <span className="h-2 w-2 animate-pulse rounded-sm bg-accent" />
+                </span>
+              ) : (
+                <Volume2 size={11} />
+              )}
+            </button>
           )}
           <button
             className="rounded p-0.5 text-muted hover:text-text"

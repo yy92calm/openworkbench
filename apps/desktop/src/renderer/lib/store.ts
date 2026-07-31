@@ -2,7 +2,7 @@ import { create } from "zustand";
 import type { ArtifactBlock, FileRoot } from "@workbench/shared";
 import { loadLocale, persistLocale, type Locale } from "./i18n";
 
-export type Theme = "light" | "dark" | "system";
+export type Theme = "light" | "warm" | "cool" | "dark" | "black" | "system";
 export type AgentRuntimeKind = "opencode" | "claude-code";
 
 /** A main-area tab. Session tabs switch the active conversation (single
@@ -21,7 +21,7 @@ const EXPAND_DETAILS_KEY = "workbench.expandThreadDetails";
 function initialTheme(): Theme {
   if (typeof window === "undefined") return "light";
   const saved = window.localStorage.getItem(THEME_KEY);
-  if (saved === "light" || saved === "dark" || saved === "system") return saved;
+  if (saved === "light" || saved === "warm" || saved === "cool" || saved === "dark" || saved === "black" || saved === "system") return saved;
   const prefersDark = window.matchMedia?.("(prefers-color-scheme: dark)").matches;
   return prefersDark ? "dark" : "light";
 }
@@ -106,7 +106,11 @@ export const useUiStore = create<UiState>((set, get) => ({
     persistLocale(locale);
     set({ locale });
   },
-  toggleTheme: () => get().setTheme(get().theme === "light" ? "dark" : "light"),
+  toggleTheme: () => {
+    const cur = get().theme;
+    const isDark = cur === "dark" || cur === "black";
+    get().setTheme(isDark ? "light" : "dark");
+  },
   setAgentRuntimeKind: (agentRuntimeKind) => {
     if (typeof window !== "undefined") window.localStorage.setItem(RUNTIME_KIND_KEY, agentRuntimeKind);
     set({ agentRuntimeKind });
@@ -132,24 +136,20 @@ export const useUiStore = create<UiState>((set, get) => ({
   tabs: [],
   activeTabId: null,
   openSessionTab: (sessionId, title) => set((s) => {
-    const existing = s.tabs.find((t) => t.kind === "session" && t.sessionId === sessionId);
+    // All sessions share a single "session" tab — switching sessions reuses it.
+    const existing = s.tabs.find((t) => t.kind === "session");
     if (existing) {
-      const tabs = title ? s.tabs.map((t) => (t.id === existing.id ? { ...t, title } : t)) : s.tabs;
-      return { tabs, activeTabId: existing.id };
-    }
-    // A draft tab (null) converts into the real session on first message.
-    if (sessionId !== null) {
-      const draft = s.tabs.find((t) => t.kind === "session" && t.sessionId === null);
-      if (draft) {
-        return {
-          tabs: s.tabs.map((t) => (t.id === draft.id ? { ...t, sessionId, title: title ?? t.title } : t)),
-          activeTabId: draft.id,
-        };
-      }
+      return {
+        tabs: s.tabs.map((t) =>
+          t.id === existing.id ? { ...t, sessionId, title: title ?? t.title } : t,
+        ),
+        activeTabId: existing.id,
+      };
     }
     const id = `tab-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     const tab: Tab = { id, kind: "session", sessionId, title: title ?? "新会话" };
-    return { tabs: [...s.tabs, tab], activeTabId: id };
+    // Session tab is always first; file tabs follow.
+    return { tabs: [tab, ...s.tabs], activeTabId: id };
   }),
   openFileTab: (artifact, root, activate = true) => set((s) => {
     const existing = s.tabs.find((t) => t.kind === "file" && t.artifact.path === artifact.path);

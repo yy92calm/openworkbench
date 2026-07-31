@@ -71,13 +71,15 @@ export function TabBar() {
             {t.kind === "file" ? <FileText size={12} className="shrink-0" /> : <MessageSquare size={12} className="shrink-0" />}
             <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", running ? "bg-accent animate-pulse" : "bg-transparent")} />
             <span className="truncate">{tabTitle(t)}</span>
-            <button
-              onClick={(e) => onClose(e, t)}
-              className="shrink-0 rounded p-0.5 opacity-0 transition-opacity hover:bg-surface-2 group-hover:opacity-100"
-              aria-label={`关闭 ${tabTitle(t)}`}
-            >
-              <X size={11} />
-            </button>
+            {t.kind === "file" && (
+              <button
+                onClick={(e) => onClose(e, t)}
+                className="shrink-0 rounded p-0.5 opacity-0 transition-opacity hover:bg-surface-2 group-hover:opacity-100"
+                aria-label={`关闭 ${tabTitle(t)}`}
+              >
+                <X size={11} />
+              </button>
+            )}
           </div>
         );
       })}

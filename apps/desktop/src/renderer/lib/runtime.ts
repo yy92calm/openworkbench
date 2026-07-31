@@ -124,6 +124,8 @@ interface RuntimeState {
   connectRetry: (tries?: number) => Promise<void>;
   bootstrap: () => Promise<void>;
   disconnect: () => void;
+  /** Restart the sidecar (picks up new provider config) and reconnect. */
+  restart: () => Promise<void>;
   refreshSessions: () => Promise<void>;
   startDraft: () => void;
   /** Active workspace folder (absolute path); null in the browser. */
@@ -649,6 +651,24 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
         case "permission.resolved":
           set((s) => ({ permissions: s.permissions.filter((p) => p.requestId !== event.requestId) }));
           return;
+        case "session.updated":
+          // Real-time token/cost update from the server (fires mid-turn).
+          set((s) => ({
+            sessions: s.sessions.map((m) =>
+              m.id === event.sessionId
+                ? {
+                    ...m,
+                    promptTokens: event.promptTokens ?? m.promptTokens,
+                    completionTokens: event.completionTokens ?? m.completionTokens,
+                    reasoningTokens: event.reasoningTokens ?? m.reasoningTokens,
+                    cacheReadTokens: event.cacheReadTokens ?? m.cacheReadTokens,
+                    cacheWriteTokens: event.cacheWriteTokens ?? m.cacheWriteTokens,
+                    cost: event.cost ?? m.cost,
+                  }
+                : m,
+            ),
+          }));
+          return;
       }
       const sid = event.sessionId;
       if (!sid) return;
@@ -802,6 +822,26 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
     client?.close();
     client = null;
     set({ status: "offline" });
+  },
+
+  restart: async () => {
+    get().disconnect();
+    set({ status: "connecting", error: null });
+    try {
+      const { restartRuntime } = await import("./tauri");
+      const { useUiStore } = await import("./store");
+      const kind: AgentRuntimeKind = useUiStore.getState().agentRuntimeKind;
+      const url = await restartRuntime(kind);
+      if (url) {
+        if (typeof window !== "undefined") window.localStorage.setItem(URL_KEY, url);
+        set({ serverUrl: url });
+        await get().connectRetry();
+      } else {
+        set({ status: "error", error: "Failed to restart runtime." });
+      }
+    } catch (err) {
+      set({ status: "error", error: err instanceof Error ? err.message : String(err) });
+    }
   },
 
   refreshSessions: async () => {

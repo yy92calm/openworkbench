@@ -1,8 +1,21 @@
-import type { Inspector } from "@workbench/shared";
+import type { Inspector, FilePreviewInspector as FilePreviewInspectorT } from "@workbench/shared";
 import { ArtifactInspector } from "./ArtifactInspector";
 import { NotebookInspector } from "./NotebookInspector";
 import { PdfInspector } from "./PdfInspector";
 import { FilePreviewInspector } from "./FilePreviewInspector";
+
+/** Derive a FilePreviewInspector-compatible object from a NotebookFileInspector. */
+function notebookFileToPreview(inspector: Extract<Inspector, { variant: "notebook-file" }>): FilePreviewInspectorT {
+  const filename = inspector.path.split(/[\\/]/).pop() ?? inspector.path;
+  return {
+    variant: "file",
+    path: inspector.path,
+    root: inspector.root,
+    filename,
+    artifact: "code",
+    language: "json",
+  };
+}
 
 /** Right pane. Renders the correct inspector variant for the active session. */
 export function InspectorShell({
@@ -24,7 +37,7 @@ export function InspectorShell({
       {inspector.variant === "pdf" && <PdfInspector data={inspector} onClose={onClose} />}
       {inspector.variant === "file" && <FilePreviewInspector data={inspector} onClose={onClose} />}
       {inspector.variant === "notebook-file" && (
-        <FilePreviewInspector data={inspector} onClose={onClose} />
+        <FilePreviewInspector data={notebookFileToPreview(inspector)} onClose={onClose} />
       )}
     </div>
   );

@@ -2,12 +2,14 @@ import { useState, useMemo, useRef, useEffect } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { CalendarClock, FolderTree, PanelLeftClose, PanelLeft, Plus, Search, Settings, Trash2, X } from "lucide-react";
 import type { Project } from "@workbench/shared";
+import type { SessionMeta } from "@workbench/sdk";
 import { cn } from "@/lib/cn";
 import { isDesktop } from "@/lib/electron";
 import { useRuntimeStore } from "@/lib/runtime";
 import { useI18n } from "@/lib/i18n";
 import { useUiStore } from "@/lib/store";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { baseName } from "@/components/thread/WorkspaceChip";
 import logo from "@/assets/logo.webp";
 
 interface Row {
@@ -17,11 +19,35 @@ interface Row {
   kind: "session" | "example";
 }
 
+/** Group session rows by their workspace directory. Examples stay ungrouped.
+ *  Exported for unit testing. */
+export function groupRowsByDirectory(
+  rows: Row[],
+  sessions: { id: string; directory?: string }[],
+): { groups: [string, Row[]][]; exampleRows: Row[] } {
+  const sessionRows = rows.filter((r) => r.kind === "session");
+  const exampleRows = rows.filter((r) => r.kind === "example");
+  const map = new Map<string, Row[]>();
+  for (const r of sessionRows) {
+    const dir = sessions.find((s) => s.id === r.id)?.directory ?? "";
+    const key = dir || "默认";
+    if (!map.has(key)) map.set(key, []);
+    map.get(key)!.push(r);
+  }
+  return { groups: [...map.entries()], exampleRows };
+}
+
+/** Format a token count for compact display: 1234 → "1.2k", 12345 → "12k". */
+function formatTokens(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
+  return String(n);
+}
+
 export function Sidebar({ project }: { project: Project }) {
   const { t } = useI18n();
   const navigate = useNavigate();
-  const location = useLocation();
-  const { sessions, hiddenExamples, startDraft, deleteSession, hideExample } = useRuntimeStore();
+  const { sessions, hiddenExamples, runningSessions, startDraft } = useRuntimeStore();
   const sidebarCollapsed = useUiStore((s) => s.sidebarCollapsed);
   const toggleSidebar = useUiStore((s) => s.toggleSidebar);
   const openSessionTab = useUiStore((s) => s.openSessionTab);
@@ -41,7 +67,6 @@ export function Sidebar({ project }: { project: Project }) {
       .map((e) => ({ id: e.id, title: e.title, to: `/example/${e.id}`, kind: "example" as const })),
   ];
 
-  const [pendingDelete, setPendingDelete] = useState<Row | null>(null);
   // Session search
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -57,14 +82,11 @@ export function Sidebar({ project }: { project: Project }) {
     return rows.filter((r) => r.title.toLowerCase().includes(q));
   }, [rows, searchQuery]);
 
-  const confirmDelete = () => {
-    const row = pendingDelete;
-    setPendingDelete(null);
-    if (!row) return;
-    if (row.kind === "session") void deleteSession(row.id);
-    else hideExample(row.id);
-    if (location.pathname === row.to) navigate("/live");
-  };
+  // Group session rows by their workspace directory; examples stay ungrouped.
+  const groups = useMemo(
+    () => groupRowsByDirectory(filteredRows, sessions),
+    [filteredRows, sessions],
+  );
 
   const overlayTitlebar = isDesktop && navigator.userAgent.includes("Mac");
 
@@ -111,43 +133,22 @@ export function Sidebar({ project }: { project: Project }) {
             {searchQuery ? "无匹配" : t("sidebar.noConversations")}
           </div>
         )}
-        {filteredRows.map((row) => (
-          <div key={row.to} className="group relative">
-            <NavLink
-              to={row.to}
-              onClick={() => {
-                if (row.kind === "session") openSessionTab(row.id, row.title);
-              }}
-              className={cn(
-                "relative flex items-center gap-1.5 rounded-input py-0.5 pl-2.5 pr-7 text-sm transition-colors duration-150 hover:bg-surface-2",
-                location.pathname === row.to ? "bg-surface-2 text-text" : "text-text/90",
-              )}
-            >
-              {/* Active accent indicator */}
-              {location.pathname === row.to && (
-                <span className="absolute left-0 top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-r-full bg-accent" />
-              )}
-              <span
-                className={cn(
-                  "h-1.5 w-1.5 shrink-0 rounded-full",
-                  row.kind === "example" ? "bg-muted" : "bg-ok",
-                )}
-              />
-              <span className="flex-1 truncate">{row.title}</span>
-              {row.kind === "example" && (
-                <span className="shrink-0 rounded-full bg-surface-2 px-1.5 text-[11px] uppercase tracking-wide text-muted ring-1 ring-border">
-                  {t("sidebar.example")}
-                </span>
-              )}
-            </NavLink>
-            <button
-              onClick={() => setPendingDelete(row)}
-              aria-label={`删除 ${row.title}`}
-              className="absolute right-1.5 top-1/2 hidden -translate-y-1/2 rounded p-1 text-muted hover:bg-border hover:text-error group-hover:block"
-            >
-              <Trash2 size={13} />
-            </button>
+        {groups.groups.map(([dir, groupRows]) => (
+          <div key={dir}>
+            <div className="mt-2 mb-0.5 flex items-center gap-1 px-2.5 first:mt-0">
+              <FolderTree size={11} className="shrink-0 text-muted" />
+              <span className="truncate text-[11px] font-medium text-muted" title={dir !== "默认" ? dir : undefined}>
+                {dir === "默认" ? "默认" : baseName(dir)}
+              </span>
+              <span className="ml-auto text-[10px] text-muted/50">{groupRows.length}</span>
+            </div>
+            {groupRows.map((row) => (
+              <SessionRow key={row.to} row={row} isRunning={!!runningSessions[row.id]} meta={sessions.find((s) => s.id === row.id)} />
+            ))}
           </div>
+        ))}
+        {groups.exampleRows.map((row) => (
+          <SessionRow key={row.to} row={row} isRunning={false} />
         ))}
       </div>
 
@@ -172,20 +173,6 @@ export function Sidebar({ project }: { project: Project }) {
           </button>
         </div>
       </div>
-
-      {pendingDelete && (
-        <ConfirmDialog
-          title={pendingDelete.kind === "session" ? t("sidebar.deleteSession") : t("sidebar.hideExample")}
-          body={
-            pendingDelete.kind === "session"
-              ? `"${pendingDelete.title}"${t("sidebar.deleteSessionBody")}`
-              : `"${pendingDelete.title}"${t("sidebar.hideExampleBody")}`
-          }
-          confirmLabel={pendingDelete.kind === "session" ? t("sidebar.delete") : t("sidebar.hide")}
-          onConfirm={confirmDelete}
-          onCancel={() => setPendingDelete(null)}
-        />
-      )}
     </aside>
   );
 }
@@ -199,5 +186,84 @@ function NavRow({ icon, label, onClick }: { icon: React.ReactNode; label: string
       <span className="text-muted">{icon}</span>
       <span>{label}</span>
     </button>
+  );
+}
+
+function SessionRow({ row, isRunning, meta }: { row: Row; isRunning: boolean; meta?: SessionMeta }) {
+  const location = useLocation();
+  const openSessionTab = useUiStore((s) => s.openSessionTab);
+  const { t } = useI18n();
+  const [pendingDelete, setPendingDelete] = useState<Row | null>(null);
+
+  // Token/cost summary line
+  const totalTokens = (meta?.promptTokens ?? 0) + (meta?.completionTokens ?? 0);
+  const detail = row.kind === "session" && totalTokens > 0
+    ? `${formatTokens(totalTokens)} tok${meta?.cost ? ` · $${meta.cost.toFixed(4)}` : ""}`
+    : null;
+
+  return (
+    <div className="group relative">
+      <NavLink
+        to={row.to}
+        onClick={() => {
+          if (row.kind === "session") openSessionTab(row.id, row.title);
+        }}
+        className={cn(
+          "relative flex flex-col gap-0 rounded-input py-1 pl-2.5 pr-7 transition-colors duration-150 hover:bg-surface-2",
+          location.pathname === row.to ? "bg-surface-2 text-text" : "text-text/90",
+        )}
+      >
+        {location.pathname === row.to && (
+          <span className="absolute left-0 top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-r-full bg-accent" />
+        )}
+        <span className="flex items-center gap-1.5">
+          <span
+            className={cn(
+              "h-1.5 w-1.5 shrink-0 rounded-full",
+              row.kind === "example" ? "bg-muted"
+                : isRunning ? "bg-accent animate-pulse"
+                : "bg-ok",
+            )}
+          />
+          <span className="flex-1 truncate text-sm">{row.title}</span>
+          {row.kind === "example" && (
+            <span className="shrink-0 rounded-full bg-surface-2 px-1.5 text-[11px] uppercase tracking-wide text-muted ring-1 ring-border">
+              {t("sidebar.example")}
+            </span>
+          )}
+        </span>
+        {detail && (
+          <span className="pl-3 text-[10px] leading-tight text-muted/70">{detail}</span>
+        )}
+      </NavLink>
+      <button
+        onClick={() => setPendingDelete(row)}
+        aria-label={`删除 ${row.title}`}
+        className="absolute right-1.5 top-1/2 hidden -translate-y-1/2 rounded p-1 text-muted hover:bg-border hover:text-error group-hover:block"
+      >
+        <Trash2 size={13} />
+      </button>
+      {pendingDelete && (
+        <ConfirmDialog
+          title={pendingDelete.kind === "session" ? t("sidebar.deleteSession") : t("sidebar.hideExample")}
+          body={
+            pendingDelete.kind === "session"
+              ? `"${pendingDelete.title}"${t("sidebar.deleteSessionBody")}`
+              : `"${pendingDelete.title}"${t("sidebar.hideExampleBody")}`
+          }
+          confirmLabel={pendingDelete.kind === "session" ? t("sidebar.delete") : t("sidebar.hide")}
+          onConfirm={() => {
+            setPendingDelete(null);
+            // Delegate to parent's delete logic via store
+            if (pendingDelete.kind === "session") {
+              useRuntimeStore.getState().deleteSession(pendingDelete.id);
+            } else {
+              useRuntimeStore.getState().hideExample(pendingDelete.id);
+            }
+          }}
+          onCancel={() => setPendingDelete(null)}
+        />
+      )}
+    </div>
   );
 }

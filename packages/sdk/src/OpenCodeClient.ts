@@ -216,6 +216,15 @@ export class OpenCodeClient {
       slug?: string;
       directory?: string;
       parentID?: string | null;
+      // Nested format (OpenCode >= 0.2)
+      tokens?: { input?: number; output?: number; reasoning?: number; cache?: { read?: number; write?: number } };
+      cost?: number;
+      time?: { created?: number; updated?: number };
+      // Legacy flat format
+      prompt_tokens?: number;
+      completion_tokens?: number;
+      created_at?: number;
+      updated_at?: number;
     }>;
     return arr.map((s) => ({
       id: s.id,
@@ -223,6 +232,14 @@ export class OpenCodeClient {
       slug: s.slug,
       directory: s.directory,
       parentId: s.parentID ?? undefined,
+      promptTokens: s.tokens?.input ?? s.prompt_tokens ?? undefined,
+      completionTokens: s.tokens?.output ?? s.completion_tokens ?? undefined,
+      reasoningTokens: s.tokens?.reasoning ?? undefined,
+      cacheReadTokens: s.tokens?.cache?.read ?? undefined,
+      cacheWriteTokens: s.tokens?.cache?.write ?? undefined,
+      cost: s.cost ?? undefined,
+      createdAt: s.time?.created ?? s.created_at ?? undefined,
+      updatedAt: s.time?.updated ?? s.updated_at ?? undefined,
     }));
   }
 
@@ -797,6 +814,25 @@ export class OpenCodeClient {
             this.reasoningStreams.delete(partId);
           }
         this.emit({ type: "session.idle", sessionId });
+        break;
+      }
+      case "session.updated": {
+        const info = props.info as {
+          id?: string;
+          tokens?: { input?: number; output?: number; reasoning?: number; cache?: { read?: number; write?: number } };
+          cost?: number;
+        } | undefined;
+        if (!info?.id) break;
+        this.emit({
+          type: "session.updated",
+          sessionId: info.id,
+          promptTokens: info.tokens?.input,
+          completionTokens: info.tokens?.output,
+          reasoningTokens: info.tokens?.reasoning,
+          cacheReadTokens: info.tokens?.cache?.read,
+          cacheWriteTokens: info.tokens?.cache?.write,
+          cost: info.cost,
+        });
         break;
       }
       // Interactive requests — support V2 (this server) and the bare names.

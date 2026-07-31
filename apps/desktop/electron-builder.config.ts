@@ -9,9 +9,9 @@ const config: Configuration = {
   },
   extraResources: [
     {
-      from: "binaries",
-      to: "binaries",
-      filter: ["opencode", "opencode.exe"],
+      "from": "binaries",
+      "to": "binaries",
+      "filter": ["opencode", "opencode.exe", "whisper/whisper-cli", "whisper/whisper-cli.exe", "whisper/ggml-tiny-q5_1.bin"],
     },
     {
       from: "../../app-config/.opencode",

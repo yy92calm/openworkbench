@@ -85,7 +85,7 @@ export function TasksPage() {
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-3xl px-8 py-8">
+      <div className="mx-auto max-w-5xl px-8 py-8">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-xl font-semibold tracking-tight text-text">定时任务</h1>

@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent } from "react";
-import { ArrowUp, Paperclip, Square, Terminal, X } from "lucide-react";
+import { ArrowUp, Loader2, Mic, Paperclip, Square, Terminal, X } from "lucide-react";
 import { addFilesToWorkspace, addTextToWorkspace, isTauri } from "@/lib/tauri";
+import { isSttSupported, startListening, stopAndTranscribe, cancelListening, isRecording } from "@/lib/stt";
+import { loadVoiceConfig, type VoiceConfig } from "@/lib/tts";
 import { useUiStore } from "@/lib/store";
 import { toast } from "@/lib/toast";
 import { cn } from "@/lib/cn";
@@ -88,6 +90,45 @@ export function Composer({
   /** ↑/↓ history navigation; `draft` is what was typed before recalling. */
   const [hist, setHist] = useState<{ index: number; draft: string } | null>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
+  const [recording, setRecording] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
+  const [sttEnabled, setSttEnabled] = useState(false);
+  const [sttSupported, setSttSupported] = useState(false);
+  const voiceCfgRef = useRef<VoiceConfig | null>(null);
+
+  useEffect(() => {
+    void loadVoiceConfig().then((c) => {
+      voiceCfgRef.current = c;
+      setSttEnabled(c.sttEnabled);
+    });
+    void isSttSupported().then(setSttSupported);
+  }, []);
+
+  const toggleRecording = async () => {
+    if (!sttSupported || !sttEnabled) return;
+    if (recording) {
+      // Stop recording → transcribe
+      setRecording(false);
+      setTranscribing(true);
+      await stopAndTranscribe(
+        (text) => {
+          setValue((v) => (v ? `${v} ${text}` : text));
+          taRef.current?.focus();
+        },
+        (err) => {
+          toast.error(`语音识别错误: ${err}`);
+        },
+      );
+      setTranscribing(false);
+      return;
+    }
+    try {
+      await startListening();
+      setRecording(true);
+    } catch (err) {
+      toast.error(`无法启动录音: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  };
   const composerDraft = useUiStore((s) => s.composerDraft);
   const setComposerDraft = useUiStore((s) => s.setComposerDraft);
 
@@ -535,6 +576,28 @@ export function Composer({
               <Paperclip size={15} />
             </button>
           )
+        )}
+        {sttSupported && sttEnabled && !command && !shellMode && (
+          <button
+            className={cn(
+              "flex h-7 w-7 shrink-0 items-center justify-center rounded-input transition-colors disabled:opacity-40",
+              recording
+                ? "text-accent bg-accent/15"
+                : transcribing
+                  ? "text-accent"
+                  : "text-muted hover:bg-surface-2 hover:text-text",
+            )}
+            aria-label={recording ? "停止录音" : transcribing ? "转写中…" : "语音输入"}
+            title={recording ? "点击停止录音并转写" : transcribing ? "正在转写…" : "语音输入"}
+            onClick={() => void toggleRecording()}
+            disabled={transcribing}
+          >
+            {transcribing ? (
+              <Loader2 size={15} className="animate-spin" />
+            ) : (
+              <Mic size={15} className={recording ? "animate-pulse" : ""} />
+            )}
+          </button>
         )}
         <span className="flex-1" />
         {working && onStop ? (

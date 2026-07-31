@@ -3,6 +3,7 @@ export { isDesktop } from "./electron";
 export const isTauri = true;
 export {
   startRuntime,
+  restartRuntime,
   runtimePassword,
   addFilesToWorkspace,
   addTextToWorkspace,

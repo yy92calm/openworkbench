@@ -1,6 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 export default {
-  darkMode: ["selector", '[data-theme="dark"]'],
+  darkMode: ["selector", '[data-theme="dark"], [data-theme="black"]'],
   content: ["./index.html", "./src/**/*.{ts,tsx}"],
   theme: {
     extend: {
@@ -28,6 +28,9 @@ export default {
         "chat-user-bg": "var(--chat-user-bg)",
         "chat-user-border": "var(--chat-user-border)",
         "chat-user-fg": "var(--chat-user-fg)",
+        "code-bg": "var(--code-bg)",
+        "code-border": "var(--code-border)",
+        "code-text": "var(--code-text)",
       },
       fontFamily: {
         serif: ["Inter", "system-ui", "sans-serif"],

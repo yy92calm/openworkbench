@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { FolderOpen, Loader2, NotebookPen, PlugZap, ArrowDown } from "lucide-react";
 import type { ArtifactBlock, FileRoot } from "@workbench/shared";
 import { DRAFT_KEY, rootSessionOf, subagentActivity, useRuntimeStore } from "@/lib/runtime";
+import { pickFolder } from "@/lib/electron";
 import { useScrollMemory } from "@/lib/scrollMemory";
 import { useWorkspaceFiles } from "@/lib/useWorkspaceFiles";
 import { fileInspectorFromBlock } from "@/lib/artifacts";
@@ -37,6 +38,7 @@ export function LiveSessionPage() {
     permissions,
     sessionParents,
     workspace,
+    switchWorkspace,
     panes,
     commands,
     connect,
@@ -423,6 +425,11 @@ export function LiveSessionPage() {
           {/* Gradient fade from chat to composer area */}
           <div className="pointer-events-none absolute inset-x-0 top-0 h-8 bg-gradient-to-b from-bg to-transparent" />
           <div className="mx-auto max-w-[880px] space-y-3">
+            {/* Folder picker — shows current workspace, click to switch (draft only) */}
+            <FolderPickerRow workspace={workspace} pinned={!!currentId} onSwitch={async () => {
+              const dir = await pickFolder();
+              if (dir) void switchWorkspace({ path: dir });
+            }} />
             <DecisionSurface
               question={activeQuestion}
               permission={activeQuestion ? undefined : activePermission}
@@ -514,5 +521,25 @@ function ThreadSkeleton() {
         <div className="h-3.5 w-3/5 rounded bg-surface-2" />
       </div>
     </div>
+  );
+}
+
+/** Lightweight folder picker row above the composer. Shows the current
+ *  workspace; clickable to switch when the session is still a draft. */
+function FolderPickerRow({ workspace, pinned, onSwitch }: { workspace: string | null; pinned: boolean; onSwitch: () => void }) {
+  return (
+    <button
+      onClick={pinned ? undefined : onSwitch}
+      disabled={pinned}
+      className={cn(
+        "flex w-full items-center gap-1.5 rounded-input px-2 py-1 text-left text-[12px] text-muted transition-colors",
+        pinned ? "cursor-default opacity-70" : "hover:bg-surface-2 hover:text-text",
+      )}
+      title={workspace ?? undefined}
+    >
+      <FolderOpen size={12} className="shrink-0" />
+      <span className="truncate">{workspace ? baseName(workspace) : "选择工作文件夹"}</span>
+      {!pinned && <span className="ml-auto shrink-0 text-[11px] text-muted/60">点击切换</span>}
+    </button>
   );
 }

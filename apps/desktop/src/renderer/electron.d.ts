@@ -4,6 +4,7 @@ export interface ElectronAPI {
   appVersion: () => Promise<string>;
 
   startRuntime: (kind?: string) => Promise<string | null>;
+  restartRuntime: (kind?: string) => Promise<string | null>;
   runtimePassword: () => Promise<string>;
   stopRuntime: () => Promise<void>;
   serverUrl: () => Promise<string | null>;
@@ -69,6 +70,10 @@ export interface ElectronAPI {
 
   /** Fetch page content from a URL (browser service). */
   browserFetch: (url: string) => Promise<string | null>;
+
+  /** Whisper STT (offline transcription). */
+  whisperAvailable: () => Promise<boolean>;
+  whisperTranscribe: (wavBuffer: ArrayBuffer, lang?: string) => Promise<string>;
 
   /** Listen for events from the main process (terminal data streaming). */
   on: (channel: string, callback: (...args: unknown[]) => void) => () => void;

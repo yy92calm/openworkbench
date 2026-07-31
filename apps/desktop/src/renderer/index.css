@@ -54,9 +54,11 @@
   --chat-user-border: #e5e5e5;
   --chat-user-fg: var(--text);
   --chat-user-shadow: none;
-  /* Chart design system (P1-5) — validated categorical hues + chart chrome,
-     the single source of truth shared with @ai4s/shared and the matplotlib
-     style. Light surface = --surface (#ffffff). */
+  /* Code block tokens */
+  --code-bg: #f6f8fa;
+  --code-border: #e5e7eb;
+  --code-text: #24292e;
+  /* Chart design system */
   --series-1: #2a78d6;
   --series-2: #1baf7a;
   --series-3: #eda100;
@@ -67,6 +69,92 @@
   --series-8: #eb6834;
   --chart-grid: #e7e3da;
   --chart-axis: #cbc6bb;
+}
+
+[data-theme="warm"] {
+  --bg: #faf8f5;
+  --bg-soft: #f4f0eb;
+  --surface: #fffdf9;
+  --surface-2: #f5f1ec;
+  --bg-elev: #fffdf9;
+  --bg-elev-2: #faf7f3;
+  --border: #e8e0d8;
+  --border-soft: #f0eae3;
+  --text: #2b2620;
+  --text-dim: #4d463d;
+  --muted: #9a8d7c;
+  --fg-faint: #c4b8a9;
+  --accent: #c15f3c;
+  --accent-fg: #ffffff;
+  --accent-soft: rgba(193, 95, 60, 0.10);
+  --accent-strong: #a94e2c;
+  --link: #b05a30;
+  --warn: #c07000;
+  --ok: #3d8c40;
+  --error: #c53030;
+  /* Chat bubble tokens */
+  --chat-user-bg: #f5f0ea;
+  --chat-user-border: #e8e0d8;
+  --chat-user-fg: var(--text);
+  --chat-user-shadow: none;
+  /* Code block tokens */
+  --code-bg: #faf6f2;
+  --code-border: #ece2d9;
+  --code-text: #4b433a;
+  /* Chart design system */
+  --series-1: #c15f3c;
+  --series-2: #3d8c40;
+  --series-3: #c07000;
+  --series-4: #2a78d6;
+  --series-5: #7c5cbf;
+  --series-6: #c53030;
+  --series-7: #d55181;
+  --series-8: #eb6834;
+  --chart-grid: #ece2d9;
+  --chart-axis: #d4c8ba;
+}
+
+[data-theme="cool"] {
+  --bg: #f5f7fa;
+  --bg-soft: #eef1f6;
+  --surface: #ffffff;
+  --surface-2: #f0f3f8;
+  --bg-elev: #ffffff;
+  --bg-elev-2: #f8fafc;
+  --border: #dde3ec;
+  --border-soft: #e8edf4;
+  --text: #1e293b;
+  --text-dim: #3f4d63;
+  --muted: #7c8ba1;
+  --fg-faint: #a8b5c8;
+  --accent: #3b82f6;
+  --accent-fg: #ffffff;
+  --accent-soft: rgba(59, 130, 246, 0.10);
+  --accent-strong: #2563eb;
+  --link: #2563eb;
+  --warn: #d97706;
+  --ok: #059669;
+  --error: #dc2626;
+  /* Chat bubble tokens */
+  --chat-user-bg: #eef2f8;
+  --chat-user-border: #dde3ec;
+  --chat-user-fg: var(--text);
+  --chat-user-shadow: none;
+  /* Code block tokens */
+  --code-bg: #f1f5f9;
+  --code-border: #e2e8f0;
+  --code-text: #334155;
+  /* Chart design system */
+  --series-1: #3b82f6;
+  --series-2: #059669;
+  --series-3: #d97706;
+  --series-4: #7c3aed;
+  --series-5: #db2777;
+  --series-6: #dc2626;
+  --series-7: #0891b2;
+  --series-8: #ea580c;
+  --chart-grid: #e2e8f0;
+  --chart-axis: #cbd5e1;
 }
 
 [data-theme="dark"] {
@@ -95,7 +183,11 @@
   --chat-user-border: #2e2e2e;
   --chat-user-fg: var(--text);
   --chat-user-shadow: none;
-  /* Same hues stepped for the dark chart surface (--surface #1a1920). */
+  /* Code block tokens */
+  --code-bg: #1e1e2e;
+  --code-border: #2e2e3e;
+  --code-text: #cdd6f4;
+  /* Chart design system */
   --series-1: #3987e5;
   --series-2: #199e70;
   --series-3: #c98500;
@@ -106,6 +198,49 @@
   --series-8: #d95926;
   --chart-grid: #2e2d38;
   --chart-axis: #4a4753;
+}
+
+[data-theme="black"] {
+  --bg: #000000;
+  --bg-soft: #0a0a0a;
+  --surface: #111111;
+  --surface-2: #1c1c1c;
+  --bg-elev: #141414;
+  --bg-elev-2: #1f1f1f;
+  --border: #2a2a2a;
+  --border-soft: #1e1e1e;
+  --text: #f0f0f0;
+  --text-dim: #bcbcbc;
+  --muted: #8a8a8a;
+  --fg-faint: #555555;
+  --accent: #10a37f;
+  --accent-fg: #ffffff;
+  --accent-soft: rgba(16, 163, 127, 0.14);
+  --accent-strong: #1ab892;
+  --link: #7ab3f7;
+  --warn: #f59e0b;
+  --ok: #22c55e;
+  --error: #ef4444;
+  /* Chat bubble tokens */
+  --chat-user-bg: #1c1c1c;
+  --chat-user-border: #2a2a2a;
+  --chat-user-fg: var(--text);
+  --chat-user-shadow: none;
+  /* Code block tokens */
+  --code-bg: #0d0d14;
+  --code-border: #222233;
+  --code-text: #cdd6f4;
+  /* Chart design system */
+  --series-1: #3987e5;
+  --series-2: #199e70;
+  --series-3: #c98500;
+  --series-4: #008300;
+  --series-5: #9085e9;
+  --series-6: #e66767;
+  --series-7: #d55181;
+  --series-8: #d95926;
+  --chart-grid: #222222;
+  --chart-axis: #3a3a3a;
 }
 
 html,
@@ -233,3 +368,17 @@ body {
 .topicbar {
   -webkit-app-region: no-drag;
 }
+
+/* ── highlight.js theme-aware tokens ── */
+.hljs { background: transparent; color: var(--code-text); }
+.hljs-comment, .hljs-quote { color: var(--muted); font-style: italic; }
+.hljs-keyword, .hljs-selector-tag, .hljs-meta { color: var(--accent-strong); font-weight: 500; }
+.hljs-string, .hljs-regexp, .hljs-addition { color: var(--ok); }
+.hljs-number, .hljs-literal { color: var(--warn); }
+.hljs-title, .hljs-section, .hljs-name { color: var(--link); font-weight: 500; }
+.hljs-attr, .hljs-attribute, .hljs-variable, .hljs-template-variable { color: var(--text-dim); }
+.hljs-built_in, .hljs-type { color: var(--warn); }
+.hljs-symbol, .hljs-bullet, .hljs-link { color: var(--link); }
+.hljs-deletion { color: var(--error); }
+.hljs-emphasis { font-style: italic; }
+.hljs-strong { font-weight: bold; }

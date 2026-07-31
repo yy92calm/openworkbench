@@ -10,6 +10,7 @@ const api = {
 
   // Runtime (sidecar)
   startRuntime: (kind?: string) => ipcRenderer.invoke("start-runtime", kind),
+  restartRuntime: (kind?: string) => ipcRenderer.invoke("restart-runtime", kind),
   runtimePassword: () => ipcRenderer.invoke("runtime-password"),
   stopRuntime: () => ipcRenderer.invoke("stop-runtime"),
   serverUrl: () => ipcRenderer.invoke("server-url"),
@@ -102,6 +103,11 @@ const api = {
   browserRecordSave: (name: string, description?: string) => ipcRenderer.invoke("browser:record-save", name, description),
   browserRecordList: () => ipcRenderer.invoke("browser:record-list"),
   browserRecordReplay: (name: string, delay?: number) => ipcRenderer.invoke("browser:record-replay", name, delay),
+
+  // Whisper STT (offline transcription)
+  whisperAvailable: () => ipcRenderer.invoke("whisper-available"),
+  whisperTranscribe: (wavBuffer: ArrayBuffer, lang?: string) =>
+    ipcRenderer.invoke("whisper-transcribe", wavBuffer, lang),
 
   // Terminal (event-based streaming)
   on: (channel: string, callback: (...args: unknown[]) => void) => {

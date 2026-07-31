@@ -14,6 +14,7 @@ import { createMainWindow, getMainWindow } from "./windows";
 import { cronEngine, type CreateTaskInput, type UpdateTaskInput } from "./scheduler";
 import { registerTerminalHandlers } from "./terminal";
 import { fetchPageContent, extractText } from "./browser";
+import { isWhisperAvailable, transcribeWav } from "./whisper";
 
 export function registerIpcHandlers(): void {
   const log = getLogger();
@@ -89,6 +90,13 @@ export function registerIpcHandlers(): void {
   ipcMain.handle("runtime-password", () => getServerPassword());
   ipcMain.handle("stop-runtime", () => stopSidecar());
   ipcMain.handle("server-url", () => getServerUrl());
+  // Restart: stop the sidecar then start it again (picks up new provider config).
+  ipcMain.handle("restart-runtime", async (_e, kind?: AgentRuntimeKind) => {
+    stopSidecar();
+    const runtimeKind: AgentRuntimeKind = kind === "claude-code" ? "claude-code" : "opencode";
+    const result = await startAgentRuntime(runtimeKind);
+    return result.url;
+  });
 
   // ---- Workspace ----
   ipcMain.handle("workspace-path", () => workspaceDir());
@@ -233,6 +241,17 @@ export function registerIpcHandlers(): void {
   ipcMain.handle("scheduler:history", (_e, taskId?: string, limit?: number) => cronEngine.getHistory(taskId, limit));
   ipcMain.handle("scheduler:delete-execution", (_e, id: string) => cronEngine.deleteExecution(id));
   ipcMain.handle("scheduler:clear-history", (_e, taskId?: string) => cronEngine.clearHistory(taskId));
+
+  // ---- Whisper STT ----
+  ipcMain.handle("whisper-available", () => isWhisperAvailable());
+  ipcMain.handle("whisper-transcribe", async (_e, wavBuffer: ArrayBuffer, lang?: string) => {
+    try {
+      return await transcribeWav(Buffer.from(wavBuffer), lang ?? "zh");
+    } catch (err) {
+      log.warn(`[whisper] transcribe failed: ${err instanceof Error ? err.message : String(err)}`);
+      throw err;
+    }
+  });
 
   log.info("IPC handlers registered");
   registerTerminalHandlers();

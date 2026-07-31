@@ -2,28 +2,12 @@ import { useMemo } from "react";
 import { DRAFT_KEY, useRuntimeStore } from "@/lib/runtime";
 import { cn } from "@/lib/cn";
 
-interface TokenEstimate {
-  label: string;
-  chars: number;
-  tokens: number;
-  color: string;
-}
-
-/**
- * Rough token estimation: ~4 chars per token for mixed content.
- * Used for relative sizing, not exact billing.
- */
-function estimateTokens(text: string): number {
-  if (!text) return 0;
-  return Math.ceil(text.length / 4);
-}
-
 /** Conservative fallback when the provider reports no window for the model. */
 const DEFAULT_CONTEXT_WINDOW = 128_000;
 
 /**
  * Resolve the context window for "provider/model": prefer the provider-reported
- * value, fall back to a conservative default. Never hard-coded per model.
+ * value, fall back to a conservative default.
  */
 function resolveContextWindow(
   defaultModel: string | null,
@@ -41,40 +25,17 @@ function resolveContextWindow(
   return DEFAULT_CONTEXT_WINDOW;
 }
 
-function countBlocks(blocks: import("@workbench/shared").ThreadBlock[]): TokenEstimate[] {
-  let userChars = 0;
-  let agentChars = 0;
-  let toolInputChars = 0;
-  let toolOutputChars = 0;
-  let reasoningChars = 0;
+/** Format a token count for compact display. */
+function fmt(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`;
+  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
+  return String(n);
+}
 
-  for (const b of blocks) {
-    switch (b.kind) {
-      case "user":
-        userChars += b.text.length;
-        break;
-      case "agent":
-        agentChars += b.markdown.length;
-        break;
-      case "reasoning":
-        reasoningChars += b.text.length;
-        break;
-      case "tool-call": {
-        toolInputChars += b.inputSummary?.length ?? 0;
-        toolInputChars += b.title?.length ?? 0;
-        toolOutputChars += b.outputSummary?.length ?? 0;
-        break;
-      }
-    }
-  }
-
-  return [
-{ label: "用户", chars: userChars, tokens: estimateTokens(userChars), color: "var(--accent)" },
-  { label: "Agent", chars: agentChars, tokens: estimateTokens(agentChars), color: "var(--ok)" },
-  { label: "工具输入", chars: toolInputChars, tokens: estimateTokens(toolInputChars), color: "var(--link)" },
-  { label: "工具输出", chars: toolOutputChars, tokens: estimateTokens(toolOutputChars), color: "var(--warn)" },
-  { label: "推理", chars: reasoningChars, tokens: estimateTokens(reasoningChars), color: "var(--accent-strong)" },
-  ];
+function formatCost(cost: number): string {
+  if (cost < 0.0001) return "$" + cost.toExponential(2);
+  if (cost < 1) return `$${cost.toFixed(4)}`;
+  return `$${cost.toFixed(2)}`;
 }
 
 /** Thresholds for the ring color (fraction of the context window). */
@@ -110,8 +71,8 @@ function Ring({ pct }: { pct: number }) {
 }
 
 /**
- * Token usage estimation panel — shows per-category token counts and a
- * context window ring. Inspired by Reasonix's context-window-ring.
+ * Token usage panel — shows real API-reported token counts from the session,
+ * a context window ring, cost, and per-message request history.
  */
 export function TokenUsage() {
   const currentId = useRuntimeStore((s) => s.currentId);
@@ -126,16 +87,44 @@ export function TokenUsage() {
     () => resolveContextWindow(defaultModel, providers),
     [defaultModel, providers],
   );
-  const estimates = countBlocks(thread?.blocks ?? []);
-  let totalTokens = 0;
-  let totalChars = 0;
-  for (const e of estimates) {
-    totalTokens += Number.isFinite(e.tokens) ? e.tokens : 0;
-    totalChars += Number.isFinite(e.chars) ? e.chars : 0;
-  }
-  const pct = Math.min(totalTokens / contextWindow, 1);
+
+  // Real API-reported tokens from the session
+  const inputTokens = session?.promptTokens ?? 0;
+  const outputTokens = session?.completionTokens ?? 0;
+  const reasoningTokens = session?.reasoningTokens ?? 0;
+  const cacheRead = session?.cacheReadTokens ?? 0;
+  const cacheWrite = session?.cacheWriteTokens ?? 0;
+  const totalTokens = inputTokens + outputTokens + reasoningTokens;
+  const cost = session?.cost ?? 0;
+  const hasRealData = totalTokens > 0 || cost > 0;
+
+  // Fallback: estimate from thread blocks when no real data yet
+  const blockChars = useMemo(() => {
+    let chars = 0;
+    for (const b of thread?.blocks ?? []) {
+      if (b.kind === "user") chars += b.text.length;
+      else if (b.kind === "agent") chars += b.markdown.length;
+      else if (b.kind === "reasoning") chars += b.text.length;
+      else if (b.kind === "tool-call") chars += (b.inputSummary?.length ?? 0) + (b.outputSummary?.length ?? 0);
+    }
+    return chars;
+  }, [thread?.blocks]);
+  const estimatedTokens = Math.ceil(blockChars / 4);
+  const displayTotal = hasRealData ? totalTokens : estimatedTokens;
+  const pct = Math.min(displayTotal / contextWindow, 1);
   const safePct = Number.isFinite(pct) ? pct : 0;
   const tone = safePct >= DANGER_AT ? "text-error" : safePct >= WARNING_AT ? "text-warn" : "text-ok";
+
+  // Message history from thread blocks
+  const messages = useMemo(() => {
+    const msgs: { role: string; summary: string }[] = [];
+    for (const b of thread?.blocks ?? []) {
+      if (b.kind === "user") msgs.push({ role: "user", summary: b.text.slice(0, 80) });
+      else if (b.kind === "agent") msgs.push({ role: "assistant", summary: b.markdown.slice(0, 80) });
+      else if (b.kind === "tool-call") msgs.push({ role: "tool", summary: b.title ?? b.tool });
+    }
+    return msgs;
+  }, [thread?.blocks]);
 
   return (
     <div className="flex flex-col gap-4 p-4">
@@ -155,7 +144,7 @@ export function TokenUsage() {
         )}
         <div className="flex items-center justify-between text-[11px]">
           <span className="text-muted">消息数</span>
-          <span className="text-text">{thread?.blocks.length ?? 0}</span>
+          <span className="text-text">{messages.length}</span>
         </div>
       </div>
 
@@ -167,42 +156,76 @@ export function TokenUsage() {
         </span>
       </div>
 
-      {/* Total */}
-      <div className="w-full text-center">
-        <div className="text-[18px] font-semibold text-text">{totalTokens.toLocaleString()}</div>
-        <div className="text-[11px] text-muted">预估 Token 数</div>
-        {totalTokens > 0 && (
-          <div className="text-[11px] text-muted">
-            上下文窗口上限 {contextWindow.toLocaleString()}
+      {/* Real token breakdown */}
+      {hasRealData ? (
+        <div className="w-full space-y-1.5">
+          <div className="flex items-center justify-between text-[11px]">
+            <span className="text-text">输入 Tokens</span>
+            <span className="font-mono text-muted">{fmt(inputTokens)}</span>
           </div>
-        )}
-      </div>
+          <div className="flex items-center justify-between text-[11px]">
+            <span className="text-text">输出 Tokens</span>
+            <span className="font-mono text-muted">{fmt(outputTokens)}</span>
+          </div>
+          {reasoningTokens > 0 && (
+            <div className="flex items-center justify-between text-[11px]">
+              <span className="text-text">推理 Tokens</span>
+              <span className="font-mono text-muted">{fmt(reasoningTokens)}</span>
+            </div>
+          )}
+          {(cacheRead > 0 || cacheWrite > 0) && (
+            <div className="flex items-center justify-between text-[11px]">
+              <span className="text-text">缓存 读/写</span>
+              <span className="font-mono text-muted">{fmt(cacheRead)} / {fmt(cacheWrite)}</span>
+            </div>
+          )}
+          <div className="mt-1 flex items-center justify-between border-t border-border pt-1 text-[11px]">
+            <span className="font-medium text-text">合计</span>
+            <span className="font-mono font-medium text-text">{fmt(totalTokens)}</span>
+          </div>
+          {cost > 0 && (
+            <div className="flex items-center justify-between text-[11px]">
+              <span className="text-muted">费用</span>
+              <span className="font-mono text-warn">{formatCost(cost)}</span>
+            </div>
+          )}
+          <div className="flex items-center justify-between text-[11px]">
+            <span className="text-muted">上下文窗口</span>
+            <span className="font-mono text-muted">{fmt(contextWindow)}</span>
+          </div>
+        </div>
+      ) : (
+        <div className="w-full text-center">
+          <div className="text-[18px] font-semibold text-text">{displayTotal.toLocaleString()}</div>
+          <div className="text-[11px] text-muted">预估 Token 数（等待 API 数据）</div>
+        </div>
+      )}
 
-      {/* Breakdown */}
-      <div className="w-full space-y-1.5">
-        {estimates
-          .filter((e) => e.tokens > 0)
-          .sort((a, b) => b.tokens - a.tokens)
-          .map((e) => {
-            const pctOfTotal = totalTokens > 0 ? (e.tokens / totalTokens) * 100 : 0;
-            return (
-              <div key={e.label}>
-                <div className="flex items-center justify-between text-[11px]">
-                  <span className="text-text">{e.label}</span>
-                  <span className="text-muted">{e.tokens.toLocaleString()} tok</span>
-                </div>
-                <div className="mt-0.5 h-1.5 w-full overflow-hidden rounded-full bg-surface-2">
-                  <div
-                    className="h-full rounded-full transition-all duration-300"
-                    style={{ width: `${pctOfTotal}%`, background: e.color }}
-                  />
-                </div>
+      {/* Message / request history */}
+      {messages.length > 0 && (
+        <div className="w-full">
+          <div className="mb-1 text-[11px] font-medium text-muted">请求报文</div>
+          <div className="max-h-48 space-y-1 overflow-y-auto">
+            {messages.map((m, i) => (
+              <div key={i} className="flex items-start gap-1.5 rounded px-1.5 py-1 text-[11px] odd:bg-surface-2">
+                <span
+                  className={cn(
+                    "shrink-0 rounded px-1 py-px text-[10px] font-medium",
+                    m.role === "user" && "bg-accent/15 text-accent",
+                    m.role === "assistant" && "bg-ok/15 text-ok",
+                    m.role === "tool" && "bg-link/15 text-link",
+                  )}
+                >
+                  {m.role === "user" ? "用户" : m.role === "assistant" ? "AI" : "工具"}
+                </span>
+                <span className="truncate text-muted" title={m.summary}>{m.summary}</span>
               </div>
-            );
-          })}
-      </div>
+            ))}
+          </div>
+        </div>
+      )}
 
-      {totalChars === 0 && (
+      {displayTotal === 0 && messages.length === 0 && (
         <div className="py-8 text-center text-[12px] text-muted">
           暂无消息。开始对话后将显示 Token 用量。
         </div>

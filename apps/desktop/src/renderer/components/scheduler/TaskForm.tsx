@@ -95,7 +95,7 @@ export function TaskForm({ task, agents, onSave, onUpdate, onCancel }: Props) {
       role="presentation"
     >
       <div
-        className="w-[480px] rounded-card border border-border bg-surface p-5 shadow-card"
+        className="w-[640px] rounded-card border border-border bg-surface p-6 shadow-card"
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="text-lg font-semibold tracking-tight text-text">
