@@ -232,8 +232,8 @@ export function LiveSessionPage() {
   const onChatScroll = useScrollMemory(chatRef, `chat:${currentId ?? DRAFT_KEY}`, !historyLoading);
   // Scroll-to-bottom FAB: visible when the user has scrolled up.
   const [showScrollBtn, setShowScrollBtn] = useState(false);
-  const scrollToBottom = () => {
-    chatRef.current?.scrollTo({ top: chatRef.current.scrollHeight, behavior: "smooth" });
+  const scrollToBottom = (behavior: ScrollBehavior = "auto") => {
+    chatRef.current?.scrollTo({ top: chatRef.current.scrollHeight, behavior });
   };
   // Track whether the user is near the bottom for auto-scroll.
   const nearBottomRef = useRef(true);
@@ -412,7 +412,7 @@ export function LiveSessionPage() {
           {/* Scroll-to-bottom FAB */}
           {showScrollBtn && (
             <button
-              onClick={scrollToBottom}
+              onClick={() => scrollToBottom("smooth")}
               className="sticky bottom-4 left-full mr-6 flex h-8 w-8 items-center justify-center rounded-full border border-border bg-surface shadow-pop transition-opacity hover:bg-surface-2"
               title="滚动到底部"
             >

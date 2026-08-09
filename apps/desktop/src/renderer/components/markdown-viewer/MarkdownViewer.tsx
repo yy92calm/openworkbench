@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { memo, useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import hljs from "highlight.js";
@@ -63,19 +63,31 @@ function CodeBlock({
   language,
   code,
   variant,
+  streaming,
 }: {
   language: string | undefined;
   code: string;
   variant: Variant;
+  /** True while the enclosing message is still streaming. A code block that
+   *  has not yet hit its closing ``` re-runs on every token; skipping the
+   *  highlight until the fence closes avoids burning CPU on a half-typed
+   *  block (the fence's completion flips this back to highlighting once). */
+  streaming?: boolean;
 }) {
   const [running, setRunning] = useState(false);
   const [output, setOutput] = useState<string | null>(null);
   const { copied, onCopy } = useCopyCode(code);
   const s = STYLES[variant];
 
-  const highlighted = language
-    ? hljs.highlight(code, { language }).value
-    : hljs.highlightAuto(code).value;
+  // Cache the highlight by its inputs — re-highlighting an unchanged code
+  // block is pure waste (react-markdown re-parses the whole document each
+  // render). Prefer the known-language path: hljs.highlightAuto is expensive.
+  const highlighted = useMemo(() => {
+    if (streaming) return null;
+    return language
+      ? hljs.highlight(code, { language }).value
+      : hljs.highlightAuto(code).value;
+  }, [language, code, streaming]);
 
   const run = async () => {
     if (running) return;
@@ -118,7 +130,11 @@ function CodeBlock({
         )}
       </div>
       <pre className={cn(s.pre, "!mt-0 !rounded-t-none")}>
-        <code dangerouslySetInnerHTML={{ __html: highlighted }} />
+        {highlighted !== null ? (
+          <code dangerouslySetInnerHTML={{ __html: highlighted }} />
+        ) : (
+          <code>{code}</code>
+        )}
       </pre>
       {output && (
         <pre className="overflow-x-auto rounded-b-input border-t border-border bg-surface-2 p-3 font-mono text-[12px] text-text">
@@ -129,14 +145,18 @@ function CodeBlock({
   );
 }
 
-export function MarkdownViewer({
+export const MarkdownViewer = memo(function MarkdownViewer({
   children,
   className,
   variant = "chat",
+  streaming = false,
 }: {
   children: string;
   className?: string;
   variant?: Variant;
+  /** True while the message is still streaming in. Code blocks skip their
+   *  highlight until the fence closes (see CodeBlock). */
+  streaming?: boolean;
 }) {
   const s = STYLES[variant];
   return (
@@ -157,7 +177,7 @@ export function MarkdownViewer({
             }
             const language = cls?.replace("language-", "");
             const code = String(children).replace(/\n$/, "");
-            return <CodeBlock language={language} code={code} variant={variant} />;
+            return <CodeBlock language={language} code={code} variant={variant} streaming={streaming} />;
           },
           pre: ({ children }) => <>{children}</>,
           ul: ({ children }) => <ul className={s.ul}>{children}</ul>,
@@ -182,4 +202,4 @@ export function MarkdownViewer({
       </ReactMarkdown>
     </div>
   );
-}
+}, (a, b) => a.children === b.children && a.streaming === b.streaming && a.className === b.className && a.variant === b.variant);

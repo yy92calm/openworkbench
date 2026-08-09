@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Brain, Check, ChevronRight, Loader2, X } from "lucide-react";
+import { Brain, Check, ChevronDown, ChevronRight, Loader2, X } from "lucide-react";
 import type { ArtifactBlock, FigureAnnotation, ReasoningBlock, ThreadBlock, ToolCallBlock } from "@workbench/shared";
 import { cn } from "@/lib/cn";
 import { useUiStore } from "@/lib/store";
@@ -133,14 +133,42 @@ export function renderBlock(block: ThreadBlock, i: number, handlers?: BlockHandl
 export function BlockList({
   blocks,
   handlers,
+  warmCount = 40,
 }: {
   blocks: ThreadBlock[];
   handlers?: BlockHandlers;
+  /** How many of the newest blocks render up front; older ones fold behind an
+   *  "expand earlier history" placeholder and only render on demand. Warm/cold
+   *  layering for long sessions — the full list is never rendered at once. */
+  warmCount?: number;
 }) {
-  const items = useMemo(() => prepareItems(blocks), [blocks]);
+  const [expanded, setExpanded] = useState(false);
+  const total = blocks.length;
+  const isCold = total > warmCount;
+
+  // The warm list is the last `warmCount` items. When the list grows past the
+  // threshold the fold boundary moves forward; rendering the new tail replaces
+  // the placeholder. The fold never collapses the LIVE tail mid-stream.
+  const items = useMemo(() => {
+    const all = prepareItems(blocks);
+    if (!isCold || expanded) return all;
+    return all.slice(-warmCount);
+  }, [blocks, isCold, expanded, warmCount]);
+
+  const coldCount = total - warmCount;
 
   return (
     <>
+      {isCold && !expanded && (
+        <button
+          type="button"
+          onClick={() => setExpanded(true)}
+          className="flex w-full items-center gap-2 rounded-lg border border-border-soft bg-surface/40 px-3 py-2 text-left text-[13px] text-muted transition-colors hover:bg-surface-2/40 hover:text-text"
+        >
+          <ChevronDown size={14} className="shrink-0" />
+          <span className="flex-1 truncate">展开更早历史（{coldCount} 条）</span>
+        </button>
+      )}
       {items.map((item, idx) => {
         if (item.type === "block") {
           const prevKind = idx > 0

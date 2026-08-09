@@ -920,6 +920,10 @@ export class OpenCodeClient {
         });
         break;
       }
+      case "session.compacted": {
+        this.emit({ type: "session.compacted", sessionId: String(props.sessionID ?? "") });
+        break;
+      }
       default:
         break; // server.connected and others are ignored
     }

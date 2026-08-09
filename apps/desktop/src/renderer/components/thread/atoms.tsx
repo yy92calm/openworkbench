@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { Check, Copy, Loader2, Paperclip, Pencil, Volume2, Square } from "lucide-react";
 import type {
   ArtifactBlock,
@@ -73,7 +73,11 @@ export function UserMessage({ block, onEdit }: { block: UserMessageBlock; onEdit
   );
 }
 
-export function AgentMessage({
+/** Memoized so a token update to one streaming message doesn't re-run the
+ *  function body (and artifact ref scanning) of every other message in the
+ *  thread on each animation frame. The markdown string is the only input that
+ *  changes while streaming, so the default shallow comparison is exact. */
+export const AgentMessage = memo(function AgentMessage({
   markdown,
   timestamp,
   streaming,
@@ -86,8 +90,7 @@ export function AgentMessage({
   streaming?: boolean;
   onOpenArtifact?: (a: ArtifactBlock) => void;
 }) {
-  const { copied, onCopy } = useCopy(markdown);
-  const [speaking, setSpeaking] = useState(false);
+  const { copied, onCopy } = useCopy(markdown);  const [speaking, setSpeaking] = useState(false);
   const voiceCfgRef = useRef<VoiceConfig | null>(null);
 
   useEffect(() => {
@@ -141,7 +144,7 @@ export function AgentMessage({
       <div className="w-[2px] shrink-0 self-stretch rounded-full bg-accent/25" />
       <div className="min-w-0 flex-1 flex flex-col gap-2">
         <div className="text-[14px] leading-relaxed text-text">
-          <MarkdownViewer>{markdown}</MarkdownViewer>
+          <MarkdownViewer streaming={streaming}>{markdown}</MarkdownViewer>
           {streaming && (
             <span className="ml-0.5 inline-block h-[1.05em] w-[2px] translate-y-[2px] animate-pulse rounded-sm bg-accent align-text-bottom" />
           )}
@@ -194,7 +197,7 @@ export function AgentMessage({
       </div>
     </div>
   );
-}
+});
 
 export function DataTable({ block }: { block: DataTableBlock }) {
   return (

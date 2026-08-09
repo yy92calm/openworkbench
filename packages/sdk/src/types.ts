@@ -56,6 +56,12 @@ export interface SessionUpdatedEvent {
   cacheWriteTokens?: number;
   cost?: number;
 }
+/** Context was compacted (old messages summarized/pruned). A cache-reset
+ *  point — every subsequent turn starts a fresh prompt prefix. */
+export interface SessionCompactedEvent {
+  type: "session.compacted";
+  sessionId: string;
+}
 
 // ---- Interactive requests (the agent asks; the user must answer) ----
 // OpenCode blocks the run until answered. Two kinds: a `question` (pick from
@@ -113,6 +119,7 @@ export type OpenCodeEvent =
   | ToolUpdatedEvent
   | SessionIdleEvent
   | SessionUpdatedEvent
+  | SessionCompactedEvent
   | RuntimeErrorEvent
   | QuestionAskedEvent
   | QuestionResolvedEvent

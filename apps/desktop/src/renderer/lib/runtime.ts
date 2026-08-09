@@ -212,6 +212,26 @@ export function rootSessionOf(parents: Record<string, string>, sessionId: string
   return cur;
 }
 
+/** True when two session metas are equivalent for the sidebar — the fields a
+ *  list refresh would show. Token/cost deltas update via session.updated. */
+function sessionsEqual(a: SessionMeta, b: SessionMeta): boolean {
+  return (
+    a.id === b.id &&
+    a.title === b.title &&
+    a.slug === b.slug &&
+    a.directory === b.directory &&
+    a.parentId === b.parentId &&
+    a.promptTokens === b.promptTokens &&
+    a.completionTokens === b.completionTokens &&
+    a.reasoningTokens === b.reasoningTokens &&
+    a.cacheReadTokens === b.cacheReadTokens &&
+    a.cacheWriteTokens === b.cacheWriteTokens &&
+    a.cost === b.cost &&
+    a.createdAt === b.createdAt &&
+    a.updatedAt === b.updatedAt
+  );
+}
+
 type StoreSet = {
   (partial: Partial<RuntimeState>): void;
   (fn: (s: RuntimeState) => Partial<RuntimeState>): void;
@@ -494,19 +514,23 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
   loadCatalog: async () => {
     if (!client) return;
     try {
-      const [firstSkills, agents, defaultModel, commands] = await Promise.all([
-        client.listSkills(),
+      // Skills can be empty right after a sidecar boot (instances create
+      // lazily per directory) — retry them in the background WITHOUT blocking
+      // the agents/commands/defaultModel that render immediately.
+      const [agents, defaultModel, commands] = await Promise.all([
         client.listAgents(),
         client.getDefaultModel().catch(() => null),
         client.listCommands().catch(() => []),
       ]);
       set({ agents, defaultModel, commands });
-      let skills = firstSkills;
-      for (let i = 0; skills.length === 0 && i < 4; i++) {
-        await sleep(400);
-        skills = await client.listSkills();
-      }
-      set({ skills });
+      void (async () => {
+        let skills = await client.listSkills();
+        for (let i = 0; skills.length === 0 && i < 4; i++) {
+          await sleep(400);
+          skills = await client.listSkills();
+        }
+        set({ skills });
+      })();
       void get().loadMcpServers();
       void get().loadProviders();
     } catch {
@@ -594,12 +618,78 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
       void logDebug(`status → ${status}`);
       set({ status });
     });
-    c.onEvent((event) => {
-      // text.updated now fires per streamed token — logging each one would
-      // flood debug.log with an IPC call per token.
-      if (event.type !== "text.updated" && event.type !== "reasoning.updated")
-        void logDebug(`event ← ${event.type}${"sessionId" in event ? " " + event.sessionId : ""}`);
-      if ("sessionId" in event && event.sessionId) sseLast.set(event.sessionId, ++sseSeq);
+    // Coalesce streaming text/reasoning updates: foldEvent upserts per partId
+    // (idempotent full-text), so emitting only the newest value per animation
+    // frame is exact — a fast token stream no longer re-renders the whole
+    // thread on every token. Non-streaming events flush pending text first so
+    // ordering holds (idle after the final token, tool rows after text, etc.).
+    //
+    // The flush is additionally gated to ~20 fps (50 ms): a 60 fps markdown
+    // re-parse of a growing document saturates the main thread once the message
+    // is long, which reads as jank. Text streaming is indistinguishable from
+    // 60 fps at this cadence, while cutting the per-frame parse cost 3x.
+    const streamPending = new Map<string, OpenCodeEvent>();
+    let streamRaf: number | null = null;
+    let lastStreamFlush = 0;
+    const flushStream = () => {
+      if (streamRaf !== null) {
+        if (typeof cancelAnimationFrame === "function") cancelAnimationFrame(streamRaf);
+        streamRaf = null;
+      }
+      if (streamPending.size === 0) return;
+      const events = [...streamPending.values()];
+      streamPending.clear();
+      lastStreamFlush = Date.now();
+      for (const e of events) applyEvent(e);
+    };
+    const scheduleStream = () => {
+      if (streamRaf !== null) return;
+      const run = () => {
+        streamRaf = null;
+        // Stay within the fps gate; a fast stream keeps re-scheduling until the
+        // gate opens. The final token is never dropped: a non-streaming event
+        // (session.idle, tool updates, …) calls flushStream() directly.
+        if (Date.now() - lastStreamFlush < 50) {
+          scheduleStream();
+          return;
+        }
+        flushStream();
+      };
+      if (typeof requestAnimationFrame === "function") streamRaf = requestAnimationFrame(run);
+      else setTimeout(run, 50); // node/jsdom fallback ≈ 20 fps
+    };
+
+    // Session token/cost updates land once per provider token; coalesce them
+    // to one sidebar refresh per second instead of one per token.
+    const sessionUpdatePending = new Map<string, SessionUpdatedEvent>();
+    let sessionUpdateTimer: ReturnType<typeof setTimeout> | null = null;
+    const flushSessionUpdates = () => {
+      sessionUpdateTimer = null;
+      if (sessionUpdatePending.size === 0) return;
+      const events = [...sessionUpdatePending.values()];
+      sessionUpdatePending.clear();
+      set((s) => ({
+        sessions: s.sessions.map((m) => {
+          const e = events.find((x) => x.sessionId === m.id);
+          if (!e) return m;
+          return {
+            ...m,
+            promptTokens: e.promptTokens ?? m.promptTokens,
+            completionTokens: e.completionTokens ?? m.completionTokens,
+            reasoningTokens: e.reasoningTokens ?? m.reasoningTokens,
+            cacheReadTokens: e.cacheReadTokens ?? m.cacheReadTokens,
+            cacheWriteTokens: e.cacheWriteTokens ?? m.cacheWriteTokens,
+            cost: e.cost ?? m.cost,
+          };
+        }),
+      }));
+    };
+    const enqueueSessionUpdate = (event: SessionUpdatedEvent) => {
+      sessionUpdatePending.set(event.sessionId, event);
+      if (sessionUpdateTimer === null) sessionUpdateTimer = setTimeout(flushSessionUpdates, 1000);
+    };
+
+    const applyEvent = (event: OpenCodeEvent) => {
       if (event.type === "error") {
         // A session-scoped error belongs IN the conversation (a red status
         // line where the user is looking), and it ends that session's turn so
@@ -728,6 +818,24 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
         }
       }
       if (event.type === "session.idle") void get().refreshSessions();
+    };
+    // Route every normalized event into the coalescing layers above. Streaming
+    // text/reasoning updates ride the animation frame; token/cost heartbeats
+    // ride a 1 Hz timer; everything else flushes pending text first so ordering
+    // holds (idle after the final token, tool rows after text, etc.).
+    c.onEvent((event) => {
+      if ("sessionId" in event && event.sessionId) sseLast.set(event.sessionId, ++sseSeq);
+      if (event.type === "text.updated" || event.type === "reasoning.updated") {
+        streamPending.set(`${event.type}:${event.partId}`, event);
+        scheduleStream();
+        return;
+      }
+      if (event.type === "session.updated") {
+        enqueueSessionUpdate(event);
+        return;
+      }
+      if (streamPending.size > 0) flushStream();
+      applyEvent(event);
     });
     try {
       void logDebug(`connect → ${get().serverUrl}`);
@@ -849,6 +957,14 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
     try {
       const sessions = await client.listSessions();
       set((s) => {
+        // Shallow-compare against the current list: skip the set when nothing
+        // changed so the sidebar (and every SessionRow) isn't re-rendered on
+        // each refresh. Token/cost deltas arrive via session.updated instead.
+        const cur = s.sessions;
+        const unchanged =
+          cur.length === sessions.length &&
+          cur.every((m, i) => sessionsEqual(m, sessions[i]));
+        if (unchanged) return {};
         // The list also names each subagent session's parent — the recovery
         // path for parent links after a reload (no live task event to learn from).
         const sessionParents = { ...s.sessionParents };
@@ -1255,6 +1371,12 @@ export function foldEvent(
     }
     case "session.idle":
       blocks.push({ kind: "status-line", text: "done", tone: "done" });
+      return { blocks, index, consecutiveTools: 0 };
+    case "session.compacted":
+      // Context was summarized/pruned — a cache-reset point. Mark it inline so
+      // the user can see when automatic compaction happened (cache-reads that
+      // follow will be near zero until the new prefix rebuilds).
+      blocks.push({ kind: "status-line", text: "上下文已压缩（cache 已重置）", tone: "done" });
       return { blocks, index, consecutiveTools: 0 };
     default:
       return state;

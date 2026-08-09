@@ -113,6 +113,13 @@ describe("foldEvent", () => {
     ]);
     expect(s.blocks.map((b) => b.kind)).toEqual(["agent", "tool-call", "agent", "status-line"]);
   });
+
+  it("marks a compaction as an inline cache-reset status line", () => {
+    const s = foldAll([{ type: "session.compacted", sessionId: S }]);
+    expect(s.blocks).toEqual([
+      { kind: "status-line", text: "上下文已压缩（cache 已重置）", tone: "done" },
+    ]);
+  });
 });
 
 describe("subagent activity", () => {

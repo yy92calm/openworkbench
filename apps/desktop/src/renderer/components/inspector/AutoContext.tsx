@@ -1,3 +1,5 @@
+import { useState } from "react";
+import { ChevronRight } from "lucide-react";
 import { useRuntimeStore } from "@/lib/runtime";
 import { cn } from "@/lib/cn";
 
@@ -6,7 +8,9 @@ import { cn } from "@/lib/cn";
  * capabilities every session starts with. Read straight from the runtime store
  * (skills/agents/mcpServers), which are loaded by loadCatalog/loadMcpServers.
  *
- * Empty sections render nothing — no fake data, no empty-state clutter.
+ * Each group (agents / skills / MCP) is a collapsible section that defaults to
+ * collapsed so a large profile doesn't dominate the panel. Empty sections
+ * render nothing.
  */
 export function AutoContext() {
   const skills = useRuntimeStore((s) => s.skills);
@@ -59,10 +63,21 @@ export function AutoContext() {
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
   return (
     <div className="mb-2.5 last:mb-0">
-      <div className="mb-1 text-[11px] text-text-dim">{title}</div>
-      <div className="space-y-0.5">{children}</div>
+      <button
+        className="flex w-full items-center gap-1.5 rounded px-1 py-0.5 text-left hover:bg-surface-2"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+      >
+        <ChevronRight
+          size={13}
+          className={cn("shrink-0 text-muted transition-transform", open && "rotate-90")}
+        />
+        <span className="flex-1 text-[11px] text-text-dim">{title}</span>
+      </button>
+      {open && <div className="mt-1 space-y-0.5">{children}</div>}
     </div>
   );
 }

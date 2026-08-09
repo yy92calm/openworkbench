@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect } from "react";
+import { memo, useState, useMemo, useRef, useEffect } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { CalendarClock, FolderTree, PanelLeftClose, PanelLeft, Plus, Search, Settings, Trash2, X } from "lucide-react";
 import type { Project } from "@workbench/shared";
@@ -58,14 +58,17 @@ export function Sidebar({ project }: { project: Project }) {
     navigate("/live");
   };
 
-  const rows: Row[] = [
-    ...sessions
-      .filter((s) => !s.parentId)
-      .map((s) => ({ id: s.id, title: s.title, to: `/live/${s.id}`, kind: "session" as const })),
-    ...project.sessions
-      .filter((e) => !hiddenExamples.includes(e.id))
-      .map((e) => ({ id: e.id, title: e.title, to: `/example/${e.id}`, kind: "example" as const })),
-  ];
+  const rows: Row[] = useMemo(
+    () => [
+      ...sessions
+        .filter((s) => !s.parentId)
+        .map((s) => ({ id: s.id, title: s.title, to: `/live/${s.id}`, kind: "session" as const })),
+      ...project.sessions
+        .filter((e) => !hiddenExamples.includes(e.id))
+        .map((e) => ({ id: e.id, title: e.title, to: `/example/${e.id}`, kind: "example" as const })),
+    ],
+    [sessions, project.sessions, hiddenExamples],
+  );
 
   // Session search
   const [searchOpen, setSearchOpen] = useState(false);
@@ -189,7 +192,7 @@ function NavRow({ icon, label, onClick }: { icon: React.ReactNode; label: string
   );
 }
 
-function SessionRow({ row, isRunning, meta }: { row: Row; isRunning: boolean; meta?: SessionMeta }) {
+const SessionRow = memo(function SessionRow({ row, isRunning, meta }: { row: Row; isRunning: boolean; meta?: SessionMeta }) {
   const location = useLocation();
   const openSessionTab = useUiStore((s) => s.openSessionTab);
   const { t } = useI18n();
@@ -266,4 +269,4 @@ function SessionRow({ row, isRunning, meta }: { row: Row; isRunning: boolean; me
       )}
     </div>
   );
-}
+});
