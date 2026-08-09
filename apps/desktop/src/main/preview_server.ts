@@ -39,11 +39,18 @@ export function previewToken(): string {
   return serverToken;
 }
 
+/** Root for a preview request, mirroring artifact_file.rootDir: "base" pins to
+ *  the base workspace, anything else resolves under the active workspace. */
+function rootDirFor(root?: string): string {
+  return root === "base" ? baseWorkspaceDir() : workspaceDir();
+}
+
 export function previewUrl(rel: string, root?: string): string | null {
-  const base = root === "workspace" ? workspaceDir() : baseWorkspaceDir();
+  const base = rootDirFor(root);
   const file = resolve(base, rel);
-  if (!file.startsWith(baseWorkspaceDir()) || !existsSync(file)) return null;
-  return `http://127.0.0.1:${serverPort ?? 0}/${previewToken()}/w/${encodeURIComponent(rel)}`;
+  if (!file.startsWith(base) || !existsSync(file)) return null;
+  const rootSeg = root === "base" ? "base" : "ws";
+  return `http://127.0.0.1:${serverPort ?? 0}/${previewToken()}/${rootSeg}/${encodeURIComponent(rel)}`;
 }
 
 export function startPreviewServer(): number {
@@ -53,9 +60,9 @@ export function startPreviewServer(): number {
     const url = new URL(req.url ?? "/", `http://${req.headers.host}`);
     const parts = url.pathname.split("/").filter(Boolean);
 
-    if (parts.length >= 3 && parts[0] === serverToken && parts[1] === "w") {
+    if (parts.length >= 3 && parts[0] === serverToken && (parts[1] === "base" || parts[1] === "ws")) {
       const rel = decodeURIComponent(parts.slice(2).join("/"));
-      const base = baseWorkspaceDir();
+      const base = rootDirFor(parts[1] === "base" ? "base" : undefined);
       const file = resolve(base, rel);
       if (!file.startsWith(base) || !existsSync(file)) {
         res.writeHead(403);

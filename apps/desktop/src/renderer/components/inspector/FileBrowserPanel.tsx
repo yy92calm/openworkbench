@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { ChevronRight, FileText, Folder, Image as ImageIcon, Loader2, NotebookPen, Sheet, X } from "lucide-react";
 import { listDir, type DirEntry } from "@/lib/artifactFile";
-import { isTauri, workspaceBase } from "@/lib/tauri";
+import { isTauri } from "@/lib/tauri";
+import { useRuntimeStore } from "@/lib/runtime";
 import { baseName } from "@/components/thread/WorkspaceChip";
 import { refToArtifactBlock } from "@/lib/artifacts";
 import { useUiStore } from "@/lib/store";
@@ -24,26 +25,29 @@ function humanSize(n: number): string {
 
 /**
  * File browser panel for the right sidebar.
- * Browses from the workspace base folder. Clicking a file opens it as a
- * main-area preview tab (not an in-dock preview) so md/text/images show in the
- * main surface alongside the conversation.
+ * Browses from the active workspace folder and follows workspace switches,
+ * so the list always shows what the current session's files live next to.
+ * Clicking a file opens it as a main-area preview tab (not an in-dock
+ * preview) so md/text/images show in the main surface alongside the
+ * conversation.
  */
 export function FileBrowserPanel({ onClose }: { onClose: () => void }) {
   const [dir, setDir] = useState("");
   const [entries, setEntries] = useState<DirEntry[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [basePath, setBasePath] = useState<string | null>(null);
+  const workspace = useRuntimeStore((s) => s.workspace);
   const openFileTab = useUiStore((s) => s.openFileTab);
 
   useEffect(() => {
-    void workspaceBase().then(setBasePath).catch(() => {});
-  }, []);
+    setBasePath(workspace);
+  }, [workspace]);
 
   const load = useCallback(async (rel: string) => {
     setEntries(null);
     setError(null);
     try {
-      setEntries(await listDir(rel, "base"));
+      setEntries(await listDir(rel));
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setEntries([]);
@@ -54,11 +58,17 @@ export function FileBrowserPanel({ onClose }: { onClose: () => void }) {
     void load(dir);
   }, [dir, load]);
 
+  // When the active workspace changes, drop any subdirectory we were browsing
+  // (it belongs to the old folder) and show the new folder's root.
+  useEffect(() => {
+    setDir("");
+  }, [workspace]);
+
   const crumbs = dir ? dir.split("/") : [];
 
   const openEntry = (entry: DirEntry) => {
     if (entry.isDir) setDir(entry.path);
-    else openFileTab(refToArtifactBlock(entry.path), "base");
+    else openFileTab(refToArtifactBlock(entry.path), "workspace");
   };
 
   return (

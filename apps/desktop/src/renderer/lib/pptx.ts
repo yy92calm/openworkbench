@@ -52,8 +52,33 @@ export function applyParagraphDefaults(xml: string): string {
   return changed ? new XMLSerializer().serializeToString(doc) : xml;
 }
 
-/** Rewrite every slide of the deck through applyParagraphDefaults. Returns the
- *  original bytes untouched when no slide needed it (or on any zip error). */
+/**
+ * Drop [Content_Types].xml Override entries whose PartName doesn't exist in the
+ * zip. Some decks (often WPS or generated files) declare slideMasters/layouts
+ * they never ship; pptx-preview loads every declared part and aborts the whole
+ * deck when one is missing, so the preview comes back empty.
+ */
+export async function dropMissingParts(zip: JSZip): Promise<boolean> {
+  const ct = zip.files["[Content_Types].xml"];
+  if (!ct) return false;
+  const xml = await ct.async("string");
+  const doc = new DOMParser().parseFromString(xml, "application/xml");
+  if (doc.getElementsByTagName("parsererror").length > 0) return false;
+  let changed = false;
+  for (const ov of Array.from(doc.getElementsByTagName("Override"))) {
+    const part = (ov.getAttribute("PartName") ?? "").replace(/^\//, "");
+    if (part && !zip.files[part]) {
+      ov.parentNode?.removeChild(ov);
+      changed = true;
+    }
+  }
+  if (changed) zip.file("[Content_Types].xml", new XMLSerializer().serializeToString(doc));
+  return changed;
+}
+
+/** Rewrite every slide of the deck through applyParagraphDefaults and drop
+ *  Content_Types entries for missing parts. Returns the original bytes
+ *  untouched when nothing needed it (or on any zip error). */
 export async function normalizePptxForPreview(bytes: ArrayBuffer): Promise<ArrayBuffer> {
   try {
     const zip = await JSZip.loadAsync(bytes);
@@ -67,6 +92,7 @@ export async function normalizePptxForPreview(bytes: ArrayBuffer): Promise<Array
         changed = true;
       }
     }
+    changed = (await dropMissingParts(zip)) || changed;
     return changed ? await zip.generateAsync({ type: "arraybuffer" }) : bytes;
   } catch {
     return bytes; // a preview normalization must never break the preview
