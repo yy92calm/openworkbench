@@ -10,6 +10,7 @@ import { spawn } from "node:child_process";
 import { deploySchedulerProfile, startSchedulerApi, stopSchedulerApi } from "./scheduler";
 import { createBrowserMcp, type BrowserMcpPlugin } from "@fafawork/browser-mcp";
 import { enrichedPath } from "./shell_env";
+import { syncDir } from "./syncDir";
 
 let child: ChildProcess | null = null;
 let currentUrl: string | null = null;
@@ -151,8 +152,7 @@ export function deployBundledProfile(): void {
     log("profile", "deploy", `source not found: ${source}`, "warn");
     return;
   }
-  if (existsSync(target)) rmSync(target, { recursive: true, force: true });
-  cpSync(source, target, { recursive: true });
+  syncDir(source, target);
   log("profile", "deploy", `deployed ${source} -> ${target}`);
   // Merge user-configured provider overrides (Settings → Model Config)
   applyUserProviderConfig(target);
