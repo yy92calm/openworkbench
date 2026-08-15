@@ -56,6 +56,9 @@ export async function connect(cfg: ConnectionConfig): Promise<OpenCodeClient> {
     baseUrl: "http://relay",
     fetchImpl: t.fetchImpl,
   });
+  // Open the SSE /event stream (via the relay transport's streaming fetch) so
+  // onEvent subscribers get live text/tool/idle updates.
+  await client.connect();
   saveConfig(cfg);
   return client;
 }
