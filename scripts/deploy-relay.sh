@@ -42,7 +42,7 @@ After=network.target
 [Service]
 WorkingDirectory=$REMOTE_DIR/relay
 Environment=RELAY_AUTH_TOKEN=$TOKEN
-Environment=RELAY_PORT=8080
+Environment=RELAY_PORT=12960
 Environment=RELAY_DATA_DIR=$REMOTE_DIR/data
 $( [ -n "$ADMIN_PASSWORD" ] && echo "Environment=RELAY_ADMIN_PASSWORD=$ADMIN_PASSWORD" )
 Environment=RELAY_ADMIN_STATIC_DIR=$REMOTE_DIR/admin-web
@@ -58,4 +58,4 @@ UNIT"
 echo "==> 启动服务"
 ssh "$SERVER" "systemctl daemon-reload && systemctl enable --now workbench-relay && systemctl --no-pager status workbench-relay --lines=5"
 
-echo "==> 完成。客户端地址: http://$SERVER:8080  中继地址: ws://$SERVER:8080"
+echo "==> 完成。客户端地址: http://$SERVER:12960  中继地址: ws://$SERVER:12960"

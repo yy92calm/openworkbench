@@ -279,17 +279,21 @@ export class RelayServer {
   }
 
   private pingAll(): void {
+    // Standard ping/pong heartbeat: check the result of the *previous* ping
+    // before scheduling the next one. Doing reset-then-check in two passes
+    // would terminate every connection, because pong callbacks run on a later
+    // tick than the synchronous ping call.
     for (const ws of this.wss.clients) {
-      (ws as WebSocket & { isAlive?: boolean }).isAlive = false;
-      ws.ping();
-    }
-    for (const ws of this.wss.clients) {
-      if ((ws as WebSocket & { isAlive?: boolean }).isAlive === false) {
+      const flag = ws as WebSocket & { isAlive?: boolean };
+      if (flag.isAlive === false) {
         ws.terminate();
         this.guestKey.delete(ws);
         for (const [k, v] of this.hosts) if (v === ws) this.hosts.delete(k);
         this.failPending(502, "connection timed out");
+        continue;
       }
+      flag.isAlive = false;
+      ws.ping();
     }
   }
 
@@ -520,7 +524,7 @@ export function startRelayFromEnv(env: NodeJS.ProcessEnv = process.env): RelaySe
   const authToken = env.RELAY_AUTH_TOKEN ?? "";
   if (!authToken) throw new Error("RELAY_AUTH_TOKEN is required");
   return new RelayServer({
-    port: Number(env.RELAY_PORT ?? 8080),
+    port: Number(env.RELAY_PORT ?? 12960),
     host: env.RELAY_HOST,
     authToken,
     adminTokens: (env.RELAY_ADMIN_TOKENS ?? "").split(",").filter(Boolean),

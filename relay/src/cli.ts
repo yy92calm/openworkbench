@@ -2,7 +2,7 @@
  *
  * Env:
  *   RELAY_AUTH_TOKEN  required — shared secret host & guest must present
- *   RELAY_PORT        default 8080
+ *   RELAY_PORT        default 12960
  *   RELAY_HOST        bind address, default 0.0.0.0
  *   RELAY_TLS_CERT    PEM cert path — enables https/wss
  *   RELAY_TLS_KEY     PEM key path (required together with RELAY_TLS_CERT)
