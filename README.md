@@ -73,6 +73,88 @@ rebrand for your product, change `appId` / `productName` in
 | `packages/shared/` | Shared domain types and the chart design system |
 | `runtime/kernel/` | Python and R kernel bridges |
 | `scripts/dev/` | Sidecar fetcher (opencode) |
+| `relay/` | **Standalone project** — relay server + admin UI (`admin/`), own pnpm workspace |
+| `client/` | **Standalone project** — remote client (drive the desktop from a phone/another machine), own workspace with `sdk/`/`shared/` copies |
+
+## Three projects (remote control)
+
+This repository contains **three independent projects** that talk to each
+other only over WebSocket/HTTP — no code imports across project boundaries:
+
+```mermaid
+flowchart LR
+    subgraph Host["① 桌面端 Workbench (host) · apps/desktop/"]
+        UI["Electron + React UI"]
+        RH["relayHost (出站 WS)"]
+        SC["opencode sidecar"]
+        UI --> RH
+        RH -- "转发 HTTP 语义请求" --> SC
+    end
+    subgraph Relay["② relay 中继服务 · relay/"]
+        WS["WS 转发 + 账号/设备注册"]
+        ADMIN["admin 管理端 /relayadmin"]
+    end
+    subgraph Client["③ client 远端客户端 · client/"]
+        CW["React PWA (手机/电脑)"]
+        CT["RelayHttpTransport (出站 WS)"]
+        CW --> CT
+    end
+    RH -- "ws://...?role=host&token=&device=" --> WS
+    CT -- "ws://...?role=guest&token=[&device=]" --> WS
+    ADMIN -. "HTTP (同端口)" .- WS
+```
+
+Key properties:
+
+- **host** owns the API keys and the sidecar password — every remote request
+  is re-authenticated by the host, and the secret never crosses the relay.
+- **relay** is a pure in-memory forwarder; only the account registry
+  (token → devices) is persisted.
+- **client** lists the account's devices (online first), pairs with one, then
+  drives sessions, streaming and file transfer through the relay.
+
+### Wire protocol
+
+One contract, three copies that must be kept in sync manually:
+`relay/src/protocol.ts` (authoritative), `client/src/protocol.ts`,
+`apps/desktop/src/main/relay-protocol.ts`.
+
+```mermaid
+sequenceDiagram
+    participant C as client (guest)
+    participant R as relay
+    participant H as host
+    C->>R: list-devices (控制连接, 无 device)
+    R-->>C: device-list (在线优先)
+    C->>R: request { id, method, path, headers?, body? }
+    R->>H: 转发 request
+    H->>H: fetch 本地 sidecar (注入密码)
+    H-->>R: head { status, headers }
+    H-->>R: chunk* (流式 SSE/JSON)
+    H-->>R: done
+    R-->>C: 原样回传 head/chunk/done
+    Note over C,R: guest 断开 / 心跳超时
+    R->>H: cancel { id } → host abort 对应 fetch
+```
+
+Additional messages: `file-write` upload (`POST /__relay/write-file` writes
+into the host workspace, then the prompt references the real path as an
+opencode `FilePartInput`), and per-session status via `GET /session/status`
+(`busy` / `idle` / `retry`) surfaced in both UIs.
+
+### Connection resilience
+
+```mermaid
+flowchart TD
+    A["relay 心跳 (30s ping/pong)"] -->|"超时 terminate + cancel"| B["host abort fetch<br/>(无连接泄漏)"]
+    C["client transport WS 断线"] --> D["指数退避重连 1s→30s<br/>重建 client + SSE"]
+    E["/event SSE 流意外断开"] --> F["SDK 自动重开<br/>1s→15s 退避"]
+    G["UI 提示"] --> H["离线横幅 + 列表/详情自动刷新"]
+```
+
+See `docs/20260815-10-three-projects.md` for the full design and
+`docs/20260815-11-three-projects-readme.md` (zh) for the operational
+runbook (deploy, dev, known limits).
 
 ## Architecture
 

@@ -66,6 +66,84 @@ provider、模型、skills、agents、命令、MCP、权限全部由打包时的
 | `packages/shared/` | 共享领域类型 + 图表设计系统 |
 | `runtime/kernel/` | Python 与 R kernel 桥 |
 | `scripts/dev/` | sidecar 拉取脚本（opencode） |
+| `relay/` | **独立项目** —— 中继服务器 + 管理端（`admin/`），自建 pnpm workspace |
+| `client/` | **独立项目** —— 远端客户端（手机/另一台电脑驱动桌面端），自持 `sdk/`/`shared/` 副本 |
+
+## 三项目（远程控制）
+
+本仓库包含**三个相互独立**的项目，彼此只通过 WebSocket/HTTP 通信，
+代码不跨项目 import：
+
+```mermaid
+flowchart LR
+    subgraph Host["① 桌面端 Workbench (host) · apps/desktop/"]
+        UI["Electron + React UI"]
+        RH["relayHost (出站 WS)"]
+        SC["opencode sidecar"]
+        UI --> RH
+        RH -- "转发 HTTP 语义请求" --> SC
+    end
+    subgraph Relay["② relay 中继服务 · relay/"]
+        WS["WS 转发 + 账号/设备注册"]
+        ADMIN["admin 管理端 /relayadmin"]
+    end
+    subgraph Client["③ client 远端客户端 · client/"]
+        CW["React PWA (手机/电脑)"]
+        CT["RelayHttpTransport (出站 WS)"]
+        CW --> CT
+    end
+    RH -- "ws://...?role=host&token=&device=" --> WS
+    CT -- "ws://...?role=guest&token=[&device=]" --> WS
+    ADMIN -. "HTTP (同端口)" .- WS
+```
+
+关键特性：
+
+- **host** 持有 API key 与 sidecar 密码——每个远端请求由 host 重新鉴权，
+  密钥永不经过 relay。
+- **relay** 是纯内存转发器；只持久化账号注册表（token → 设备列表）。
+- **client** 拉取账号下设备（在线优先）、配对一台，随后经 relay 驱动
+  会话、流式与文件传输。
+
+### 线协议
+
+一份契约、三处副本需手动同步：`relay/src/protocol.ts`（权威定义）、
+`client/src/protocol.ts`、`apps/desktop/src/main/relay-protocol.ts`。
+
+```mermaid
+sequenceDiagram
+    participant C as client (guest)
+    participant R as relay
+    participant H as host
+    C->>R: list-devices (控制连接, 无 device)
+    R-->>C: device-list (在线优先)
+    C->>R: request { id, method, path, headers?, body? }
+    R->>H: 转发 request
+    H->>H: fetch 本地 sidecar (注入密码)
+    H-->>R: head { status, headers }
+    H-->>R: chunk* (流式 SSE/JSON)
+    H-->>R: done
+    R-->>C: 原样回传 head/chunk/done
+    Note over C,R: guest 断开 / 心跳超时
+    R->>H: cancel { id } → host abort 对应 fetch
+```
+
+其它消息：文件上传（`POST /__relay/write-file` 写入 host 工作区，prompt
+以 opencode `FilePartInput` 引用真实路径）；会话状态
+`GET /session/status`（`busy` / `idle` / `retry`）在两端 UI 展示。
+
+### 连接稳定（三层防护）
+
+```mermaid
+flowchart TD
+    A["relay 心跳 (30s ping/pong)"] -->|"超时 terminate + cancel"| B["host abort fetch<br/>(无连接泄漏)"]
+    C["client transport WS 断线"] --> D["指数退避重连 1s→30s<br/>重建 client + SSE"]
+    E["/event SSE 流意外断开"] --> F["SDK 自动重开<br/>1s→15s 退避"]
+    G["UI 提示"] --> H["离线横幅 + 列表/详情自动刷新"]
+```
+
+完整设计与运维手册（部署、开发、已知限制）见
+`docs/20260815-10-three-projects.md` 与 `docs/20260815-11-three-projects-readme.md`。
 
 ## 架构
 
