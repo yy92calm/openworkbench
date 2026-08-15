@@ -32,6 +32,7 @@ export {
   type PermissionReply,
   type SessionStatus,
   type SessionStatusKind,
+  type SessionStatusEvent,
   type SessionStatusMap,
   type AttachmentFile,
   type FilePartInput,

@@ -91,6 +91,7 @@ export function SessionPage({ sessionId, onBack }: { sessionId: string; onBack: 
   const [sending, setSending] = useState(false);
   const [attachments, setAttachments] = useState<AttachmentFile[]>([]);
   const [hostOnline, setHostOnline] = useState(true);
+  const [error, setError] = useState("");
   const fileInput = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -109,6 +110,10 @@ export function SessionPage({ sessionId, onBack }: { sessionId: string; onBack: 
   // Load history + subscribe to live events for this session. Re-subscribes
   // after an automatic reconnect (the client instance is replaced).
   useEffect(() => {
+    // Reset on every effect run — React StrictMode mounts → unmounts → remounts
+    // in dev, and the cleanup below would otherwise leave this false forever,
+    // discarding the history we just loaded.
+    mounted.current = true;
     const client = getClient();
     if (!client) return;
     let unsub = () => {};
@@ -157,6 +162,18 @@ export function SessionPage({ sessionId, onBack }: { sessionId: string; onBack: 
             activeId.current = null;
             setSending(false);
             break;
+          case "session.status": {
+            // Surface why a turn is stuck (e.g. model quota exhausted) instead
+            // of staying silent.
+            const st = e.status;
+            if (st.type === "retry") {
+              setError(`模型调用失败：${st.message ?? "请重试"}${st.next ? `（${new Date(st.next).toLocaleString()} 后可用）` : ""}`);
+              active.active = false;
+              activeId.current = null;
+              setSending(false);
+            }
+            break;
+          }
         }
         return next;
       });
@@ -178,8 +195,10 @@ export function SessionPage({ sessionId, onBack }: { sessionId: string; onBack: 
         } catch {
           /* status poll is best-effort */
         }
-      } catch {
-        /* history may be unavailable for brand-new sessions */
+      } catch (err) {
+        if (mounted.current) {
+          setError(`历史消息加载失败: ${err instanceof Error ? err.message : String(err)}`);
+        }
       }
       unsub = client.onEvent(handleEvent);
     })();
@@ -264,6 +283,12 @@ export function SessionPage({ sessionId, onBack }: { sessionId: string; onBack: 
         <div style={{ margin: "0 14px", padding: "7px 12px", borderRadius: 9, background: "color-mix(in srgb, var(--warn) 12%, transparent)", border: "1px solid var(--warn)", color: "var(--warn)", fontSize: 12.5, display: "flex", alignItems: "center", gap: 8 }}>
           <span style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--warn)", animation: "pulse 1.2s infinite", flexShrink: 0 }} />
           主机离线，正在自动重连…
+        </div>
+      )}
+
+      {error && (
+        <div style={{ margin: "0 14px", padding: "7px 12px", borderRadius: 9, background: "color-mix(in srgb, var(--error) 12%, transparent)", border: "1px solid var(--error)", color: "var(--error)", fontSize: 12.5 }}>
+          {error}
         </div>
       )}
 

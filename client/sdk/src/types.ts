@@ -56,6 +56,14 @@ export interface SessionUpdatedEvent {
   cacheWriteTokens?: number;
   cost?: number;
 }
+/** Session activity state changed (busy / idle / retry with a reason, e.g.
+ *  a model quota error). Lets the UI surface why a turn is not producing
+ *  text instead of staying silent. */
+export interface SessionStatusEvent {
+  type: "session.status";
+  sessionId: string;
+  status: SessionStatus;
+}
 /** Context was compacted (old messages summarized/pruned). A cache-reset
  *  point — every subsequent turn starts a fresh prompt prefix. */
 export interface SessionCompactedEvent {
@@ -119,6 +127,7 @@ export type OpenCodeEvent =
   | ToolUpdatedEvent
   | SessionIdleEvent
   | SessionUpdatedEvent
+  | SessionStatusEvent
   | SessionCompactedEvent
   | RuntimeErrorEvent
   | QuestionAskedEvent

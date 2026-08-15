@@ -20,6 +20,8 @@ import type {
   PermissionAskedEvent,
   RuntimeStatus,
   SessionMeta,
+  SessionStatus,
+  SessionStatusEvent,
   SessionStatusMap,
   SkillInfo,
   ToolCallStatus,
@@ -931,12 +933,18 @@ export class OpenCodeClient {
           type: "session.updated",
           sessionId: info.id,
           promptTokens: info.tokens?.input,
-          completionTokens: info.tokens?.output,
-          reasoningTokens: info.tokens?.reasoning,
+          completionTokens: info.tokens?.output,          reasoningTokens: info.tokens?.reasoning,
           cacheReadTokens: info.tokens?.cache?.read,
           cacheWriteTokens: info.tokens?.cache?.write,
           cost: info.cost,
         });
+        break;
+      }
+      case "session.status": {
+        const sessionId = String(props.sessionID ?? "");
+        const status = props.status as SessionStatus | undefined;
+        if (!sessionId || !status) break;
+        this.emit({ type: "session.status", sessionId, status });
         break;
       }
       // Interactive requests — support V2 (this server) and the bare names.

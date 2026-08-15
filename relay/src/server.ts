@@ -255,6 +255,11 @@ export class RelayServer {
       const entry = this.pending.get(id);
       if (!entry) continue;
       this.pending.delete(id);
+      // Tell the host to abort the underlying sidecar fetch (same as dropGuest):
+      // a terminated guest must not leave a long-lived stream hanging on the host.
+      if (entry.host.readyState === WebSocket.OPEN) {
+        entry.host.send(JSON.stringify({ type: "cancel", id }));
+      }
       if (entry.guest.readyState !== WebSocket.OPEN) continue;
       this.reply(entry.guest, { type: "head", id, status, headers: { "x-relay-error": reason } });
       this.reply(entry.guest, { type: "done", id });

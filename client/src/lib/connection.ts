@@ -66,9 +66,19 @@ async function buildClient(t: RelayHttpTransport, c: ConnectionConfig): Promise<
     fetchImpl: t.fetchImpl,
   });
   // Open the SSE /event stream (via the relay transport's streaming fetch) so
-  // onEvent subscribers get live text/tool/idle updates.
-  await c2.connect();
-  return c2;
+  // onEvent subscribers get live text/tool/idle updates. Retry a few times —
+  // right after the host restarts its sidecar, /event can 502 briefly.
+  let lastErr: Error | null = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      await c2.connect();
+      return c2;
+    } catch (err) {
+      lastErr = err instanceof Error ? err : new Error(String(err));
+      await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
+    }
+  }
+  throw lastErr ?? new Error("failed to open event stream");
 }
 
 /** Reconnect after an unexpected disconnect. Keeps retrying with backoff. */
