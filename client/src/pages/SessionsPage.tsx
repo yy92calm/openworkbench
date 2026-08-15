@@ -15,6 +15,8 @@ export function SessionsPage({
   const [error, setError] = useState("");
   /** sessionId → "busy"|"retry" (running). Absent = idle. */
   const [running, setRunning] = useState<Record<string, boolean>>({});
+  /** sessionId → retry reason (model quota, etc). */
+  const [failed, setFailed] = useState<Record<string, string>>({});
   const [switching, setSwitching] = useState(false);
   const [devices, setDevices] = useState<RelayDeviceInfo[] | null>(null);
   const [chosen, setChosen] = useState("");
@@ -30,14 +32,17 @@ export function SessionsPage({
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
-    // Poll session activity (busy/retry) for the running badge.
+    // Poll session activity for the running/failed badge.
     try {
       const status = await client.getSessionStatus();
       const run: Record<string, boolean> = {};
+      const failed: Record<string, string> = {};
       for (const [id, st] of Object.entries(status)) {
-        if (st.type === "busy" || st.type === "retry") run[id] = true;
+        if (st.type === "busy") run[id] = true;
+        else if (st.type === "retry") failed[id] = st.message ?? "模型调用失败";
       }
       setRunning(run);
+      setFailed(failed);
     } catch {
       /* status poll is best-effort */
     }
@@ -191,6 +196,19 @@ export function SessionsPage({
                   >
                     <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--ok)", animation: "pulse 1.2s infinite" }} />
                     运行中
+                  </span>
+                )}
+                {failed[s.id] && (
+                  <span
+                    style={{
+                      display: "inline-flex", alignItems: "center", gap: 4, flexShrink: 0,
+                      padding: "1px 7px", borderRadius: 999, fontSize: 11,
+                      color: "var(--error)", background: "color-mix(in srgb, var(--error) 12%, transparent)",
+                      border: "1px solid var(--error)",
+                    }}
+                  >
+                    <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--error)" }} />
+                    失败
                   </span>
                 )}
               </div>

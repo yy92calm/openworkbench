@@ -130,6 +130,20 @@ export function SessionPage({ sessionId, onBack }: { sessionId: string; onBack: 
     });
     const handleEvent = (e: OpenCodeEvent) => {
       if (e.sessionId !== sessionId) return;
+      // Session-level events first — they must work even without an active
+      // assistant placeholder (e.g. re-entering a session that's mid-retry).
+      if (e.type === "session.status") {
+        const st = e.status;
+        if (st.type === "retry") {
+          // Surface why a turn is stuck (e.g. model quota exhausted) instead
+          // of staying silent or showing an empty spinner forever.
+          setError(`模型调用失败：${st.message ?? "请重试"}${st.next ? `（${new Date(st.next).toLocaleString()} 后可用）` : ""}`);
+          setMessages((prev) => prev.map((m) => (m.active ? { ...m, active: false } : m)));
+          activeId.current = null;
+          setSending(false);
+        }
+        return;
+      }
       setMessages((prev) => {
         const next = [...prev];
         let active = next.find((m) => m.active);
@@ -162,18 +176,6 @@ export function SessionPage({ sessionId, onBack }: { sessionId: string; onBack: 
             activeId.current = null;
             setSending(false);
             break;
-          case "session.status": {
-            // Surface why a turn is stuck (e.g. model quota exhausted) instead
-            // of staying silent.
-            const st = e.status;
-            if (st.type === "retry") {
-              setError(`模型调用失败：${st.message ?? "请重试"}${st.next ? `（${new Date(st.next).toLocaleString()} 后可用）` : ""}`);
-              active.active = false;
-              activeId.current = null;
-              setSending(false);
-            }
-            break;
-          }
         }
         return next;
       });
@@ -185,12 +187,17 @@ export function SessionPage({ sessionId, onBack }: { sessionId: string; onBack: 
         if (!mounted.current) return;
         setMessages(history.map(toMsg));
         // If this session is mid-turn (busy/retry), open an active placeholder
-        // so live text/tool events have somewhere to render.
+        // so live text/tool events have somewhere to render. A retry also gets
+        // an immediate error banner (e.g. model quota) instead of silence.
         try {
           const status = await client.getSessionStatus();
           const st = status[sessionId];
-          if (st && (st.type === "busy" || st.type === "retry")) {
-            setMessages((prev) => [...prev, { id: `a${Date.now()}`, role: "assistant", text: "", tools: [], files: [], active: true }]);
+          if (st) {
+            if (st.type === "busy") {
+              setMessages((prev) => [...prev, { id: `a${Date.now()}`, role: "assistant", text: "", tools: [], files: [], active: true }]);
+            } else if (st.type === "retry") {
+              setError(`模型调用失败：${st.message ?? "请重试"}${st.next ? `（${new Date(st.next).toLocaleString()} 后可用）` : ""}`);
+            }
           }
         } catch {
           /* status poll is best-effort */
