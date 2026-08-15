@@ -2,6 +2,11 @@
 
 简体中文。中继服务器 + 远程客户端让手机/另一台电脑经公网连接桌面端 Workbench。
 
+> 独立组件：`relay/` 目录自包含（自建 pnpm workspace，独立 `pnpm-lock.yaml`）。
+> 管理界面源码在 `relay/admin/`（构建产物输出到 `relay/admin-web`，已入库）；
+> 远程客户端源码在 `relay/client/`（含独立副本 `sdk/`、`shared/`）。
+> 首次使用：`cd relay && pnpm install`。
+
 ## 账号模型
 
 - **令牌即账号**：每个用户/每个使用方持有一个**账号令牌**（token），由管理员通过
@@ -106,11 +111,17 @@ Environment=RELAY_TLS_KEY=/etc/ssl/privkey.pem
 ## 五、开发与测试
 
 ```bash
+# 首次：relay 独立 workspace 安装
+cd relay && pnpm install
+
 # relay 包单测（协议/转发/账号鉴权/设备注册/持久化/静态托管）
 pnpm --filter @workbench/relay test
 
 # 本机端到端：relay + mock sidecar + OpenCodeClient（见仓库根 relay/）
 cd relay && pnpm tsx e2e-account.mjs   # 已由 vitest 覆盖
+
+# 构建管理界面（产物 → relay/admin-web）
+cd relay/admin && pnpm build
 
 # 本地起中继（开发）
 RELAY_AUTH_TOKEN=dev pnpm --filter @workbench/relay serve

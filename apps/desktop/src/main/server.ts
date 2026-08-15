@@ -12,6 +12,7 @@ import { createBrowserMcp, type BrowserMcpPlugin } from "@fafawork/browser-mcp";
 import { enrichedPath } from "./shell_env";
 import { syncDir } from "./syncDir";
 import { applyUserOverlay } from "./profilePatch";
+import { getStore } from "./store";
 
 let child: ChildProcess | null = null;
 let currentUrl: string | null = null;
@@ -177,7 +178,6 @@ export function deployBundledProfile(): void {
  *  - Legacy single: "provider-config" = { baseUrl, apiKey, modelId, providerName } */
 function applyUserProviderConfig(profileDir: string): void {
   try {
-    const { getStore } = require("./store");
     const store = getStore();
 
     // Try array format first

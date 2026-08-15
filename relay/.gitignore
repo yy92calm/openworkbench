@@ -1,2 +1,6 @@
 # E2E 本地数据（账号注册表快照）
 .e2e-data/
+
+# 构建产物（admin-web 与 client/dist 保持入库，各自独立）
+admin/dist/
+client/dist/

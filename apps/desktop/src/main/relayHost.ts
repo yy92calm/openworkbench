@@ -1,5 +1,5 @@
 import { WebSocket } from "ws";
-import type { RelayMessage } from "@workbench/client";
+import type { RelayMessage } from "../../../../relay/client/src/protocol";
 import { getServerUrl, getServerPassword } from "./server";
 
 export interface RelayHostConfig {
