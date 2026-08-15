@@ -56,6 +56,14 @@ export interface SessionUpdatedEvent {
   cacheWriteTokens?: number;
   cost?: number;
 }
+/** Session activity state changed (busy / idle / retry with a reason, e.g.
+ *  a model quota error). Lets the UI surface why a turn is not producing
+ *  text instead of staying silent. */
+export interface SessionStatusEvent {
+  type: "session.status";
+  sessionId: string;
+  status: SessionStatus;
+}
 /** Context was compacted (old messages summarized/pruned). A cache-reset
  *  point — every subsequent turn starts a fresh prompt prefix. */
 export interface SessionCompactedEvent {
@@ -119,6 +127,7 @@ export type OpenCodeEvent =
   | ToolUpdatedEvent
   | SessionIdleEvent
   | SessionUpdatedEvent
+  | SessionStatusEvent
   | SessionCompactedEvent
   | RuntimeErrorEvent
   | QuestionAskedEvent
@@ -128,6 +137,21 @@ export type OpenCodeEvent =
 
 /** Approve a permission once, always (persist a rule), or reject it. */
 export type PermissionReply = "once" | "always" | "reject";
+
+/** Per-session activity state as reported by GET /session/status.
+ *  idle — no active turn; busy — a turn is in flight; retry — a turn is
+ *  waiting on an interactive prompt (question/permission) or failed (e.g.
+ *  model quota exhausted). */
+export type SessionStatusKind = "idle" | "busy" | "retry";
+
+/** Value of GET /session/status for one session. */
+export type SessionStatus =
+  | { type: "idle" }
+  | { type: "busy" }
+  | { type: "retry"; attempt: number; message?: string; action?: string; next?: number };
+
+/** Session status map: sessionId → status. Sessions absent are idle. */
+export type SessionStatusMap = Record<string, SessionStatus>;
 
 /** Permission mode presets for the agent. */
 export type PermissionMode = "review" | "auto" | "yolo";

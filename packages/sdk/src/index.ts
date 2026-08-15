@@ -30,6 +30,10 @@ export {
   type PermissionAskedEvent,
   type PermissionResolvedEvent,
   type PermissionReply,
+  type SessionStatus,
+  type SessionStatusKind,
+  type SessionStatusEvent,
+  type SessionStatusMap,
 } from "./types";
 
 // Agent runtime abstraction layer (transport-neutral surface the UI targets).

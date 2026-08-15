@@ -742,6 +742,27 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
         }
         return;
       }
+      if (event.type === "session.status" && event.status.type === "retry") {
+        // The turn is stuck (e.g. model quota exhausted) — surface it in the
+        // thread as a red status line and unlock the composer, instead of
+        // showing "Working…" forever.
+        const sid = event.sessionId;
+        const st = event.status;
+        const msg = `模型调用失败：${st.message ?? "请重试"}${st.next ? `（${new Date(st.next).toLocaleString()} 后可用）` : ""}`;
+        set((s) => {
+          const cur = s.threads[sid] ?? emptyThread();
+          const runningSessions = { ...s.runningSessions };
+          delete runningSessions[sid];
+          return {
+            runningSessions,
+            threads: {
+              ...s.threads,
+              [sid]: { ...cur, loaded: true, blocks: [...cur.blocks, { kind: "status-line", text: msg, tone: "error" }] },
+            },
+          };
+        });
+        return;
+      }
       // Interactive requests live outside the thread blocks (transient UI).
       switch (event.type) {
         case "question.asked":
