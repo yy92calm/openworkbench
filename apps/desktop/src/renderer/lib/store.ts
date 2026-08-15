@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import type { ArtifactBlock, FileRoot } from "@workbench/shared";
+import type { ArtifactBlock, FileRoot, RendererManifest, UiDefaults } from "@workbench/shared";
 import { loadLocale, persistLocale, type Locale } from "./i18n";
 
 export type Theme = "light" | "warm" | "cool" | "dark" | "black" | "system";
@@ -171,3 +171,52 @@ export const useUiStore = create<UiState>((set, get) => ({
   }),
   activateTab: (id) => set({ activeTabId: id }),
 }));
+
+// ---- Interaction layer (keyed renderers + UI defaults) ----
+
+interface InteractionState {
+  renderers: Map<string, RendererManifest>;
+  uiDefaults: UiDefaults;
+  loaded: boolean;
+  load: (renderers: RendererManifest[], ui: UiDefaults) => void;
+}
+
+export const useInteractionStore = create<InteractionState>((set) => ({
+  renderers: new Map(),
+  uiDefaults: {},
+  loaded: false,
+  load: (renderers, ui) =>
+    set({ renderers: new Map(renderers.map((r) => [r.type, r])), uiDefaults: ui, loaded: true }),
+}));
+
+/** Load the interaction config (enabled renderers + UI defaults) from the
+ *  deployed profile and apply it to the store. Returns after IPC; falls back
+ *  to empty defaults when the desktop bridge is unavailable. */
+export async function initInteraction(): Promise<void> {
+  const { profileInteraction } = await import("./tauri");
+  const cfg = (await profileInteraction()) as { renderers?: RendererManifest[]; ui?: UiDefaults };
+  useInteractionStore.getState().load(
+    Array.isArray(cfg?.renderers) ? cfg.renderers : [],
+    cfg?.ui && typeof cfg.ui === "object" ? cfg.ui : {},
+  );
+
+  // Apply UI defaults only where the user has not set an explicit value yet
+  // (precedence: user runtime settings > profile ui.json > built-in default).
+  const ui = cfg?.ui && typeof cfg.ui === "object" ? cfg.ui : {};
+  const uiStore = useUiStore.getState();
+  if (typeof window !== "undefined") {
+    if (ui.theme && window.localStorage.getItem(THEME_KEY) === null && isTheme(ui.theme)) {
+      uiStore.setTheme(ui.theme);
+    }
+    if (ui.locale && window.localStorage.getItem("workbench.locale") === null) {
+      uiStore.setLocale(ui.locale as Locale);
+    }
+    if (ui.expandThreadDetails !== undefined && window.localStorage.getItem(EXPAND_DETAILS_KEY) === null) {
+      uiStore.setExpandThreadDetails(ui.expandThreadDetails);
+    }
+  }
+}
+
+function isTheme(v: string): v is Theme {
+  return v === "light" || v === "warm" || v === "cool" || v === "dark" || v === "black" || v === "system";
+}

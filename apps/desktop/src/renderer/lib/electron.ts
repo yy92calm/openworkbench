@@ -228,6 +228,40 @@ export async function schedulerList(): Promise<ScheduledTask[]> {
   }
 }
 
+/** Last OpenCode profile deploy manifest (base/patch fingerprints). */
+export async function profileManifest(): Promise<unknown | null> {
+  try {
+    return await api().profileManifest();
+  } catch {
+    return null;
+  }
+}
+
+/** Interaction config (enabled renderers + UI defaults) from the profile. */
+export async function profileInteraction(): Promise<unknown> {
+  try {
+    return await api().profileInteraction();
+  } catch {
+    return { renderers: [], ui: {} };
+  }
+}
+
+/** Dry-run a patch against the deployed opencode.json. Never writes. */
+export async function profileValidatePatch(
+  raw: string,
+): Promise<{ ok: true; ops: number } | { ok: false; rejection: { kind: string; detail: string } }> {
+  return await api().profileValidatePatch(raw);
+}
+
+/** Validate + persist the user patch overlay (patch.json). */
+export async function profileWritePatch(raw: string): Promise<{ ok: boolean; error?: string }> {
+  try {
+    return await api().profileWritePatch(raw);
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
 export async function schedulerCreate(task: CreateTaskInput): Promise<ScheduledTask | null> {
   try {
     return await api().schedulerCreate(task) as ScheduledTask;

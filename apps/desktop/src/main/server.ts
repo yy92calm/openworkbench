@@ -11,6 +11,7 @@ import { deploySchedulerProfile, startSchedulerApi, stopSchedulerApi } from "./s
 import { createBrowserMcp, type BrowserMcpPlugin } from "@fafawork/browser-mcp";
 import { enrichedPath } from "./shell_env";
 import { syncDir } from "./syncDir";
+import { applyUserOverlay } from "./profilePatch";
 
 let child: ChildProcess | null = null;
 let currentUrl: string | null = null;
@@ -50,6 +51,11 @@ function runtimeRoot(): string {
 
 function xdgConfigHome(): string {
   return join(runtimeRoot(), "xdg-config");
+}
+
+/** Where the bundled OpenCode profile is deployed on each sidecar start. */
+export function deployedProfileDir(): string {
+  return join(xdgConfigHome(), "opencode");
 }
 
 function activeWorkspaceFile(): string {
@@ -147,13 +153,20 @@ function migrateStaleDatabase(sidecarPath: string, dataHome: string): void {
 
 export function deployBundledProfile(): void {
   const source = bundledProfileSource();
-  const target = join(xdgConfigHome(), "opencode");
+  const target = deployedProfileDir();
   if (!existsSync(source)) {
     log("profile", "deploy", `source not found: ${source}`, "warn");
     return;
   }
   syncDir(source, target);
-  log("profile", "deploy", `deployed ${source} -> ${target}`);
+  // Layer user file overrides + patch.json on top of the base mirror.
+  const manifest = applyUserOverlay(target);
+  log(
+    "profile",
+    "deploy",
+    `deployed ${source} -> ${target} (base=${manifest.base} patch=${manifest.patch}` +
+      `${manifest.fileOverrides.length ? ` overlays=${manifest.fileOverrides.join(",")}` : ""})`,
+  );
   // Merge user-configured provider overrides (Settings → Model Config)
   applyUserProviderConfig(target);
 }

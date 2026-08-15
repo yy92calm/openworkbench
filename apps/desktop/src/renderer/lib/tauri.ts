@@ -32,6 +32,10 @@ export {
   schedulerHistory,
   schedulerDeleteExecution,
   schedulerClearHistory,
+  profileManifest,
+  profileInteraction,
+  profileValidatePatch,
+  profileWritePatch,
 } from "./electron";
 export type {
   JupyterStatus,

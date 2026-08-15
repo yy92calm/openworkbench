@@ -1,0 +1,9 @@
+{
+  "name": "Workbench Remote",
+  "short_name": "Workbench",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0e0d12",
+  "theme_color": "#0e0d12",
+  "icons": []
+}

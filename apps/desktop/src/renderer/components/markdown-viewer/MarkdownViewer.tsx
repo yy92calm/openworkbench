@@ -5,6 +5,8 @@ import hljs from "highlight.js";
 import { Check, Clipboard, Play, Loader2 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { kernelExecute, formatExecResult } from "@/lib/kernel";
+import { useInteractionStore } from "@/lib/store";
+import { renderWorkbenchFence } from "@/lib/renderers";
 
 function useCopyCode(text: string) {
   const [copied, setCopied] = useState(false);
@@ -84,9 +86,15 @@ function CodeBlock({
   // render). Prefer the known-language path: hljs.highlightAuto is expensive.
   const highlighted = useMemo(() => {
     if (streaming) return null;
-    return language
-      ? hljs.highlight(code, { language }).value
-      : hljs.highlightAuto(code).value;
+    const fallback = () => hljs.highlightAuto(code).value;
+    if (!language) return fallback();
+    try {
+      return hljs.highlight(code, { language }).value;
+    } catch {
+      // Unknown language tag (e.g. an unregistered workbench: fence) — do not
+      // let a bad fence break the thread; degrade to auto-detect.
+      return fallback();
+    }
   }, [language, code, streaming]);
 
   const run = async () => {
@@ -159,6 +167,7 @@ export const MarkdownViewer = memo(function MarkdownViewer({
   streaming?: boolean;
 }) {
   const s = STYLES[variant];
+  const enabledRenderers = useInteractionStore((st) => st.renderers);
   return (
     <div className={cn(s.root, className)}>
       <ReactMarkdown
@@ -176,6 +185,17 @@ export const MarkdownViewer = memo(function MarkdownViewer({
               return <code className={s.code}>{children}</code>;
             }
             const language = cls?.replace("language-", "");
+            // Keyed renderer seam: a `workbench:<type>` fence dispatches to the
+            // registered renderer; an unknown/disabled type falls back to the
+            // plain code block so arbitrary agent output never breaks layout.
+            if (language?.startsWith("workbench:")) {
+              const node = renderWorkbenchFence(
+                language.slice("workbench:".length),
+                String(children).replace(/\n+$/, ""),
+                enabledRenderers,
+              );
+              if (node) return <>{node}</>;
+            }
             const code = String(children).replace(/\n$/, "");
             return <CodeBlock language={language} code={code} variant={variant} streaming={streaming} />;
           },

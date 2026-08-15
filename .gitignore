@@ -60,3 +60,10 @@ app-config/
 apps/desktop/release/
 apps/desktop/out/
 
+# Stray hashed build artifacts from one-off vite builds (e.g. index-*.js, xlsx-*.css)
+apps/desktop/*-*.js
+apps/desktop/*-*.css
+
+# ZCode tooling (local plans, session state)
+.zcode/
+

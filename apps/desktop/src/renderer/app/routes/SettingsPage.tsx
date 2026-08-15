@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
-import { FolderOpen, RefreshCw, Download, Eye, EyeOff, RotateCw, Check, Plus, Trash2, Power, Volume2, Mic } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { FolderOpen, RefreshCw, Download, Eye, EyeOff, RotateCw, Check, Plus, Trash2, Power, Volume2, Mic, Send, Loader2 } from "lucide-react";
 import { useUiStore, type AgentRuntimeKind, type Theme } from "@/lib/store";
-import { useRuntimeStore } from "@/lib/runtime";
+import { useRuntimeStore, sendConfigPrompt } from "@/lib/runtime";
+import { extractConfigPatch } from "@/lib/renderers";
 import { useI18n } from "@/lib/i18n";
 import {
   openWorkspaceBase,
@@ -16,7 +17,10 @@ import {
 } from "@/lib/tauri";
 import { toast } from "@/lib/toast";
 import { cn } from "@/lib/cn";
+import { profileManifest, profileWritePatch, profileInteraction, profileValidatePatch } from "@/lib/tauri";
+import type { DeployedManifest, InteractionConfig } from "@workbench/shared";
 import { DataFlowCard } from "@/components/settings/DataFlowCard";
+import { RemoteCard } from "@/components/settings/RemoteCard";
 import {
   speak,
   cancelSpeak,
@@ -28,7 +32,7 @@ import {
 } from "@/lib/tts";
 import { isSttSupported } from "@/lib/stt";
 
-type Section = "general" | "models" | "runtime" | "voice" | "workspace" | "privacy" | "about";
+type Section = "general" | "models" | "runtime" | "voice" | "workspace" | "remote" | "privacy" | "profile" | "about";
 
 /** A saved provider configuration. */
 interface ProviderConfig {
@@ -92,7 +96,9 @@ export function SettingsPage() {
     { id: "runtime", label: t("settings.tabRuntime") },
     { id: "voice", label: "语音" },
     { id: "workspace", label: t("settings.tabWorkspace") },
+    { id: "remote", label: t("settings.tabRemote") },
     { id: "privacy", label: t("settings.tabPrivacy") },
+    { id: "profile", label: "个性化" },
     { id: "about", label: t("settings.tabAbout") },
   ];
 
@@ -350,6 +356,10 @@ export function SettingsPage() {
               </Card>
             )}
 
+            {section === "remote" && (
+              <RemoteCard />
+            )}
+
             {section === "privacy" && (
               <div className="mt-0">
                 <p className="mb-3 text-xs text-muted">{t("settings.privacyHint")}</p>
@@ -360,10 +370,226 @@ export function SettingsPage() {
             {section === "about" && (
               <AboutSection />
             )}
+
+            {section === "profile" && (
+              <ProfileSection />
+            )}
           </div>
         </div>
       </div>
     </div>
+  );
+}
+
+// ── Profile section: user-level patch overlay ──
+
+/** Settings-embedded config conversation. Sends a natural-language request to
+ *  the agent via the config-prompt contract, extracts the `workbench:config-patch`
+ *  fence from the reply, and runs it through the main-process validator BEFORE
+ *  touching the patch editor. The agent never writes anything directly. */
+function ConfigConversation({ onPatchGenerated }: { onPatchGenerated: (patch: string) => void }) {
+  const [input, setInput] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState<"idle" | "waiting" | "validating" | "validated" | "rejected" | "none">("idle");
+  const [detail, setDetail] = useState<string | null>(null);
+  const processedRef = useRef<string>("");
+  const onPatchRef = useRef(onPatchGenerated);
+  onPatchRef.current = onPatchGenerated;
+
+  const currentMarkdown = useRuntimeStore((s) => {
+    const id = s.currentId ?? "draft";
+    const t = s.threads[id];
+    if (!t) return "";
+    for (let i = t.blocks.length - 1; i >= 0; i--) {
+      const b = t.blocks[i];
+      if (b && (b as { kind?: string }).kind === "agent") return (b as { markdown?: string }).markdown ?? "";
+    }
+    return "";
+  });
+
+  // Watch the active session's latest agent reply for a config-patch fence.
+  useEffect(() => {
+    if (!currentMarkdown || currentMarkdown === processedRef.current) return;
+    processedRef.current = currentMarkdown;
+    const fence = extractConfigPatch(currentMarkdown);
+    if (fence) {
+      setBusy(true);
+      setStatus("validating");
+      void profileValidatePatch(fence).then((res) => {
+        setBusy(false);
+        if (res.ok) {
+          setStatus("validated");
+          setDetail(`patch 合法（${res.ops} 个操作），已填入编辑器。`);
+          onPatchRef.current(fence);
+        } else {
+          setStatus("rejected");
+          const r = res.rejection;
+          const label =
+            r.kind === "permission" ? "权限仅可收紧" :
+            r.kind === "forbidden-path" ? "目标路径禁止修改" :
+            r.kind === "syntax" ? "patch 语法错误" :
+            "不符合约束";
+          setDetail(`${label}：${r.detail}`);
+        }
+      }).catch(() => setBusy(false));
+    }
+  }, [currentMarkdown]);
+
+  const send = async () => {
+    const text = input.trim();
+    if (!text || busy) return;
+    setInput("");
+    setBusy(true);
+    setStatus("waiting");
+    setDetail("agent 正在生成配置差异…");
+    processedRef.current = "";
+    const ok = await sendConfigPrompt(text);
+    if (!ok) {
+      setBusy(false);
+      setStatus("rejected");
+      setDetail("无法连接运行时，发送失败。");
+    }
+  };
+
+  return (
+    <Card
+      title="配置对话"
+      hint="用自然语言说出改动（如「把默认模型换成 deepseek-r1」「停用 etf 这个 MCP」）。agent 只生成配置差异，保存前会在本机做安全校验；权限只能收紧、instructions 不可改。"
+    >
+      <div className="space-y-3">
+        <textarea
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(); } }}
+          placeholder="例如：把默认模型换成 ali/deepseek-r1"
+          rows={2}
+          className={cn(inputCls(), "w-full resize-y p-3 text-[13px] leading-relaxed")}
+        />
+        <div className="flex items-center gap-3">
+          <button className={btnAccent("gap-1.5")} onClick={() => void send()} disabled={busy || !input.trim()}>
+            {busy ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
+            {busy ? "生成中…" : "生成 patch"}
+          </button>
+          {detail && (
+            <span className={cn("text-xs", status === "rejected" ? "text-danger" : "text-muted")}>{detail}</span>
+          )}
+        </div>
+        <p className="text-[11px] text-muted">
+          安全边界：agent 不能直接写文件；生成的 patch 会先由本机校验（模型 / MCP / 权限收紧），通过后才进入下方编辑器。
+        </p>
+      </div>
+    </Card>
+  );
+}
+
+function ProfileSection() {
+  const [manifest, setManifest] = useState<DeployedManifest | null>(null);
+  const [raw, setRaw] = useState("");
+  const [dirty, setDirty] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+  const [interaction, setInteraction] = useState<InteractionConfig | null>(null);
+
+  useEffect(() => {
+    void load();
+  }, []);
+
+  async function load() {
+    const [m, itx] = await Promise.all([profileManifest(), profileInteraction()]);
+    if (m) {
+      setManifest(m as DeployedManifest);
+      setInteraction(itx as InteractionConfig);
+      try {
+        const stored = await window.electronAPI?.storeGet("profile-patch-raw");
+        setRaw(typeof stored === "string" ? stored : "");
+      } catch { /* not editable in web build */ }
+    }
+  }
+
+  async function onSave() {
+    setBusy(true);
+    setMsg(null);
+    const result = await profileWritePatch(raw);
+    if (!result.ok) {
+      setMsg(result.error ?? "保存失败");
+      toast.error(result.error ?? "patch 格式有误");
+      setBusy(false);
+      return;
+    }
+    await window.electronAPI?.storeSet("profile-patch-raw", raw);
+    setDirty(false);
+    setMsg("已保存。重启运行时（设置 → 运行时 → 重启）后生效。");
+    toast.success("patch 已保存");
+    setBusy(false);
+  }
+
+  return (
+    <>
+      <Card
+        title="个性化覆盖层"
+        hint="用户层配置，重启 sidecar 时叠加到出厂 profile 之上。仅可调整模型 / MCP / 外观等字段；权限只能收紧、instructions 不可修改。"
+      >
+        <dl className="space-y-2.5">
+          <Row label="base 指纹" value={manifest?.base ?? null} />
+          <Row label="patch 指纹" value={manifest?.patch ?? "none"} />
+          <Row label="合并指纹" value={manifest?.merged ?? null} />
+          <Row label="更新时间" value={manifest?.appliedAt ?? null} />
+          <Row label="文件覆盖" value={manifest?.fileOverrides?.length ? manifest.fileOverrides.join(", ") : "无"} />
+        </dl>
+      </Card>
+
+      <ConfigConversation onPatchGenerated={(p) => { setRaw(p); setDirty(true); setMsg("对话已生成 patch，已填入下方编辑器。点击「保存 patch」生效。"); }} />
+
+      <Card
+        title="启用渲染器"
+        hint="由 profile 的 interaction/renderers.json 声明。agent 输出 workbench:&lt;type&gt; 代码块时按注册表渲染；未启用的类型退化为普通代码块。"
+      >
+        {interaction && interaction.renderers.length > 0 ? (
+          <div className="flex flex-wrap gap-2">
+            {interaction.renderers.map((r) => (
+              <span
+                key={r.type}
+                className="inline-flex items-center gap-1.5 rounded-input border border-border bg-surface-2 px-2.5 py-1 font-mono text-xs text-text"
+              >
+                <span className="h-1.5 w-1.5 rounded-full bg-ok" />
+                {r.type}
+                {r.title ? <span className="text-muted">({r.title})</span> : null}
+              </span>
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-muted">profile 未声明渲染器。</p>
+        )}
+
+        {interaction && Object.keys(interaction.ui).length > 0 && (
+          <dl className="mt-4 space-y-2.5 border-t border-border pt-4">
+            {Object.entries(interaction.ui).map(([k, v]) => (
+              <Row key={k} label={`ui.${k}`} value={v === null ? null : String(v)} />
+            ))}
+          </dl>
+        )}
+      </Card>
+
+      <Card title="patch.json" hint="RFC 6902 JSON Patch。示例：替换默认模型为 { &quot;op&quot;: &quot;replace&quot;, &quot;path&quot;: &quot;/model&quot;, &quot;value&quot;: &quot;ali/deepseek-r1&quot; }">
+        <div className="space-y-3">
+          <textarea
+            value={raw}
+            onChange={(e) => { setRaw(e.target.value); setDirty(true); setMsg(null); }}
+            spellCheck={false}
+            rows={10}
+            placeholder={'{\n  "target": "opencode.json",\n  "patch": [\n    { "op": "replace", "path": "/model", "value": "ali/deepseek-r1" }\n  ]\n}'}
+            className={cn(inputCls(), "h-auto min-h-40 w-full resize-y p-3 font-mono text-xs leading-relaxed")}
+          />
+          <div className="flex items-center gap-3">
+            <button className={btnAccent("gap-1.5")} onClick={() => void onSave()} disabled={!dirty || busy}>
+              <Check size={13} />
+              保存 patch
+            </button>
+            {msg && <span className="text-xs text-muted">{msg}</span>}
+          </div>
+        </div>
+      </Card>
+    </>
   );
 }
 

@@ -394,6 +394,28 @@ export function getClient(): AgentRuntime | null {
   return client;
 }
 
+/** System-prompt prefix injected into a config-conversation turn. It steers
+ *  the agent to emit ONLY a structured `workbench:config-patch` fence and
+ *  forbids file/bash/network actions. The UI never lets the agent write
+ *  directly — every patch goes through the main-process validator first. */
+export const CONFIG_PROMPT_PREFIX = `你正在帮助用户修改本应用的 OpenCode 配置。规则：
+1. 只允许对 opencode.json 输出配置修改，且必须产出以下格式的 fenced code block（唯一允许的输出容器）：
+   \`\`\`workbench:config-patch
+   {"target":"opencode.json","patch":[ {"op":"replace","path":"/model","value":"<provider>/<model>"} ]}
+   \`\`\`
+2. patch 必须是 RFC 6902 操作。permission 只能收紧（allow->ask/deny），禁止放宽容限。
+3. 禁止修改 /instructions。禁止任何文件写入、bash 执行、网络请求、MCP 操作。
+4. 若用户的要求不在范围（模型、MCP 增删改启停、外观键）内，说明做不到并建议人工。
+不要输出其他代码块或对 patch 之外的内容做操作。`;
+
+/** Send a turn that translates natural-language config requests into a
+ *  structured patch. Runs in the current session (shared history); the reply
+ *  is expected to carry a `workbench:config-patch` fence the UI will extract
+ *  and validate before it is ever written. Returns the session id or null. */
+export function sendConfigPrompt(text: string): Promise<string | null> {
+  return useRuntimeStore.getState().sendPrompt(`${CONFIG_PROMPT_PREFIX}\n\n${text}`);
+}
+
 export const useRuntimeStore = create<RuntimeState>((set, get) => ({
   status: "offline",
   serverUrl: initialUrl(),
@@ -885,6 +907,9 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
 
   bootstrap: async () => {
     void get().detectTools();
+    // Load the profile-declared interaction config (renderers + UI defaults).
+    // Left floating so the runtime start is never blocked on it.
+    void import("./store").then(({ initInteraction }) => initInteraction());
     if (!isTauri) return;
     // Read the user's runtime engine choice from the UI store.
     const { useUiStore } = await import("./store");

@@ -49,6 +49,22 @@ export interface ElectronAPI {
   storeKeys: (scope?: string) => Promise<string[]>;
   storeLength: (scope?: string) => Promise<number>;
 
+  profileManifest: () => Promise<unknown | null>;
+  profileInteraction: () => Promise<unknown>;
+  profileValidatePatch: (raw: string) =>
+    Promise<{ ok: true; ops: number } | { ok: false; rejection: { kind: string; detail: string } }>;
+  profileWritePatch: (raw: string) => Promise<{ ok: boolean; error?: string }>;
+
+  /** Remote relay (host side). */
+  relayStatus: () => Promise<{
+    status: "off" | "connecting" | "connected" | "error";
+    config: { enabled: boolean; relayUrl: string; deviceId: string; tokenSet: boolean };
+  }>;
+  relayStart: (config: { relayUrl: string; deviceId: string; token: string }) =>
+    Promise<"off" | "connecting" | "connected" | "error">;
+  relayStop: () => Promise<string>;
+  onRelayStatus: (callback: (status: string) => void) => () => void;
+
   logDebug: (message: string) => Promise<void>;
   logEvent: (level: string, module: string, message: string, data?: unknown) => Promise<void>;
   exportLogs: () => Promise<string>;

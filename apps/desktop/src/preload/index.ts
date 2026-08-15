@@ -66,6 +66,23 @@ const api = {
   storeKeys: (scope?: string) => ipcRenderer.invoke("store-keys", scope),
   storeLength: (scope?: string) => ipcRenderer.invoke("store-length", scope),
 
+  // Profile patch overlay
+  profileManifest: () => ipcRenderer.invoke("profile-manifest"),
+  profileInteraction: () => ipcRenderer.invoke("profile-interaction"),
+  profileValidatePatch: (raw: string) => ipcRenderer.invoke("profile-validate-patch", raw),
+  profileWritePatch: (raw: string) => ipcRenderer.invoke("profile-write-patch", raw),
+
+  // Remote relay (host side)
+  relayStatus: () => ipcRenderer.invoke("relay-status"),
+  relayStart: (config: { relayUrl: string; deviceId: string; token: string }) =>
+    ipcRenderer.invoke("relay-start", config),
+  relayStop: () => ipcRenderer.invoke("relay-stop"),
+  onRelayStatus: (callback: (status: string) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, status: string) => callback(status);
+    ipcRenderer.on("relay-status-changed", handler);
+    return () => ipcRenderer.removeListener("relay-status-changed", handler);
+  },
+
   // Logging
   logDebug: (message: string) => ipcRenderer.invoke("log-debug", message),
   logEvent: (level: string, module: string, message: string, data?: unknown) =>

@@ -1,9 +1,12 @@
 import { app, ipcMain, dialog, BrowserWindow } from "electron";
+import { randomUUID } from "node:crypto";
 import { createAgentRuntime, type AgentRuntime, type AgentRuntimeEvent } from "@workbench/sdk/agent-runtime";
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { CHANNEL, APP_NAMES, APP_IDS } from "./constants";
 import { getStore, removeStoreFile } from "./store";
 import { getLogger, exportDebugLogs } from "./logging";
-import { stopSidecar, getServerPassword, workspaceDir, baseWorkspaceDir, setActiveWorkspace, setBaseWorkspace, getServerUrl, startAgentRuntime, type AgentRuntimeKind } from "./server";
+import { stopSidecar, getServerPassword, workspaceDir, baseWorkspaceDir, setActiveWorkspace, setBaseWorkspace, getServerUrl, startAgentRuntime, type AgentRuntimeKind, deployedProfileDir } from "./server";
 import * as artifactFile from "./artifact_file";
 import * as kernel from "./kernel";
 import * as provenance from "./provenance";
@@ -12,9 +15,14 @@ import { detectShells, detectTools, enrichedPath } from "./shell_env";
 import { checkForUpdates } from "./updater";
 import { createMainWindow, getMainWindow } from "./windows";
 import { cronEngine, type CreateTaskInput, type UpdateTaskInput } from "./scheduler";
+import { readDeployedManifest, writeUserPatch, readInteractionConfig, validateUserPatch } from "./profilePatch";
 import { registerTerminalHandlers } from "./terminal";
 import { fetchPageContent, extractText } from "./browser";
 import { isWhisperAvailable, transcribeWav } from "./whisper";
+import { RelayHost, type RelayHostConfig } from "./relayHost";
+
+/** Host-side relay instance (shared by IPC handlers). */
+export const relayHost = new RelayHost();
 
 export function registerIpcHandlers(): void {
   const log = getLogger();
@@ -90,6 +98,49 @@ export function registerIpcHandlers(): void {
   ipcMain.handle("runtime-password", () => getServerPassword());
   ipcMain.handle("stop-runtime", () => stopSidecar());
   ipcMain.handle("server-url", () => getServerUrl());
+
+  // ---- Remote relay (host side) ----
+  // Config is persisted in the electron-store under "relay". deviceId and token
+  // are generated once on first use; the token never leaves the main process
+  // in status responses.
+  ipcMain.handle("relay-status", () => {
+    const store = getStore();
+    const cfg = store.get("relay") as Partial<RelayHostConfig> | undefined;
+    return {
+      status: relayHost.getStatus(),
+      config: {
+        enabled: !!cfg?.enabled,
+        relayUrl: cfg?.relayUrl ?? "ws://43.133.82.137:8080",
+        deviceId: cfg?.deviceId ?? "",
+        tokenSet: !!cfg?.token,
+      },
+    };
+  });
+  ipcMain.handle("relay-start", (_e, input: RelayHostConfig) => {
+    const store = getStore();
+    const existing = store.get("relay") as Partial<RelayHostConfig> | undefined;
+    const cfg: RelayHostConfig = {
+      enabled: true,
+      relayUrl: input.relayUrl?.trim() || existing?.relayUrl || "ws://43.133.82.137:8080",
+      deviceId: input.deviceId?.trim() || existing?.deviceId || randomUUID(),
+      token: input.token?.trim() || existing?.token || randomUUID(),
+    };
+    store.set("relay", cfg);
+    return relayHost.start(cfg);
+  });
+  ipcMain.handle("relay-stop", () => {
+    const store = getStore();
+    const cfg = store.get("relay") as Partial<RelayHostConfig> | undefined;
+    if (cfg) store.set("relay", { ...cfg, enabled: false });
+    relayHost.stop();
+    return "off";
+  });
+  relayHost.onStatusChange((status) => {
+    for (const win of BrowserWindow.getAllWindows()) {
+      win.webContents.send("relay-status-changed", status);
+    }
+  });
+
   // Restart: stop the sidecar then start it again (picks up new provider config).
   ipcMain.handle("restart-runtime", async (_e, kind?: AgentRuntimeKind) => {
     stopSidecar();
@@ -210,6 +261,23 @@ export function registerIpcHandlers(): void {
   ipcMain.handle("store-length", (_e, scope?: string) => {
     const store = getStore(scope);
     return Object.keys(store.store).length;
+  });
+
+  // ---- Profile patch overlay ----
+  ipcMain.handle("profile-manifest", () => readDeployedManifest());
+  ipcMain.handle("profile-interaction", () => readInteractionConfig(deployedProfileDir()));
+  ipcMain.handle("profile-validate-patch", (_e, raw: string) => {
+    const file = join(deployedProfileDir(), "opencode.json");
+    const base = existsSync(file) ? readFileSync(file, "utf-8") : "{}";
+    return validateUserPatch(base, raw);
+  });
+  ipcMain.handle("profile-write-patch", (_e, raw: string) => {
+    try {
+      writeUserPatch(raw);
+      return { ok: true };
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
   });
 
   // ---- Logging ----

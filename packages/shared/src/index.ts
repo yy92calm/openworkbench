@@ -2,6 +2,35 @@
 // Imported by the desktop app now, and by the SDK / runtime in later slices.
 
 export type RuntimeStatus = "connecting" | "ready" | "error" | "offline";
+
+// ---- User-level patch overlay (OpenCode profile) ----
+
+export {
+  applyProfilePatch,
+  contentHash,
+  humanizePatchError,
+  validateProfilePatch,
+  PatchPolicyError,
+} from "./patchOverlay";
+export type {
+  DeployedManifest,
+  PatchOp,
+  PatchRejection,
+  UserPatchSpec,
+} from "./patchOverlay";
+
+// ---- Interaction layer (keyed renderers + UI defaults) ----
+
+export {
+  parseRenderersJson,
+  parseUiDefaultsJson,
+} from "./interaction";
+export type {
+  RendererManifest,
+  UiDefaults,
+  InteractionConfig,
+} from "./interaction";
+
 export type ModelStatus = "connected" | "disconnected" | "error";
 
 export interface Project {
