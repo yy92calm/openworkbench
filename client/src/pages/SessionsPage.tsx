@@ -18,6 +18,8 @@ export function SessionsPage({
   const [switching, setSwitching] = useState(false);
   const [devices, setDevices] = useState<RelayDeviceInfo[] | null>(null);
   const [chosen, setChosen] = useState("");
+  /** Connection health: false when the host is unreachable (SSE offline/error). */
+  const [hostOnline, setHostOnline] = useState(true);
   const cfg = loadConfig();
 
   const refresh = useCallback(async () => {
@@ -44,10 +46,20 @@ export function SessionsPage({
   useEffect(() => {
     void refresh();
     const t = setInterval(() => void refresh(), 8000);
-    const unsub = onReconnect(() => void refresh());
+    const unsub = onReconnect(() => {
+      setHostOnline(true);
+      void refresh();
+    });
+    // Track SSE health: offline/error means the host dropped; reconnect logic
+    // in the SDK will bring it back with backoff.
+    const client = getClient();
+    const unsubStatus = client?.onStatus((s) => {
+      setHostOnline(s === "ready");
+    });
     return () => {
       clearInterval(t);
       unsub();
+      unsubStatus?.();
     };
   }, [refresh]);
 
@@ -124,6 +136,13 @@ export function SessionsPage({
           <LogOut size={16} />
         </button>
       </header>
+
+      {!hostOnline && (
+        <div style={{ margin: "0 16px 8px", padding: "8px 12px", borderRadius: 9, background: "color-mix(in srgb, var(--warn) 12%, transparent)", border: "1px solid var(--warn)", color: "var(--warn)", fontSize: 12.5, display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--warn)", animation: "pulse 1.2s infinite", flexShrink: 0 }} />
+          主机离线，正在自动重连…
+        </div>
+      )}
 
       <div style={{ padding: "4px 16px" }}>
         <button className="btn-primary" style={{ width: "100%" }} onClick={() => void create()} disabled={busy}>

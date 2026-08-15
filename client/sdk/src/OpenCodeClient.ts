@@ -76,6 +76,12 @@ export class OpenCodeClient {
   private readonly textStreams = new Map<string, { sessionId: string; text: string }>();
   /** partID → accumulated reasoning text (same accumulation pattern as text). */
   private readonly reasoningStreams = new Map<string, { sessionId: string; text: string }>();
+  /** SSE auto-reconnect state. The /event stream can drop when the host or
+   *  relay hiccups; instead of leaving the app silent we re-open it with
+   *  exponential backoff until close() is called. */
+  private sseClosed = true;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private reconnectAttempts = 0;
 
   constructor(opts: OpenCodeClientOptions = {}) {
     this.baseUrl = (opts.baseUrl ?? DEFAULT_OPENCODE_URL).replace(/\/$/, "");
@@ -146,22 +152,15 @@ export class OpenCodeClient {
     }
 
     this.abort = new AbortController();
+    this.sseClosed = false;
+    this.reconnectAttempts = 0;
     return new Promise((resolve, reject) => {
       let opened = false;
-      this.fetchImpl(this.eventUrl(), {
-        headers: { Accept: "text/event-stream", ...this.headers() },
-        signal: this.abort!.signal,
-      })
-        .then(async (res) => {
-          if (!res.ok || !res.body) {
-            this.setStatus("error");
-            reject(new Error(`OpenCode /event returned ${res.status}`));
-            return;
-          }
+      this.openEventStream()
+        .then(() => {
           this.setStatus("ready");
           opened = true;
           resolve();
-          await this.readStream(res.body);
         })
         .catch((err) => {
           if (!opened) {
@@ -174,11 +173,50 @@ export class OpenCodeClient {
     });
   }
 
+  /** Open the /event SSE stream (fetch path). Resolves once the stream is
+   *  established; the body is then consumed in the background until it ends or
+   *  close() aborts. On an unexpected end, schedule a re-open with backoff. */
+  private async openEventStream(): Promise<void> {
+    const res = await this.fetchImpl(this.eventUrl(), {
+      headers: { Accept: "text/event-stream", ...this.headers() },
+      signal: this.abort!.signal,
+    });
+    if (!res.ok || !res.body) {
+      throw new Error(`OpenCode /event returned ${res.status}`);
+    }
+    // Consume in the background; readStream schedules a reconnect on drop.
+    void this.readStream(res.body);
+  }
+
+  /** Re-open the event stream after an unexpected drop, with exponential
+   *  backoff, until close() or a successful reconnect. */
+  private scheduleSseReconnect(): void {
+    if (this.sseClosed || this.reconnectTimer) return;
+    const delay = Math.min(1_000 * 2 ** this.reconnectAttempts, 15_000);
+    this.reconnectAttempts += 1;
+    this.reconnectTimer = setTimeout(() => {
+      this.reconnectTimer = null;
+      if (this.sseClosed) return;
+      this.setStatus("connecting");
+      this.openEventStream()
+        .then(() => {
+          this.reconnectAttempts = 0;
+          this.setStatus("ready");
+        })
+        .catch(() => this.scheduleSseReconnect());
+    }, delay);
+  }
+
   close(): void {
     this.es?.close();
     this.es = null;
     this.abort?.abort();
     this.abort = null;
+    this.sseClosed = true;
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
     this.setStatus("offline");
   }
 
@@ -750,6 +788,7 @@ export class OpenCodeClient {
       // aborted or connection dropped
     } finally {
       this.setStatus("offline");
+      this.scheduleSseReconnect();
     }
   }
 

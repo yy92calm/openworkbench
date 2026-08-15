@@ -176,9 +176,13 @@ export class RelayHttpTransport {
       case "head": {
         if (p.done) break;
         try {
-          // Status 204/205/304 must not carry a body per the fetch spec —
-          // Response would throw on construction. Resolve with a null body.
-          if (msg.status === 204 || msg.status === 205 || msg.status === 304) {
+          // Status 204/205/304 must not carry a body per the fetch spec, and a
+          // stream that was already locked/consumed (e.g. the SSE stream read
+          // while the host dropped) cannot be re-wrapped — Response would throw
+          // on construction. Resolve with a null body in both cases.
+          const noBody =
+            msg.status === 204 || msg.status === 205 || msg.status === 304 || p.stream.locked;
+          if (noBody) {
             p.headResolve(new Response(null, {
               status: msg.status,
               headers: new Headers(msg.headers ?? {}),

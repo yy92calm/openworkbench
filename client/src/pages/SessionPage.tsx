@@ -90,6 +90,7 @@ export function SessionPage({ sessionId, onBack }: { sessionId: string; onBack: 
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [attachments, setAttachments] = useState<AttachmentFile[]>([]);
+  const [hostOnline, setHostOnline] = useState(true);
   const fileInput = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -118,6 +119,9 @@ export function SessionPage({ sessionId, onBack }: { sessionId: string; onBack: 
       unsub();
       unsub = c2.onEvent(handleEvent);
       void c2.getMessages(sessionId).then((h) => mounted.current && setMessages(h.map(toMsg))).catch(() => {});
+    });
+    const unsubStatus = client.onStatus((s) => {
+      if (mounted.current) setHostOnline(s === "ready");
     });
     const handleEvent = (e: OpenCodeEvent) => {
       if (e.sessionId !== sessionId) return;
@@ -183,6 +187,7 @@ export function SessionPage({ sessionId, onBack }: { sessionId: string; onBack: 
       mounted.current = false;
       unsub();
       unsubReconnect();
+      unsubStatus();
     };
   }, [sessionId]);
 
@@ -254,6 +259,13 @@ export function SessionPage({ sessionId, onBack }: { sessionId: string; onBack: 
           </button>
         )}
       </header>
+
+      {!hostOnline && (
+        <div style={{ margin: "0 14px", padding: "7px 12px", borderRadius: 9, background: "color-mix(in srgb, var(--warn) 12%, transparent)", border: "1px solid var(--warn)", color: "var(--warn)", fontSize: 12.5, display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ width: 7, height: 7, borderRadius: "50%", background: "var(--warn)", animation: "pulse 1.2s infinite", flexShrink: 0 }} />
+          主机离线，正在自动重连…
+        </div>
+      )}
 
       <div ref={scrollRef} style={{ flex: 1, overflowY: "auto", padding: "16px 14px", display: "flex", flexDirection: "column", gap: 14 }}>
         {messages.length === 0 && (
