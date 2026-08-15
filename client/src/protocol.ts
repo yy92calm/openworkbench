@@ -64,7 +64,15 @@ export interface RelayDeviceList {
   devices: RelayDeviceInfo[];
 }
 
-export type RelayMessage = RelayRequest | RelayResponseHead | RelayChunk | RelayDone | RelayListDevices | RelayDeviceList;
+/** Relay → host: cancel an in-flight forwarded request. Sent when the guest
+ *  that started it disconnects, so the host aborts the sidecar fetch instead
+ *  of leaving it (e.g. an SSE stream) hanging forever and leaking connections. */
+export interface RelayCancel {
+  type: "cancel";
+  id: string;
+}
+
+export type RelayMessage = RelayRequest | RelayResponseHead | RelayChunk | RelayDone | RelayListDevices | RelayDeviceList | RelayCancel;
 
 /** Connection query params: ?role=host|guest&token=<accountToken>[&device=<deviceId>]
  *  device is required for host and for guest data connections; a guest control

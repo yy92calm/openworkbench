@@ -30,6 +30,9 @@ export class RelayHost {
   private stopped = true;
   private status: RelayHostStatus = "off";
   private readonly listeners = new Set<(s: RelayHostStatus) => void>();
+  /** In-flight sidecar fetches keyed by relay request id — aborted when the
+   *  relay sends `cancel` (the guest disconnected). */
+  private readonly pendingFetches = new Map<string, AbortController>();
 
   getStatus(): RelayHostStatus {
     return this.status;
@@ -55,6 +58,8 @@ export class RelayHost {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
     }
+    for (const ctrl of this.pendingFetches.values()) ctrl.abort();
+    this.pendingFetches.clear();
     this.ws?.close();
     this.ws = null;
     this.setStatus("off");
@@ -105,7 +110,9 @@ export class RelayHost {
     }, delay);
   }
 
-  /** Guest request → local sidecar → head/chunk/done back through the socket. */
+  /** Guest request → local sidecar → head/chunk/done back through the socket.
+   *  Also handles relay → host `cancel` messages so an in-flight forward (e.g.
+   *  an SSE stream) is aborted when its guest disconnects. */
   private async handleMessage(data: unknown): Promise<void> {
     let msg: RelayMessage | null = null;
     try {
@@ -113,7 +120,17 @@ export class RelayHost {
     } catch {
       return;
     }
-    if (!msg || msg.type !== "request") return;
+    if (!msg) return;
+    if (msg.type === "cancel") {
+      // The guest left — abort the sidecar fetch so it doesn't hang/leak.
+      const ctrl = this.pendingFetches.get(msg.id);
+      if (ctrl) {
+        ctrl.abort();
+        this.pendingFetches.delete(msg.id);
+      }
+      return;
+    }
+    if (msg.type !== "request") return;
     const ws = this.ws;
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
 
@@ -139,10 +156,13 @@ export class RelayHost {
     if (password) {
       headers["Authorization"] = `Basic ${Buffer.from(`opencode:${password}`).toString("base64")}`;
     }
+    const ctrl = new AbortController();
+    this.pendingFetches.set(msg.id, ctrl);
     try {
       const res = await fetch(`${sidecarUrl}${msg.path}`, {
         method: msg.method,
         headers,
+        signal: ctrl.signal,
         ...(msg.body !== undefined ? { body: msg.body } : {}),
       });
       ws.send(JSON.stringify({
@@ -163,10 +183,20 @@ export class RelayHost {
       }
       ws.send(JSON.stringify({ type: "done", id: msg.id }));
     } catch (err) {
+      // Aborted because the guest disconnected (relay sent cancel) — the guest
+      // is gone, nothing to reply to. Any other failure is a genuine error.
+      if ((err as Error).name === "AbortError") {
+        this.pendingFetches.delete(msg.id);
+        return;
+      }
       const logger = (await import("./logging")).getLogger();
       logger.warn(`[relayHost] forward failed: ${(err as Error)?.message} path=${msg.path} sidecar=${sidecarUrl}`);
-      ws.send(JSON.stringify({ type: "head", id: msg.id, status: 502, headers: {} }));
-      ws.send(JSON.stringify({ type: "done", id: msg.id }));
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: "head", id: msg.id, status: 502, headers: {} }));
+        ws.send(JSON.stringify({ type: "done", id: msg.id }));
+      }
+    } finally {
+      this.pendingFetches.delete(msg.id);
     }
   }
 

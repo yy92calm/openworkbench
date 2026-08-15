@@ -51,7 +51,7 @@ export class RelayServer {
   /** `${token}|${device}` → host socket (one host per device; newer wins). */
   private readonly hosts = new Map<string, WebSocket>();
   /** requestId → guest socket that owns the request (routes host replies). */
-  private readonly pending = new Map<string, WebSocket>();
+  private readonly pending = new Map<string, { guest: WebSocket; host: WebSocket }>();
   /** guest socket → `${token}|${device}` of the host it is paired with. */
   private readonly guestKey = new Map<WebSocket, string>();
   /** socket → account token (for kicking connections of removed accounts). */
@@ -220,7 +220,7 @@ export class RelayServer {
       this.reply(guest, { type: "done", id: msg.id });
       return;
     }
-    this.pending.set(msg.id, guest);
+    this.pending.set(msg.id, { guest, host });
     host.send(JSON.stringify(msg));
   }
 
@@ -228,29 +228,36 @@ export class RelayServer {
   private handleHostMessage(host: WebSocket, data: unknown): void {
     const msg = this.parse<RelayMessage>(data);
     if (!msg || (msg.type !== "head" && msg.type !== "chunk" && msg.type !== "done")) return;
-    const guest = this.pending.get(msg.id);
-    if (!guest || guest.readyState !== WebSocket.OPEN) return;
+    const entry = this.pending.get(msg.id);
+    if (!entry || entry.guest.readyState !== WebSocket.OPEN) return;
     if (msg.type === "done") this.pending.delete(msg.id);
-    guest.send(JSON.stringify(msg));
+    entry.guest.send(JSON.stringify(msg));
   }
 
   private dropGuest(ws: WebSocket): void {
     this.guestKey.delete(ws);
-    // Drop requests this guest started so host replies never route nowhere.
-    for (const [id, owner] of this.pending) {
-      if (owner === ws) this.pending.delete(id);
+    // Drop requests this guest started so host replies never route nowhere,
+    // and tell the host to abort the underlying sidecar fetch — otherwise a
+    // long-lived stream (e.g. SSE /event) would hang forever on the host side
+    // and leak connections.
+    for (const [id, entry] of this.pending) {
+      if (entry.guest !== ws) continue;
+      this.pending.delete(id);
+      if (entry.host.readyState === WebSocket.OPEN) {
+        entry.host.send(JSON.stringify({ type: "cancel", id }));
+      }
     }
   }
 
   private failPending(status: number, reason: string): void {
     const ids = [...this.pending.keys()];
     for (const id of ids) {
-      const guest = this.pending.get(id);
-      if (!guest) continue;
+      const entry = this.pending.get(id);
+      if (!entry) continue;
       this.pending.delete(id);
-      if (guest.readyState !== WebSocket.OPEN) continue;
-      this.reply(guest, { type: "head", id, status, headers: { "x-relay-error": reason } });
-      this.reply(guest, { type: "done", id });
+      if (entry.guest.readyState !== WebSocket.OPEN) continue;
+      this.reply(entry.guest, { type: "head", id, status, headers: { "x-relay-error": reason } });
+      this.reply(entry.guest, { type: "done", id });
     }
   }
 

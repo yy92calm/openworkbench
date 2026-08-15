@@ -6,7 +6,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { app } from "electron";
 import type { ChildProcess } from "node:child_process";
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { deploySchedulerProfile, startSchedulerApi, stopSchedulerApi } from "./scheduler";
 import { createBrowserMcp, type BrowserMcpPlugin } from "@fafawork/browser-mcp";
 import { enrichedPath } from "./shell_env";
@@ -121,15 +121,25 @@ function sidecarBinaryPath(): string {
 
 /** Clear the OpenCode SQLite database when the bundled sidecar binary changes.
  *  OpenCode's DB schema is version-specific; a binary upgrade against a stale
- *  DB causes "no such table" errors that make /event return 500. */
+ *  DB causes "no such table" errors that make /event return 500.
+ *
+ *  The fingerprint is the sidecar's `--version` output, not its mtime — a
+ *  repackage/reinstall of the same binary must NOT wipe session history. Only
+ *  an actual opencode version bump clears the DB. */
 function migrateStaleDatabase(sidecarPath: string, dataHome: string): void {
   const markerPath = join(runtimeRoot(), "sidecar-fingerprint.txt");
   let fingerprint = "";
   try {
-    const st = statSync(sidecarPath);
-    fingerprint = `${st.size}:${Math.floor(st.mtimeMs)}`;
+    // Quick version probe: identical version ⇒ identical schema ⇒ keep the DB.
+    fingerprint = execFileSync(sidecarPath, ["--version"], { encoding: "utf8", timeout: 10_000 }).trim();
   } catch {
-    return; // can't stat - let the normal "not found" path handle it
+    // Can't probe (broken binary / no exec) — fall back to size+mtime.
+    try {
+      const st = statSync(sidecarPath);
+      fingerprint = `${st.size}:${Math.floor(st.mtimeMs)}`;
+    } catch {
+      return; // can't stat - let the normal "not found" path handle it
+    }
   }
   let stored = "";
   try {
