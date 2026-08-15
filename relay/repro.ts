@@ -1,7 +1,7 @@
 import { createServer } from "node:http";
 import { WebSocket } from "ws";
 import { RelayServer } from "./src/server.js";
-import { RelayHttpTransport } from "@workbench/client";
+import { makeGuestTransport } from "./test/helpers/relay-guest.js";
 
 const TOKEN = "t1", DEVICE = "d1";
 let mockPORT = 0;
@@ -54,7 +54,7 @@ mock.listen(0, "127.0.0.1", () => {
   mockPORT = mock.address().port;
 });
 
-const t = new RelayHttpTransport({ WebSocketImpl: WebSocket });
+const t = makeGuestTransport({ WebSocketImpl: WebSocket });
 await t.connect(relayUrl, DEVICE, TOKEN);
 const res = await t.fetchImpl("http://relay/event", { headers: { Accept: "text/event-stream" } });
 console.log("event status", res.status);

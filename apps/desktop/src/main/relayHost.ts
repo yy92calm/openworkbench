@@ -1,5 +1,8 @@
 import { WebSocket } from "ws";
-import type { RelayMessage } from "../../../../relay/client/src/protocol";
+// Local copy of the relay wire protocol (contract between the three projects:
+// Workbench host, relay, remote client). Keep in sync with relay/src/protocol.ts
+// and client/src/protocol.ts — changes to the relay server must be mirrored here.
+import type { RelayMessage } from "./relay-protocol";
 import { getServerUrl, getServerPassword } from "./server";
 
 export interface RelayHostConfig {

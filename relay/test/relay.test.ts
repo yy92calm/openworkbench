@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { createServer as createHttpServer, type Server } from "node:http";
 import { WebSocket } from "ws";
 import { RelayServer } from "../src/server";
-import { RelayHttpTransport, listAccountDevices } from "@workbench/client";
+import { listAccountDevices, makeGuestTransport, type RelayGuest } from "./helpers/relay-guest";
 import { AccountRegistry } from "../src/registry";
 import type { RelayMessage } from "../src/protocol";
 
@@ -100,8 +100,8 @@ function startFakeHost(relayUrl: string, opts: FakeHostOpts = {}): Promise<WebSo
   return new Promise((resolve) => ws.on("open", () => resolve(ws)));
 }
 
-function makeGuest(relayUrl: string): RelayHttpTransport {
-  return new RelayHttpTransport({ WebSocketImpl: WebSocket });
+function makeGuest(relayUrl: string): RelayGuest {
+  return makeGuestTransport({ WebSocketImpl: WebSocket });
 }
 
 const servers: RelayServer[] = [];

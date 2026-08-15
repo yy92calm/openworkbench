@@ -2,9 +2,15 @@
 
 简体中文。中继服务器 + 远程客户端让手机/另一台电脑经公网连接桌面端 Workbench。
 
-> 独立组件：`relay/` 目录自包含（自建 pnpm workspace，独立 `pnpm-lock.yaml`）。
-> 管理界面源码在 `relay/admin/`（构建产物输出到 `relay/admin-web`，已入库）；
-> 远程客户端源码在 `relay/client/`（含独立副本 `sdk/`、`shared/`）。
+> 独立项目：本仓库有**三个相互独立**的项目，只通过服务接口
+> （WebSocket/HTTP）连接，代码互不 import：
+> 1. **Workbench**（桌面端 host，`apps/desktop/` + `packages/`）
+> 2. **relay**（中继服务，本目录）——自建 pnpm workspace，独立 `pnpm-lock.yaml`
+> 3. **client**（远程客户端，仓库根 `client/`）——独立项目
+>
+> 三项目各持一份**协议定义**（relay: `src/protocol.ts`；client: `client/src/protocol.ts`；
+> desktop: `apps/desktop/src/main/relay-protocol.ts`），有变更需手动同步。
+> 管理界面源码在 `relay/admin/`（构建产物输出到 `relay/admin-web`，已入库）。
 > 首次使用：`cd relay && pnpm install`。
 
 ## 账号模型
@@ -35,8 +41,8 @@
 RELAY_AUTH_TOKEN=你的强随机令牌 ./scripts/deploy-relay.sh root@43.133.82.137
 ```
 
-脚本会：构建 Web 客户端 → 上传 relay 源码与构建产物 → 安装依赖 →
-写入并启动 systemd 服务（`workbench-relay`，端口 8080）。
+脚本会：构建管理界面（`relay/admin` → `relay/admin-web`）→ 上传 relay 源码与
+构建产物 → 安装依赖 → 写入并启动 systemd 服务（`workbench-relay`，端口 8080）。
 
 > 单一账号模式：`RELAY_AUTH_TOKEN` 本身就是第一个账号的令牌（向后兼容）。
 > 多账号模式：在服务端用管理 CLI 添加更多账号（见下）。
@@ -86,14 +92,8 @@ RELAY_DATA_DIR=/opt/workbench-relay/data pnpm exec tsx src/admin.ts remove --tok
 
 - **手机 / 电脑浏览器**：打开 `http://43.133.82.137:8080` → 填入中继地址 + 账号令牌 →
   「登录并查看设备」→ 选中一台设备 → 连接。可「添加到主屏幕」获得 App 体验。
-- **Electron 壳**（可选）：
-  ```bash
-  cd apps/remote/electron && pnpm install && pnpm start
-  ```
-  自签证书的 wss 中继需显式开启：
-  ```bash
-  RELAY_ALLOW_SELF_SIGNED=1 pnpm start
-  ```
+- **Electron 壳**（可选）：仓库根 `client/`（独立项目）是 Web 客户端源码，
+  构建产物 `client/dist` 如部署在 `web/` 目录即被中继静态托管。
 
 ## 四、TLS（可选，推荐）
 

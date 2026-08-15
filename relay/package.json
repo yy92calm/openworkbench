@@ -22,7 +22,6 @@
   },
   "devDependencies": {
     "@types/ws": "^8.5.12",
-    "@workbench/client": "workspace:*",
     "tsx": "^4.19.0",
     "typescript": "^5.6.3",
     "vitest": "^2.1.4"

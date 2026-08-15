@@ -5,13 +5,13 @@
  *       选择设备 → 配对 → createSession → sendPrompt → 流式事件（text.updated）
  *       → session.idle → deleteSession。
  *
- * 运行：pnpm tsx e2e-account.mjs
+ * 运行：pnpm tsx e2e-account.ts
  * 期望输出：E2E PASS
  */
 import { createServer } from "node:http";
 import { WebSocket } from "ws";
 import { RelayServer } from "./src/server.js";
-import { RelayHttpTransport, listAccountDevices } from "@workbench/client";
+import { listAccountDevices, makeGuestTransport } from "./test/helpers/relay-guest.js";
 
 const TOKEN = "dev-account-a";
 const DEVICE = "desk-1";
@@ -190,7 +190,7 @@ const desk = devices.find((d) => d.device === DEVICE);
 if (!desk || !desk.online) throw new Error(`E2E FAIL: 设备未注册或不在线: ${JSON.stringify(devices)}`);
 
 // 3. 用选中的设备配对，走完整会话流。
-const t = new RelayHttpTransport({ WebSocketImpl: WebSocket });
+const t = makeGuestTransport({ WebSocketImpl: WebSocket });
 await t.connect(relayUrl, DEVICE, TOKEN);
 const client = new MiniOpenCodeClient({ baseUrl: "http://relay", fetchImpl: t.fetchImpl });
 const connectDone = client.connect(); // 打开 /event 长连接（流式读取直至 done）

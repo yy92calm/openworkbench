@@ -1,6 +1,3 @@
 packages:
   - "."
   - "admin"
-  - "client"
-  - "client/sdk"
-  - "client/shared"

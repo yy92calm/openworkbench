@@ -1,6 +1,5 @@
 # E2E 本地数据（账号注册表快照）
 .e2e-data/
 
-# 构建产物（admin-web 与 client/dist 保持入库，各自独立）
+# 构建产物（admin-web 保持入库，admin/dist 不入库；client 已独立出去，由 client/.gitignore 管）
 admin/dist/
-client/dist/

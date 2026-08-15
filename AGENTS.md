@@ -36,6 +36,15 @@ API), local workspace + JSONL provenance.
 - `packages/` — `ui` (placeholder), `shared`, `sdk` (the `OpenCodeClient` wrapper).
 - `runtime/` — `kernel` (Python/R bridges), `manager`, `mcp`.
 - `scripts/` — release and dev scripts.
+- `relay/` — **standalone project**: relay server + admin UI (`admin/`), self-owned
+  pnpm workspace (own `pnpm-lock.yaml`). Protocol in `src/protocol.ts`.
+- `client/` — **standalone project**: remote client (drive the desktop from
+  phone/another machine), self-owned workspace including `sdk/`/`shared/` copies.
+
+The three projects (Workbench, relay, client) are code-independent — they talk
+over WS/HTTP only. Each owns a copy of the wire protocol contract
+(`apps/desktop/src/main/relay-protocol.ts`, `relay/src/protocol.ts`,
+`client/src/protocol.ts`); keep them in sync manually.
 
 ## Architecture guardrails
 
