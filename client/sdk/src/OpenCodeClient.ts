@@ -1,6 +1,8 @@
 import type {
   AgentInfo,
+  AttachmentFile,
   CommandInfo,
+  FilePartInput,
   HistoryMessage,
   McpConfig,
   McpServer,
@@ -18,6 +20,7 @@ import type {
   PermissionAskedEvent,
   RuntimeStatus,
   SessionMeta,
+  SessionStatusMap,
   SkillInfo,
   ToolCallStatus,
 } from "./types";
@@ -241,6 +244,17 @@ export class OpenCodeClient {
       createdAt: s.time?.created ?? s.created_at ?? undefined,
       updatedAt: s.time?.updated ?? s.updated_at ?? undefined,
     }));
+  }
+
+  /** Activity state of every session: sessionId → {type:"idle"|"busy"|"retry"}.
+   *  Sessions absent from the result are idle. Used to show "running" badges;
+   *  the SSE event stream gives the realtime story inside an open session. */
+  async getSessionStatus(): Promise<SessionStatusMap> {
+    const res = await this.fetchImpl(`${this.baseUrl}/session/status`, {
+      headers: this.headers(),
+    });
+    if (!res.ok) throw new Error(`Failed to get session status (${res.status})`);
+    return (await res.json()) as SessionStatusMap;
   }
 
   /** Delete a session. */
@@ -533,12 +547,61 @@ export class OpenCodeClient {
 
   /** Send a prompt into a session; output streams back via onEvent (SSE). */
   async sendPrompt(sessionId: string, text: string): Promise<void> {
+    await this.sendPromptWithFiles(sessionId, text, []);
+  }
+
+  /** Upload a file attachment into the host workspace and get its absolute path
+ *  for referencing in a FilePartInput. Uses the relay's built-in
+ *  /__relay/write-file endpoint (handled by the host, not the sidecar). */
+  async uploadAttachment(f: AttachmentFile): Promise<{ path: string; filename: string }> {
+    let b64 = "";
+    try {
+      const chunks: string[] = [];
+      const bytesPerChunk = 0x8000;
+      for (let i = 0; i < f.data.length; i += bytesPerChunk) {
+        chunks.push(String.fromCharCode(...f.data.subarray(i, i + bytesPerChunk)));
+      }
+      b64 = btoa(chunks.join(""));
+    } catch {
+      b64 = Buffer.from(f.data).toString("base64");
+    }
+    const res = await this.fetchImpl("http://relay/__relay/write-file", {
+      method: "POST",
+      headers: { ...this.headers(true), "content-type": "application/json" },
+      body: JSON.stringify({ filename: f.filename, base64: b64 }),
+    });
+    if (!res.ok) throw new Error(`Failed to upload file (${res.status})`);
+    return (await res.json()) as { path: string; filename: string };
+  }
+
+  /** Send a prompt with optional file attachments. Each file is first written
+   *  into the host workspace (via /__relay/write-file), then referenced in a
+   *  FilePartInput so the host's agent can read it. */
+  async sendPromptWithFiles(sessionId: string, text: string, files: AttachmentFile[]): Promise<void> {
+    const parts: Array<{ type: "text"; text: string } | FilePartInput> = [];
+    if (text) parts.push({ type: "text", text });
+    for (const f of files) {
+      // Upload first: the sidecar only accepts file parts whose source path
+      // exists on the host. Write into the workspace via the relay endpoint.
+      const uploaded = await this.uploadAttachment(f);
+      parts.push({
+        type: "file",
+        mime: f.mime,
+        filename: f.filename,
+        url: `file://${uploaded.path}`,
+        source: {
+          type: "file",
+          text: { value: `@${f.filename}`, start: 0, end: 1 },
+          path: uploaded.path,
+        },
+      });
+    }
     const res = await this.fetchImpl(
       `${this.baseUrl}/session/${encodeURIComponent(sessionId)}/prompt_async`,
       {
         method: "POST",
         headers: this.headers(true),
-        body: JSON.stringify({ parts: [{ type: "text", text }] }),
+        body: JSON.stringify({ parts }),
       },
     );
     if (!res.ok) throw new Error(`Failed to send prompt (${res.status})`);

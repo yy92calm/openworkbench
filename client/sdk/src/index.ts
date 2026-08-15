@@ -30,4 +30,9 @@ export {
   type PermissionAskedEvent,
   type PermissionResolvedEvent,
   type PermissionReply,
+  type SessionStatus,
+  type SessionStatusKind,
+  type SessionStatusMap,
+  type AttachmentFile,
+  type FilePartInput,
 } from "./types";

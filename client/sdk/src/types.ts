@@ -160,6 +160,46 @@ export interface SessionMeta {
   updatedAt?: number;
 }
 
+/** Per-session activity state as reported by GET /session/status.
+ *  idel — no active turn; busy — a turn is in flight; retry — a turn is
+ *  waiting on an interactive prompt (question/permission). */
+export type SessionStatusKind = "idle" | "busy" | "retry";
+
+/** Value of GET /session/status for one session. */
+export type SessionStatus =
+  | { type: "idle" }
+  | { type: "busy" }
+  | { type: "retry"; attempt: number; message?: string; action?: string; next?: number };
+
+/** Session status map: sessionId → status. Sessions absent are idle. */
+export type SessionStatusMap = Record<string, SessionStatus>;
+
+/** A file attachment to include with a prompt. The raw bytes travel as UTF-8
+ *  text through the relay (base64 body in FilePartSource), so no wire-protocol
+ *  change is needed. */
+export interface AttachmentFile {
+  /** File name shown to the model and in history. */
+  filename: string;
+  /** MIME type, e.g. "text/csv", "application/pdf". */
+  mime?: string;
+  /** Raw file content (bytes). */
+  data: Uint8Array;
+}
+
+/** Wire shape of a file part: opencode FilePartInput. The `source` mirrors the
+ *  sidecar's FilePartSource schema (FileSourceText is { value, start, end }). */
+export interface FilePartInput {
+  type: "file";
+  mime?: string;
+  filename?: string;
+  /** Required by the sidecar — a file:// URI for the attached file. */
+  url: string;
+  source:
+    | { type: "file"; text: { value: string; start: number; end: number }; path: string }
+    | { type: "symbol"; text: { value: string; start: number; end: number }; path: string; range?: unknown; name?: string; kind?: number }
+    | { type: "resource"; text: { value: string; start: number; end: number }; clientName: string; uri: string };
+}
+
 export interface SkillInfo {
   name: string;
   description: string;

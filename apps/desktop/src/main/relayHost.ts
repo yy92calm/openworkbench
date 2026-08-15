@@ -3,7 +3,9 @@ import { WebSocket } from "ws";
 // Workbench host, relay, remote client). Keep in sync with relay/src/protocol.ts
 // and client/src/protocol.ts — changes to the relay server must be mirrored here.
 import type { RelayMessage } from "./relay-protocol";
-import { getServerUrl, getServerPassword } from "./server";
+import { getServerUrl, getServerPassword, workspaceDir } from "./server";
+import { mkdirSync, writeFileSync, existsSync } from "node:fs";
+import { join, basename } from "node:path";
 
 export interface RelayHostConfig {
   enabled: boolean;
@@ -115,6 +117,14 @@ export class RelayHost {
     const ws = this.ws;
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
 
+    // Special relay endpoint: write a file attachment into the host workspace.
+    // The client uploads base64 content; this writes it to disk so the sidecar
+    // can reference it as a real FilePartInput path. Body: { filename, base64 }.
+    if (msg.path === "/__relay/write-file") {
+      await this.handleWriteFile(ws, msg);
+      return;
+    }
+
     const sidecarUrl = getServerUrl();
     if (!sidecarUrl) {
       ws.send(JSON.stringify({ type: "head", id: msg.id, status: 503, headers: {} }));
@@ -141,18 +151,59 @@ export class RelayHost {
         status: res.status,
         headers: Object.fromEntries(res.headers.entries()),
       }));
-      const reader = res.body!.getReader();
-      const decoder = new TextDecoder();
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        const text = decoder.decode(value, { stream: true });
-        if (text) ws.send(JSON.stringify({ type: "chunk", id: msg.id, chunk: text }));
+      if (res.body) {
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          const text = decoder.decode(value, { stream: true });
+          if (text) ws.send(JSON.stringify({ type: "chunk", id: msg.id, chunk: text }));
+        }
       }
       ws.send(JSON.stringify({ type: "done", id: msg.id }));
-    } catch {
+    } catch (err) {
+      const logger = (await import("./logging")).getLogger();
+      logger.warn(`[relayHost] forward failed: ${(err as Error)?.message} path=${msg.path} sidecar=${sidecarUrl}`);
       ws.send(JSON.stringify({ type: "head", id: msg.id, status: 502, headers: {} }));
       ws.send(JSON.stringify({ type: "done", id: msg.id }));
+    }
+  }
+
+  /** Write a file attachment into the host workspace (the "__relay/write-file"
+   *  endpoint). Body: { filename: string, base64: string }. Replies with the
+   *  absolute path the sidecar can reference in a FilePartInput. */
+  private async handleWriteFile(
+    ws: WebSocket,
+    msg: Extract<RelayMessage, { type: "request" }>,
+  ): Promise<void> {
+    const logger = (await import("./logging")).getLogger();
+    const respond = (status: number, body: string) => {
+      if (ws.readyState !== WebSocket.OPEN) return;
+      ws.send(JSON.stringify({ type: "head", id: msg.id, status, headers: { "content-type": "application/json" } }));
+      ws.send(JSON.stringify({ type: "chunk", id: msg.id, chunk: body }));
+      ws.send(JSON.stringify({ type: "done", id: msg.id }));
+    };
+    try {
+      const payload = JSON.parse(msg.body ?? "{}") as { filename?: string; base64?: string };
+      const filename = basename(payload.filename ?? "");
+      if (!filename || typeof payload.base64 !== "string") {
+        respond(400, JSON.stringify({ error: "filename and base64 required" }));
+        return;
+      }
+      const dir = workspaceDir();
+      if (!dir || !existsSync(dir)) {
+        respond(503, JSON.stringify({ error: "no workspace" }));
+        return;
+      }
+      const dest = join(dir, filename);
+      const bytes = Buffer.from(payload.base64, "base64");
+      writeFileSync(dest, bytes);
+      logger.info(`[relayHost] wrote attachment ${filename} (${bytes.length} bytes) -> ${dest}`);
+      respond(200, JSON.stringify({ path: dest, filename }));
+    } catch (err) {
+      logger.warn(`[relayHost] write-file failed: ${(err as Error)?.message}`);
+      respond(500, JSON.stringify({ error: (err as Error)?.message ?? "write failed" }));
     }
   }
 }

@@ -16,7 +16,7 @@ export default defineConfig({
     },
     build: {
       rollupOptions: {
-        external: ["electron-log", "electron-updater", "electron-context-menu", "electron-window-state", "@anthropic-ai/claude-agent-sdk", "node-pty"],
+        external: ["electron-log", "electron-updater", "electron-context-menu", "electron-window-state", "@anthropic-ai/claude-agent-sdk", "node-pty", "ws", "bufferutil", "utf-8-validate"],
         input: {
           index: r("./src/main/index.ts"),
           "browser-mcp-server": r("./src/main/browser-mcp-server.ts"),

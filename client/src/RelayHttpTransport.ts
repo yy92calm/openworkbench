@@ -165,10 +165,19 @@ export class RelayHttpTransport {
       case "head": {
         if (p.done) break;
         try {
-          p.headResolve(new Response(p.stream, {
-            status: msg.status,
-            headers: new Headers(msg.headers ?? {}),
-          }));
+          // Status 204/205/304 must not carry a body per the fetch spec —
+          // Response would throw on construction. Resolve with a null body.
+          if (msg.status === 204 || msg.status === 205 || msg.status === 304) {
+            p.headResolve(new Response(null, {
+              status: msg.status,
+              headers: new Headers(msg.headers ?? {}),
+            }));
+          } else {
+            p.headResolve(new Response(p.stream, {
+              status: msg.status,
+              headers: new Headers(msg.headers ?? {}),
+            }));
+          }
         } catch (e) {
           console.error("RELAY-DEBUG head id=", msg.id, "err:", (e as Error).message);
           throw e;
