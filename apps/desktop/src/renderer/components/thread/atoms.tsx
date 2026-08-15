@@ -37,6 +37,16 @@ export function UserMessage({ block, onEdit }: { block: UserMessageBlock; onEdit
   return (
     <div className="flex justify-end">
       <div className="group max-w-[80%]">
+        {block.remote && (
+          <div className="mb-1 flex items-center justify-end gap-1">
+            <span
+              className="rounded-full px-2 py-0.5 text-[10.5px] font-medium"
+              style={{ color: "var(--accent)", background: "color-mix(in srgb, var(--accent) 10%, transparent)", border: "1px solid color-mix(in srgb, var(--accent) 30%, transparent)" }}
+            >
+              远端客户端
+            </span>
+          </div>
+        )}
         <div
           className="rounded-2xl px-4 py-2.5 text-[14px] leading-relaxed"
           style={{

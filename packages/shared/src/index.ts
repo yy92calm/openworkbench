@@ -74,6 +74,9 @@ export interface UserMessageBlock {
   text: string;
   /** Epoch ms when the message was sent. */
   timestamp?: number;
+  /** True when this message came from the remote relay client (not typed in
+   *  this desktop's composer). Set from the part's metadata.source. */
+  remote?: boolean;
 }
 
 export interface AgentMessageBlock {

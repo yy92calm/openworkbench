@@ -1471,9 +1471,13 @@ export function historyToThread(messages: HistoryMessage[], commands?: CommandIn
         .trim();
       const command = asTypedCommand(text);
       const ts = m.completed;
+      // A message sent from the remote relay client carries
+      // metadata.source === "remote" on its text part — surface it so the
+      // desktop thread shows where the message came from.
+      const remote = m.parts.some((p) => p.type === "text" && (p as { metadata?: Record<string, unknown> }).metadata?.source === "remote");
       blocks.push({ kind: "turn-divider" });
-      if (command) blocks.push({ kind: "user", text: command, ...(ts ? { timestamp: ts } : {}) });
-      else if (text) blocks.push({ kind: "user", text, ...(ts ? { timestamp: ts } : {}) });
+      if (command) blocks.push({ kind: "user", text: command, ...(ts ? { timestamp: ts } : {}), ...(remote ? { remote: true } : {}) });
+      else if (text) blocks.push({ kind: "user", text, ...(ts ? { timestamp: ts } : {}), ...(remote ? { remote: true } : {}) });
     } else {
       for (const p of m.parts) {
         if (p.type === "text" && p.text?.trim()) {

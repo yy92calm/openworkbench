@@ -18,6 +18,8 @@ export interface WebSocketCtor {
 export interface RelayHttpTransportOptions {
   /** WebSocket constructor. Browser: default global. Node: pass the `ws` one. */
   WebSocketImpl?: WebSocketCtor;
+  /** Called when the underlying relay connection closes (not on close()). */
+  onDisconnect?: () => void;
 }
 
 interface PendingRequest {
@@ -47,8 +49,10 @@ export class RelayHttpTransport {
   /** (relayUrl, deviceId, token) the current connection was opened with. */
   private connectedTo: { url: string; device: string; token: string } | null = null;
   private readonly pending = new Map<string, PendingRequest>();
+  private readonly opts: RelayHttpTransportOptions;
 
   constructor(opts: RelayHttpTransportOptions = {}) {
+    this.opts = opts;
     if (opts.WebSocketImpl) {
       this.wsCtor = opts.WebSocketImpl;
     } else if (typeof WebSocket !== "undefined") {
@@ -80,11 +84,18 @@ export class RelayHttpTransport {
     this.ws = ws;
     ws.addEventListener("message", (ev) => this.handleMessage((ev as { data: unknown }).data));
     ws.addEventListener("close", () => {
+      // Only report unexpected disconnects (not close()).
+      const wasOpen = this.opened !== null && this.ws === ws;
       const err = new Error("relay connection closed");
       for (const [id, p] of this.pending) {
         this.pending.delete(id);
         try { p.controller?.error(err); } catch { /* already closed */ }
         p.headReject(err);
+      }
+      if (wasOpen && this.ws === ws) {
+        this.opened = null;
+        this.connectedTo = null;
+        this.opts.onDisconnect?.();
       }
     });
     this.opened = new Promise((resolveOpen, rejectOpen) => {

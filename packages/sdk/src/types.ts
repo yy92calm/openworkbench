@@ -202,6 +202,9 @@ export interface HistoryPart {
   /** True on runtime-generated text (e.g. the "tool was executed by the user"
    *  marker a "!" shell run leaves in history) — not something the user typed. */
   synthetic?: boolean;
+  /** Server-preserved metadata, e.g. { source: "remote" } set by the relay
+   *  client so the desktop can show where a message came from. */
+  metadata?: Record<string, unknown>;
   tool?: string;
   state?: {
     status?: string;

@@ -578,8 +578,10 @@ export class OpenCodeClient {
    *  into the host workspace (via /__relay/write-file), then referenced in a
    *  FilePartInput so the host's agent can read it. */
   async sendPromptWithFiles(sessionId: string, text: string, files: AttachmentFile[]): Promise<void> {
-    const parts: Array<{ type: "text"; text: string } | FilePartInput> = [];
-    if (text) parts.push({ type: "text", text });
+    const parts: Array<{ type: "text"; text: string; metadata?: Record<string, unknown> } | FilePartInput> = [];
+    if (text) {
+      parts.push({ type: "text", text, metadata: { source: "remote" } });
+    }
     for (const f of files) {
       // Upload first: the sidecar only accepts file parts whose source path
       // exists on the host. Write into the workspace via the relay endpoint.

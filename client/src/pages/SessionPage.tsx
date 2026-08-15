@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowLeft, Send, Wrench, Square, Paperclip, Download, X } from "lucide-react";
 import type { OpenCodeEvent, HistoryMessage, AttachmentFile } from "@workbench/sdk";
-import { getClient } from "@/lib/connection";
+import { getClient, onReconnect } from "@/lib/connection";
 
 interface ToolRow {
   callID: string;
@@ -92,57 +92,98 @@ export function SessionPage({ sessionId, onBack }: { sessionId: string; onBack: 
   const [attachments, setAttachments] = useState<AttachmentFile[]>([]);
   const fileInput = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const activeId = useRef<string | null>(null);
+  const mounted = useRef(true);
 
-  const scroll = () => bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  /** Scroll to bottom, but only when the user is already near the bottom —
+   *  never yank them away from reading history above. */
+  const scroll = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 160;
+    if (nearBottom) bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
 
-  // Load history + subscribe to live events for this session.
+  // Load history + subscribe to live events for this session. Re-subscribes
+  // after an automatic reconnect (the client instance is replaced).
   useEffect(() => {
     const client = getClient();
     if (!client) return;
     let unsub = () => {};
+    const unsubReconnect = onReconnect(() => {
+      // Client was rebuilt by the reconnector — reload history and re-subscribe.
+      const c2 = getClient();
+      if (!c2 || !mounted.current) return;
+      unsub();
+      unsub = c2.onEvent(handleEvent);
+      void c2.getMessages(sessionId).then((h) => mounted.current && setMessages(h.map(toMsg))).catch(() => {});
+    });
+    const handleEvent = (e: OpenCodeEvent) => {
+      if (e.sessionId !== sessionId) return;
+      setMessages((prev) => {
+        const next = [...prev];
+        let active = next.find((m) => m.active);
+        // A running turn we didn't start (entered mid-stream, or the event
+        // arrived before the optimistic message) — create the placeholder.
+        if (!active && (e.type === "text.updated" || e.type === "reasoning.updated" || e.type === "tool.updated")) {
+          active = { id: `a${Date.now()}`, role: "assistant", text: "", tools: [], files: [], active: true };
+          next.push(active);
+        }
+        if (!active) return next;
+        switch (e.type) {
+          case "text.updated":
+            active.text = e.text;
+            break;
+          case "reasoning.updated":
+            active.reasoning = e.text;
+            break;
+          case "tool.updated": {
+            const row = active.tools.find((t) => t.callID === e.callId);
+            if (row) {
+              row.status = e.status;
+              if (e.title) row.title = e.title;
+            } else {
+              active.tools.push({ callID: e.callId, tool: e.tool, title: e.title, status: e.status });
+            }
+            break;
+          }
+          case "session.idle":
+            active.active = false;
+            activeId.current = null;
+            setSending(false);
+            break;
+        }
+        return next;
+      });
+      scroll();
+    };
     void (async () => {
       try {
         const history = await client.getMessages(sessionId);
+        if (!mounted.current) return;
         setMessages(history.map(toMsg));
+        // If this session is mid-turn (busy/retry), open an active placeholder
+        // so live text/tool events have somewhere to render.
+        try {
+          const status = await client.getSessionStatus();
+          const st = status[sessionId];
+          if (st && (st.type === "busy" || st.type === "retry")) {
+            setMessages((prev) => [...prev, { id: `a${Date.now()}`, role: "assistant", text: "", tools: [], files: [], active: true }]);
+          }
+        } catch {
+          /* status poll is best-effort */
+        }
       } catch {
         /* history may be unavailable for brand-new sessions */
       }
-      unsub = client.onEvent((e: OpenCodeEvent) => {
-        if (e.sessionId !== sessionId) return;
-        setMessages((prev) => {
-          const next = [...prev];
-          const active = next.find((m) => m.active);
-          if (!active) return next;
-          switch (e.type) {
-            case "text.updated":
-              active.text = e.text;
-              break;
-            case "reasoning.updated":
-              active.reasoning = e.text;
-              break;
-            case "tool.updated": {
-              const row = active.tools.find((t) => t.callID === e.callId);
-              if (row) {
-                row.status = e.status;
-                if (e.title) row.title = e.title;
-              } else {
-                active.tools.push({ callID: e.callId, tool: e.tool, title: e.title, status: e.status });
-              }
-              break;
-            }
-            case "session.idle":
-              active.active = false;
-              activeId.current = null;
-              setSending(false);
-              break;
-          }
-          return next;
-        });
-        scroll();
-      });
+      unsub = client.onEvent(handleEvent);
     })();
-    return () => unsub();
+    return () => {
+      mounted.current = false;
+      unsub();
+      unsubReconnect();
+    };
   }, [sessionId]);
 
   const send = async () => {
@@ -214,7 +255,7 @@ export function SessionPage({ sessionId, onBack }: { sessionId: string; onBack: 
         )}
       </header>
 
-      <div style={{ flex: 1, overflowY: "auto", padding: "16px 14px", display: "flex", flexDirection: "column", gap: 14 }}>
+      <div ref={scrollRef} style={{ flex: 1, overflowY: "auto", padding: "16px 14px", display: "flex", flexDirection: "column", gap: 14 }}>
         {messages.length === 0 && (
           <p style={{ color: "var(--muted)", textAlign: "center", paddingTop: 60, fontSize: 14 }}>
             开始对话，agent 会在桌面端工作区执行任务

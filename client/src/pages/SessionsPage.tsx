@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { MessageSquare, Plus, Trash2, LogOut, RefreshCw, RadioTower, X } from "lucide-react";
 import type { SessionMeta } from "@workbench/sdk";
-import { connect, disconnect, getClient, listDevices, loadConfig, type RelayDeviceInfo } from "@/lib/connection";
+import { connect, disconnect, getClient, listDevices, loadConfig, onReconnect, type RelayDeviceInfo } from "@/lib/connection";
 
 export function SessionsPage({
   onOpenSession,
@@ -44,7 +44,11 @@ export function SessionsPage({
   useEffect(() => {
     void refresh();
     const t = setInterval(() => void refresh(), 8000);
-    return () => clearInterval(t);
+    const unsub = onReconnect(() => void refresh());
+    return () => {
+      clearInterval(t);
+      unsub();
+    };
   }, [refresh]);
 
   const create = async () => {
@@ -174,6 +178,11 @@ export function SessionsPage({
               {s.directory && (
                 <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                   {s.directory}
+                </div>
+              )}
+              {s.updatedAt != null && (
+                <div style={{ fontSize: 10.5, color: "var(--muted)", marginTop: 2, opacity: 0.8 }}>
+                  {new Date(s.updatedAt).toLocaleString(undefined, { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}
                 </div>
               )}
             </button>
