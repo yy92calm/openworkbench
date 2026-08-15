@@ -44,9 +44,13 @@ export default defineConfig({
         "@fafawork/browser-mcp/panel": r("../../packages/browser-mcp/src/renderer/BrowserPanel.tsx"),
       },
     },
+    optimizeDeps: {
+      exclude: ["@anthropic-ai/claude-agent-sdk"],
+    },
     build: {
       rollupOptions: {
         input: r("./src/renderer/index.html"),
+        external: ["@anthropic-ai/claude-agent-sdk"],
       },
     },
   },

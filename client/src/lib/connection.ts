@@ -1,5 +1,5 @@
 import { RelayHttpTransport, listAccountDevices, type RelayDeviceInfo } from "../client";
-import { OpenCodeClient } from "@workbench/sdk";
+import { OpenCodeClient, HostClient } from "@workbench/sdk";
 
 export type { RelayDeviceInfo } from "../client";
 
@@ -139,4 +139,17 @@ export function getClient(): OpenCodeClient | null {
 
 export function isConnected(): boolean {
   return client !== null;
+}
+
+/** The live relay transport (for HostClient to reuse its fetchImpl). Null when
+ *  not connected. */
+export function getTransport(): RelayHttpTransport | null {
+  return transport;
+}
+
+/** Lazily build a HostClient backed by the current relay transport. Throws if
+ *  not connected — call from inside a view that only renders after connect. */
+export function getHostClient(): HostClient {
+  if (!transport) throw new Error("relay not connected");
+  return new HostClient(transport.fetchImpl);
 }

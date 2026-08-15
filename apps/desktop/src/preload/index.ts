@@ -82,6 +82,12 @@ const api = {
     ipcRenderer.on("relay-status-changed", handler);
     return () => ipcRenderer.removeListener("relay-status-changed", handler);
   },
+  relayRemoteSessions: () => ipcRenderer.invoke("relay-remote-sessions"),
+  onRelayRemoteSessionsChanged: (callback: () => void) => {
+    const handler = () => callback();
+    ipcRenderer.on("relay-remote-sessions-changed", handler);
+    return () => ipcRenderer.removeListener("relay-remote-sessions-changed", handler);
+  },
 
   // Logging
   logDebug: (message: string) => ipcRenderer.invoke("log-debug", message),

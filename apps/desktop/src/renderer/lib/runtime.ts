@@ -76,6 +76,9 @@ interface RuntimeState {
   status: RuntimeStatus;
   serverUrl: string;
   sessions: SessionMeta[];
+  /** Session IDs created by remote guests via relay — shown with a "远端" badge
+   *  in the sidebar. Empty in the browser (no electron API). */
+  remoteSessionIds: string[];
   currentId: string | null;
   threads: Record<string, Thread>;
   skills: SkillInfo[];
@@ -127,6 +130,8 @@ interface RuntimeState {
   /** Restart the sidecar (picks up new provider config) and reconnect. */
   restart: () => Promise<void>;
   refreshSessions: () => Promise<void>;
+  /** Reload the set of remote-created session IDs from the main process. */
+  refreshRemoteSessions: () => Promise<void>;
   startDraft: () => void;
   /** Active workspace folder (absolute path); null in the browser. */
   workspace: string | null;
@@ -420,6 +425,7 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
   status: "offline",
   serverUrl: initialUrl(),
   sessions: [],
+  remoteSessionIds: [],
   currentId: null,
   threads: {},
   skills: [],
@@ -886,6 +892,7 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
       void logDebug("connect OK");
       set({ error: null });
       await get().refreshSessions();
+      void get().refreshRemoteSessions();
       // Catalog (skills/agents/commands) fills in behind the page — a session
       // switch must not wait on it to show the conversation.
       void get().loadCatalog();
@@ -1019,6 +1026,16 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
       });
     } catch {
       /* ignore transient list failures */
+    }
+  },
+
+  refreshRemoteSessions: async () => {
+    if (!isTauri) return;
+    try {
+      const ids = await window.electronAPI.relayRemoteSessions();
+      set({ remoteSessionIds: Array.isArray(ids) ? ids : [] });
+    } catch {
+      /* ignore — badge is non-critical */
     }
   },
 

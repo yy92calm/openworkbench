@@ -1,4 +1,5 @@
 export { OpenCodeClient } from "./OpenCodeClient";
+export { HostClient, type HostFetch } from "./hostClient";
 export {
   OPENCODE_VERSION,
   DEFAULT_OPENCODE_URL,
@@ -36,4 +37,13 @@ export {
   type SessionStatusMap,
   type AttachmentFile,
   type FilePartInput,
+  type ScheduledTask,
+  type CreateTaskInput,
+  type UpdateTaskInput,
+  type ExecutionRecord,
+  type DirEntry,
+  type NotebookEntry,
+  type ArtifactContent,
+  type WorkspaceInfo,
+  type RelayHostStatusInfo,
 } from "./types";

@@ -112,9 +112,16 @@ export class RelayHttpTransport {
     this.connectedTo = null;
   }
 
-  /** fetch-compatible signature — pass directly as OpenCodeClient's fetchImpl. */
+  /** fetch-compatible signature — pass directly as OpenCodeClient's fetchImpl.
+   *  Accepts absolute URLs (e.g. `http://relay/session`), relative paths
+   *  (e.g. `/__host/workspace`), URL instances, and Request objects. Relative
+   *  paths are resolved against a synthetic base — only pathname+search are
+   *  forwarded to the relay anyway. */
   fetchImpl = (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
-    const url = typeof input === "string" ? new URL(input) : input instanceof URL ? input : new URL(input.url);
+    const url =
+      typeof input === "string" ? new URL(input, "http://relay.local")
+      : input instanceof URL ? input
+      : new URL(input.url, "http://relay.local");
     const headers: Record<string, string> = {};
     if (init?.headers) {
       new Headers(init.headers).forEach((v, k) => { headers[k] = v; });

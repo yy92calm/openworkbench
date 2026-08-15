@@ -47,10 +47,20 @@ function formatTokens(n: number): string {
 export function Sidebar({ project }: { project: Project }) {
   const { t } = useI18n();
   const navigate = useNavigate();
-  const { sessions, hiddenExamples, runningSessions, startDraft } = useRuntimeStore();
+  const { sessions, hiddenExamples, runningSessions, startDraft, remoteSessionIds } = useRuntimeStore();
   const sidebarCollapsed = useUiStore((s) => s.sidebarCollapsed);
   const toggleSidebar = useUiStore((s) => s.toggleSidebar);
   const openSessionTab = useUiStore((s) => s.openSessionTab);
+
+  // Subscribe to remote-session-set changes so the "远端" badge appears as
+  // soon as a guest creates a session via relay. Desktop only.
+  useEffect(() => {
+    if (!isDesktop) return;
+    const off = window.electronAPI.onRelayRemoteSessionsChanged(() => {
+      void useRuntimeStore.getState().refreshRemoteSessions();
+    });
+    return off;
+  }, []);
 
   const startNew = () => {
     startDraft();
@@ -146,12 +156,12 @@ export function Sidebar({ project }: { project: Project }) {
               <span className="ml-auto text-[10px] text-muted/50">{groupRows.length}</span>
             </div>
             {groupRows.map((row) => (
-              <SessionRow key={row.to} row={row} isRunning={!!runningSessions[row.id]} meta={sessions.find((s) => s.id === row.id)} />
+              <SessionRow key={row.to} row={row} isRunning={!!runningSessions[row.id]} meta={sessions.find((s) => s.id === row.id)} isRemote={remoteSessionIds.includes(row.id)} />
             ))}
           </div>
         ))}
         {groups.exampleRows.map((row) => (
-          <SessionRow key={row.to} row={row} isRunning={false} />
+          <SessionRow key={row.to} row={row} isRunning={false} isRemote={false} />
         ))}
       </div>
 
@@ -192,7 +202,7 @@ function NavRow({ icon, label, onClick }: { icon: React.ReactNode; label: string
   );
 }
 
-const SessionRow = memo(function SessionRow({ row, isRunning, meta }: { row: Row; isRunning: boolean; meta?: SessionMeta }) {
+const SessionRow = memo(function SessionRow({ row, isRunning, meta, isRemote }: { row: Row; isRunning: boolean; meta?: SessionMeta; isRemote: boolean }) {
   const location = useLocation();
   const openSessionTab = useUiStore((s) => s.openSessionTab);
   const { t } = useI18n();
@@ -229,6 +239,11 @@ const SessionRow = memo(function SessionRow({ row, isRunning, meta }: { row: Row
             )}
           />
           <span className="flex-1 truncate text-sm">{row.title}</span>
+          {isRemote && (
+            <span className="shrink-0 rounded-full bg-accent/10 px-1.5 text-[11px] tracking-wide text-accent ring-1 ring-accent/30">
+              远端
+            </span>
+          )}
           {row.kind === "example" && (
             <span className="shrink-0 rounded-full bg-surface-2 px-1.5 text-[11px] uppercase tracking-wide text-muted ring-1 ring-border">
               {t("sidebar.example")}

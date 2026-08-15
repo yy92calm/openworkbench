@@ -126,7 +126,7 @@ export function SessionsPage({
   };
 
   return (
-    <div style={{ minHeight: "100dvh", display: "flex", flexDirection: "column" }}>
+    <div className="page">
       <header style={{ display: "flex", alignItems: "center", gap: 8, padding: "16px 16px 8px" }}>
         <MessageSquare size={18} style={{ color: "var(--accent)" }} />
         <h1 style={{ fontSize: 17, fontWeight: 600, flex: 1 }}>会话</h1>

@@ -64,6 +64,9 @@ export interface ElectronAPI {
     Promise<"off" | "connecting" | "connected" | "error">;
   relayStop: () => Promise<string>;
   onRelayStatus: (callback: (status: string) => void) => () => void;
+  /** Session IDs created by remote guests via relay (for sidebar badge). */
+  relayRemoteSessions: () => Promise<string[]>;
+  onRelayRemoteSessionsChanged: (callback: () => void) => () => void;
 
   logDebug: (message: string) => Promise<void>;
   logEvent: (level: string, module: string, message: string, data?: unknown) => Promise<void>;

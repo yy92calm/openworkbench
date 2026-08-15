@@ -140,6 +140,12 @@ export function registerIpcHandlers(): void {
       win.webContents.send("relay-status-changed", status);
     }
   });
+  ipcMain.handle("relay-remote-sessions", () => relayHost.getRemoteSessionIds());
+  relayHost.onRemoteSessionsChange(() => {
+    for (const win of BrowserWindow.getAllWindows()) {
+      win.webContents.send("relay-remote-sessions-changed");
+    }
+  });
 
   // Restart: stop the sidecar then start it again (picks up new provider config).
   ipcMain.handle("restart-runtime", async (_e, kind?: AgentRuntimeKind) => {

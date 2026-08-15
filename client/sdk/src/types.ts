@@ -357,3 +357,77 @@ export interface OpenCodeToolPart {
   state: { status: "pending" | "running" | "completed" | "error"; title?: string };
 }
 export type OpenCodePart = OpenCodeTextPart | OpenCodeToolPart | { type: string };
+
+// ── Host API types (mirror of apps/desktop/src/main/scheduler.ts + artifact_file.ts) ──
+// Keep in sync with the desktop host. Client is a separate workspace and does
+// not import desktop code; these types are the wire contract for /__host/*.
+
+export interface ScheduledTask {
+  id: string;
+  name: string;
+  cron: string;
+  prompt: string;
+  agent?: string;
+  model?: string;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+  lastRunAt?: string;
+  nextRunAt?: string;
+  tags?: string[];
+}
+
+export interface CreateTaskInput {
+  name: string;
+  cron: string;
+  prompt: string;
+  agent?: string;
+  model?: string;
+  tags?: string[];
+}
+
+export type UpdateTaskInput = Partial<Omit<CreateTaskInput, "name">> & { name?: string };
+
+export interface ExecutionRecord {
+  id: string;
+  taskId: string;
+  taskName: string;
+  triggeredAt: string;
+  status: "running" | "completed" | "failed" | "timeout";
+  sessionId?: string;
+  durationMs?: number;
+  error?: string;
+}
+
+export interface DirEntry {
+  name: string;
+  is_dir: boolean;
+  is_file: boolean;
+  size: number;
+}
+
+export interface NotebookEntry {
+  name: string;
+  path: string;
+  modified: string;
+}
+
+export interface ArtifactContent {
+  content: string;
+  binary: boolean;
+}
+
+export interface WorkspaceInfo {
+  current: string;
+  base: string;
+}
+
+export interface RelayHostStatusInfo {
+  status: "off" | "connecting" | "connected" | "error";
+  config: {
+    enabled: boolean;
+    relayUrl: string;
+    deviceId: string;
+    tokenSet: boolean;
+  };
+}
