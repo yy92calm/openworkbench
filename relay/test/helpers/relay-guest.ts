@@ -54,6 +54,8 @@ export function makeGuestTransport(opts: RelayGuestOptions = {}): RelayGuest {
     } catch {
       return;
     }
+    // Room (peer) messages don't have an `id` — ignore them here.
+    if (!("id" in msg)) return;
     const p = pending.get(msg.id);
     if (!p) return;
     switch (msg.type) {
@@ -132,6 +134,7 @@ export function makeGuestTransport(opts: RelayGuestOptions = {}): RelayGuest {
         buffered: [],
         headResolve: () => {},
         headReject: () => {},
+        headPromise: Promise.resolve(new Response(null, { status: 502 })),
         done: false,
       };
       p.stream = new ReadableStream<Uint8Array>({

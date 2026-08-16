@@ -1,6 +1,6 @@
 import { memo, useState, useMemo, useRef, useEffect } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
-import { CalendarClock, FolderTree, PanelLeftClose, PanelLeft, Plus, Search, Settings, Trash2, X } from "lucide-react";
+import { CalendarClock, FolderTree, PanelLeftClose, PanelLeft, Plus, Radio, Search, Settings, Trash2, X } from "lucide-react";
 import type { Project } from "@workbench/shared";
 import type { SessionMeta } from "@workbench/sdk";
 import { cn } from "@/lib/cn";
@@ -117,6 +117,7 @@ export function Sidebar({ project }: { project: Project }) {
         <NavRow icon={<Plus size={15} />} label={t("sidebar.new")} onClick={startNew} />
         <NavRow icon={<CalendarClock size={15} />} label={t("sidebar.tasks")} onClick={() => navigate("/tasks")} />
         <NavRow icon={<FolderTree size={15} />} label={t("sidebar.skills")} onClick={() => navigate("/skills")} />
+        <NavRow icon={<Radio size={15} />} label={t("sidebar.rooms")} onClick={() => navigate("/rooms")} />
       </nav>
 
       <div className="mt-3 flex-1 overflow-y-auto px-2 pb-2">

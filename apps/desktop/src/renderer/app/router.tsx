@@ -6,6 +6,7 @@ import { SkillsPage } from "./routes/SkillsPage";
 import { TasksPage } from "./routes/TasksPage";
 import { FilesPage } from "./routes/FilesPage";
 import { SettingsPage } from "./routes/SettingsPage";
+import { RoomsPage } from "./routes/RoomsPage";
 import { NotFound } from "./routes/NotFound";
 
 export const routes: RouteObject[] = [
@@ -20,6 +21,7 @@ export const routes: RouteObject[] = [
       { path: "skills", element: <SkillsPage /> },
       { path: "tasks", element: <TasksPage /> },
       { path: "files", element: <FilesPage /> },
+      { path: "rooms", element: <RoomsPage /> },
       { path: "settings", element: <SettingsPage /> },
       { path: "*", element: <NotFound /> },
     ],

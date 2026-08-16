@@ -319,3 +319,132 @@ export async function schedulerClearHistory(taskId?: string): Promise<void> {
     await api().schedulerClearHistory(taskId);
   } catch { /* ignore */ }
 }
+
+// ---- Room (peer chat) ----
+
+export type RoomStatus = "off" | "connecting" | "joined" | "error";
+
+export interface RoomMember {
+  id: string;
+  nickname?: string;
+  pubKey?: string;
+}
+
+export interface RoomMessageMeta {
+  filename?: string;
+  size?: number;
+  mime?: string;
+  /** Audio duration in seconds. */
+  duration?: number;
+}
+
+export type RoomEvent =
+  | { type: "status"; status: RoomStatus }
+  | { type: "joined"; roomId: string; inviteCode: string; members: RoomMember[] }
+  | { type: "member-joined"; member: RoomMember }
+  | { type: "member-left"; memberId: string }
+  | {
+      type: "message";
+      msg: {
+        messageId: string;
+        from: string;
+        nonce: string;
+        ct: string;
+        kind?: "text" | "audio" | "file";
+        fileId?: string;
+        meta?: RoomMessageMeta;
+        viewOnce?: boolean;
+        at: number;
+      };
+    }
+  | { type: "message-viewed"; messageId: string }
+  | { type: "error"; message: string };
+
+export async function roomCreate(): Promise<{ inviteCode: string }> {
+  return api().roomCreate();
+}
+
+export async function roomValidate(code: string): Promise<boolean> {
+  return api().roomValidate(code);
+}
+
+export async function roomJoin(inviteCode: string, nickname: string): Promise<boolean> {
+  return api().roomJoin(inviteCode, nickname);
+}
+
+export async function roomLeave(): Promise<boolean> {
+  return api().roomLeave();
+}
+
+export async function roomSend(text: string, viewOnce: boolean): Promise<string> {
+  return api().roomSend(text, viewOnce);
+}
+
+/** Pick a file via the OS file dialog. Returns { path, name, size, mime } or
+ *  null if the user cancelled. */
+export async function roomPickFile(): Promise<{
+  path: string;
+  name: string;
+  size: number;
+  mime: string;
+} | null> {
+  return api().roomPickFile();
+}
+
+export async function roomUploadFile(
+  filePath: string,
+  meta: { filename?: string; mime?: string; duration?: number },
+): Promise<{ fileId: string }> {
+  return api().roomUploadFile(filePath, meta);
+}
+
+/** Upload an in-memory blob (e.g. recorded audio) base64-encoded. */
+export async function roomUploadBlob(
+  base64Data: string,
+  meta: { filename?: string; mime?: string; duration?: number },
+): Promise<{ fileId: string }> {
+  return api().roomUploadBlob(base64Data, meta);
+}
+
+export async function roomSendFile(
+  fileId: string,
+  kind: "audio" | "file",
+  meta: RoomMessageMeta,
+  viewOnce: boolean,
+): Promise<string> {
+  return api().roomSendFile(fileId, kind, meta, viewOnce);
+}
+
+/** Download a file blob to a local temp path and open the OS save dialog.
+ *  Returns { path, cancelled } — path is the final saved path (or temp path
+ *  if the user cancelled the save dialog). */
+export async function roomDownloadFile(
+  fileId: string,
+  filename?: string,
+): Promise<{ path: string; saved: boolean }> {
+  return api().roomDownloadFile(fileId, filename);
+}
+
+/** Open an OS save dialog and return the chosen path or null if cancelled. */
+export async function roomSaveDialog(
+  defaultName: string,
+): Promise<string | null> {
+  return api().roomSaveDialog(defaultName);
+}
+
+export async function roomViewed(messageId: string): Promise<boolean> {
+  return api().roomViewed(messageId);
+}
+
+export async function roomStatus(): Promise<{
+  status: RoomStatus;
+  inviteCode: string;
+  myMemberId: string;
+  members: RoomMember[];
+}> {
+  return api().roomStatus();
+}
+
+export function onRoomEvent(callback: (event: RoomEvent) => void): () => void {
+  return api().onRoomEvent(callback as (event: unknown) => void);
+}

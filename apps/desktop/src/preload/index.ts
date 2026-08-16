@@ -89,6 +89,34 @@ const api = {
     return () => ipcRenderer.removeListener("relay-remote-sessions-changed", handler);
   },
 
+  // Room (peer chat)
+  roomCreate: () => ipcRenderer.invoke("room-create"),
+  roomValidate: (code: string) => ipcRenderer.invoke("room-validate", code),
+  roomJoin: (inviteCode: string, nickname: string) => ipcRenderer.invoke("room-join", inviteCode, nickname),
+  roomLeave: () => ipcRenderer.invoke("room-leave"),
+  roomSend: (text: string, viewOnce: boolean) => ipcRenderer.invoke("room-send", text, viewOnce),
+  roomPickFile: () => ipcRenderer.invoke("room-pick-file"),
+  roomUploadFile: (filePath: string, meta: { filename?: string; mime?: string; duration?: number }) =>
+    ipcRenderer.invoke("room-upload-file", filePath, meta),
+  roomUploadBlob: (base64Data: string, meta: { filename?: string; mime?: string; duration?: number }) =>
+    ipcRenderer.invoke("room-upload-blob", base64Data, meta),
+  roomSendFile: (
+    fileId: string,
+    kind: "audio" | "file",
+    meta: { filename?: string; size?: number; mime?: string; duration?: number },
+    viewOnce: boolean,
+  ) => ipcRenderer.invoke("room-send-file", fileId, kind, meta, viewOnce),
+  roomDownloadFile: (fileId: string, filename?: string) =>
+    ipcRenderer.invoke("room-download-file", fileId, filename),
+  roomSaveDialog: (defaultName: string) => ipcRenderer.invoke("room-save-dialog", defaultName),
+  roomViewed: (messageId: string) => ipcRenderer.invoke("room-viewed", messageId),
+  roomStatus: () => ipcRenderer.invoke("room-status"),
+  onRoomEvent: (callback: (event: unknown) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, data: unknown) => callback(data);
+    ipcRenderer.on("room-event", handler);
+    return () => ipcRenderer.removeListener("room-event", handler);
+  },
+
   // Logging
   logDebug: (message: string) => ipcRenderer.invoke("log-debug", message),
   logEvent: (level: string, module: string, message: string, data?: unknown) =>

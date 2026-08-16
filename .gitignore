@@ -67,3 +67,6 @@ apps/desktop/*-*.css
 # ZCode tooling (local plans, session state)
 .zcode/
 
+# Local-only deployment plan (contains server addresses, tokens, SSH paths)
+DEPLOYMENT.local.md
+

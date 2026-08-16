@@ -68,6 +68,21 @@ export interface ElectronAPI {
   relayRemoteSessions: () => Promise<string[]>;
   onRelayRemoteSessionsChanged: (callback: () => void) => () => void;
 
+  // Room (peer chat)
+  roomCreate: () => Promise<{ inviteCode: string }>;
+  roomValidate: (code: string) => Promise<boolean>;
+  roomJoin: (inviteCode: string, nickname: string) => Promise<boolean>;
+  roomLeave: () => Promise<boolean>;
+  roomSend: (text: string, viewOnce: boolean) => Promise<string>;
+  roomViewed: (messageId: string) => Promise<boolean>;
+  roomStatus: () => Promise<{
+    status: "off" | "connecting" | "joined" | "error";
+    inviteCode: string;
+    myMemberId: string;
+    members: Array<{ id: string; nickname?: string; pubKey?: string }>;
+  }>;
+  onRoomEvent: (callback: (event: unknown) => void) => () => void;
+
   logDebug: (message: string) => Promise<void>;
   logEvent: (level: string, module: string, message: string, data?: unknown) => Promise<void>;
   exportLogs: () => Promise<string>;

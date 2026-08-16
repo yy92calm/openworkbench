@@ -81,7 +81,7 @@ export function ConnectPage({ onConnected }: { onConnected: () => void }) {
             <>
               <div className="field">
                 <label>中继服务器（ws:// 或 wss://）</label>
-                <input value={relayUrl} onChange={(e) => setRelayUrl(e.target.value)} placeholder="ws://your-server:8080" spellCheck={false} inputMode="url" />
+                <input value={relayUrl} onChange={(e) => setRelayUrl(e.target.value)} placeholder="ws://relay-host:12960" spellCheck={false} inputMode="url" />
               </div>
               <div className="field">
                 <label>账号令牌（桌面端管理分配的登录凭证）</label>

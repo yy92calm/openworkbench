@@ -177,6 +177,9 @@ export class RelayHttpTransport {
     } catch {
       return;
     }
+    // Room (peer) messages don't have an `id` — they're handled by a separate
+    // WebSocket connection in roomConnection.ts, not this transport. Ignore them.
+    if (!("id" in msg)) return;
     const p = this.pending.get(msg.id);
     if (!p) return;
     switch (msg.type) {

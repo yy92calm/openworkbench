@@ -10,6 +10,7 @@ import { FilesPage } from "@/pages/FilesPage";
 import { FilePreviewPage } from "@/pages/FilePreviewPage";
 import { WorkspaceSwitchPage } from "@/pages/WorkspaceSwitchPage";
 import { SettingsPage } from "@/pages/SettingsPage";
+import { RoomsPage } from "@/pages/RoomsPage";
 import { TabBar, type TabKey } from "@/components/TabBar";
 
 /** Stack entry for pages pushed on top of a tab (e.g. session view, task form,
@@ -108,6 +109,9 @@ export function App() {
           onSwitchWorkspace={() => push({ kind: "workspace-switch" })}
         />
       );
+      break;
+    case "rooms":
+      page = <RoomsPage />;
       break;
     case "settings":
       page = <SettingsPage onDisconnected={() => setReady(false)} />;

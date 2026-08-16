@@ -1,9 +1,10 @@
-export type TabKey = "sessions" | "tasks" | "files" | "settings";
+export type TabKey = "sessions" | "tasks" | "files" | "rooms" | "settings";
 
 const TABS: { key: TabKey; label: string; icon: string }[] = [
   { key: "sessions", label: "会话", icon: "💬" },
   { key: "tasks", label: "任务", icon: "⏰" },
   { key: "files", label: "文件", icon: "📁" },
+  { key: "rooms", label: "会话分享", icon: "📡" },
   { key: "settings", label: "设置", icon: "⚙️" },
 ];
 

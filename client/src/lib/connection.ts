@@ -60,25 +60,35 @@ function makeTransport(): RelayHttpTransport {
 }
 
 async function buildClient(t: RelayHttpTransport, c: ConnectionConfig): Promise<OpenCodeClient> {
+  // Login = establishing the relay transport. This only depends on the relay
+  // being up — the host sidecar does NOT need to be online. SSE /event is
+  // opened separately below and retried in the background until the host
+  // comes online, so the user can still see the device list / sessions.
   await t.connect(c.relayUrl, c.deviceId, c.token);
   const c2 = new OpenCodeClient({
     baseUrl: "http://relay",
     fetchImpl: t.fetchImpl,
   });
-  // Open the SSE /event stream (via the relay transport's streaming fetch) so
-  // onEvent subscribers get live text/tool/idle updates. Retry a few times —
-  // right after the host restarts its sidecar, /event can 502 briefly.
-  let lastErr: Error | null = null;
-  for (let attempt = 0; attempt < 3; attempt++) {
+  // Kick off SSE in the background. Failures (host offline → 502) do not
+  // block login; OpenCodeClient.status will flip to "ready" once it opens,
+  // and views already track that status to show the "host offline" banner.
+  void ensureEventStream(c2);
+  return c2;
+}
+
+/** Keep retrying the SSE /event stream until it opens. Host offline returns
+ *  502 — we back off and try again so the user is connected the moment the
+ *  host comes back online. Resolves once the stream opens; never throws. */
+async function ensureEventStream(c: OpenCodeClient): Promise<void> {
+  for (let attempt = 0; ; attempt++) {
     try {
-      await c2.connect();
-      return c2;
-    } catch (err) {
-      lastErr = err instanceof Error ? err : new Error(String(err));
-      await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
+      await c.connect();
+      return;
+    } catch {
+      const delay = Math.min(1_500 * 2 ** Math.min(attempt, 5), 30_000);
+      await new Promise((r) => setTimeout(r, delay));
     }
   }
-  throw lastErr ?? new Error("failed to open event stream");
 }
 
 /** Reconnect after an unexpected disconnect. Keeps retrying with backoff. */

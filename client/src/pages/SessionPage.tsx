@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowLeft, Send, Wrench, Square, Paperclip, Download, X } from "lucide-react";
-import type { OpenCodeEvent, HistoryMessage, AttachmentFile } from "@workbench/sdk";
+import { ArrowLeft, Send, Wrench, Square, Paperclip, Download, X, Brain, CheckCircle2, LoaderCircle, Circle } from "lucide-react";
+import type { OpenCodeEvent, HistoryMessage, AttachmentFile, QuestionAskedEvent, PermissionAskedEvent, PermissionReply } from "@workbench/sdk";
 import { getClient, onReconnect } from "@/lib/connection";
+import { MarkdownView, maybeMarkdown } from "@/components/MarkdownView";
+import { InteractionSheet, type Interaction } from "@/components/InteractionSheet";
 
 interface ToolRow {
   callID: string;
@@ -9,6 +11,12 @@ interface ToolRow {
   title?: string;
   status: string;
 }
+
+/** `todo*` tools only report an opaque "N todos" count with no useful content
+ *  — pure noise in the thread, so skip them. `question`/`permission` tools
+ *  are surfaced via InteractionSheet (interactive card), also not as tool rows.
+ *  Mirrors apps/desktop/src/renderer/lib/runtime.ts. */
+const NOISE_TOOL = /question|permission|^ask$|todo/i;
 
 interface FileRow {
   /** Original file name. */
@@ -40,6 +48,7 @@ function toMsg(m: HistoryMessage, idx: number): Msg {
     .join("\n");
   const tools: ToolRow[] = m.parts
     .filter((p): p is typeof m.parts[number] & { tool: string } => !!p.tool)
+    .filter((p) => !NOISE_TOOL.test(p.tool))
     .map((p) => ({
       callID: `${idx}-${p.tool}`,
       tool: p.tool,
@@ -92,6 +101,9 @@ export function SessionPage({ sessionId, onBack }: { sessionId: string; onBack: 
   const [attachments, setAttachments] = useState<AttachmentFile[]>([]);
   const [hostOnline, setHostOnline] = useState(true);
   const [error, setError] = useState("");
+  /** Pending question/permission that blocks the agent. Only one at a time —
+   *  OpenCode serializes these, and the most recent supersedes any prior. */
+  const [interaction, setInteraction] = useState<Interaction | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -144,6 +156,20 @@ export function SessionPage({ sessionId, onBack }: { sessionId: string; onBack: 
         }
         return;
       }
+      // Interactive requests (question/permission) block the agent until the
+      // user answers — surface them as a modal sheet instead of a tool row.
+      if (e.type === "question.asked") {
+        setInteraction(e);
+        return;
+      }
+      if (e.type === "permission.asked") {
+        setInteraction(e);
+        return;
+      }
+      if (e.type === "question.resolved" || e.type === "permission.resolved") {
+        setInteraction((cur) => (cur?.requestId === e.requestId ? null : cur));
+        return;
+      }
       setMessages((prev) => {
         const next = [...prev];
         let active = next.find((m) => m.active);
@@ -162,6 +188,10 @@ export function SessionPage({ sessionId, onBack }: { sessionId: string; onBack: 
             active.reasoning = e.text;
             break;
           case "tool.updated": {
+            // Interactive (question/permission) and opaque (todo*) tools are
+            // handled by the desktop's InteractionPrompt — skip them in the
+            // thread so they don't show up as blank noise rows.
+            if (NOISE_TOOL.test(e.tool)) break;
             const row = active.tools.find((t) => t.callID === e.callId);
             if (row) {
               row.status = e.status;
@@ -201,6 +231,17 @@ export function SessionPage({ sessionId, onBack }: { sessionId: string; onBack: 
           }
         } catch {
           /* status poll is best-effort */
+        }
+        // Recover any pending interactive request that predates this view
+        // (the agent asked before the client connected — the SSE event was
+        // missed). Query both endpoints; newest wins.
+        try {
+          const [q, p] = await Promise.all([client.listQuestions(), client.listPermissions()]);
+          if (!mounted.current) return;
+          if (p.length > 0) setInteraction(p[p.length - 1]);
+          else if (q.length > 0) setInteraction(q[q.length - 1]);
+        } catch {
+          /* pending-asks poll is best-effort */
         }
       } catch (err) {
         if (mounted.current) {
@@ -306,35 +347,16 @@ export function SessionPage({ sessionId, onBack }: { sessionId: string; onBack: 
           </p>
         )}
         {messages.map((m) => (
-          <div key={m.id} style={{ display: "flex", flexDirection: "column", alignItems: m.role === "user" ? "flex-end" : "flex-start" }}>
-            <div
-              style={{
-                maxWidth: "88%",
-                padding: "10px 12px",
-                borderRadius: 12,
-                background: m.role === "user" ? "var(--accent-soft)" : "var(--surface)",
-                border: `1px solid ${m.role === "user" ? "var(--border)" : "var(--border)"}`,
-                whiteSpace: "pre-wrap",
-                wordBreak: "break-word",
-                fontSize: 14,
-                lineHeight: 1.55,
-              }}
-            >
+          <div key={m.id} className={`msg-row ${m.role}`}>
+            <div className={`msg-bubble ${m.role} ${m.active ? "streaming" : ""}`}>
               {m.files.length > 0 && (
-                <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: m.text ? 8 : 0 }}>
+                <div className="msg-files">
                   {m.files.map((f, fi) => (
-                    <div
-                      key={`${f.name}-${fi}`}
-                      style={{
-                        display: "flex", alignItems: "center", gap: 6, padding: "4px 8px",
-                        borderRadius: 8, border: "1px solid var(--border)", background: "var(--bg)",
-                        fontSize: 12.5,
-                      }}
-                    >
+                    <div key={`${f.name}-${fi}`} className="msg-file-chip">
                       <Paperclip size={12} style={{ color: "var(--accent)", flexShrink: 0 }} />
-                      <span style={{ flex: 1, minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{f.name}</span>
+                      <span className="msg-file-name">{f.name}</span>
                       {f.data ? (
-                        <button onClick={() => downloadFile(f)} aria-label="下载附件" style={{ color: "var(--accent)", padding: 2, flexShrink: 0 }}>
+                        <button onClick={() => downloadFile(f)} aria-label="下载附件" className="msg-file-dl">
                           <Download size={13} />
                         </button>
                       ) : null}
@@ -342,28 +364,48 @@ export function SessionPage({ sessionId, onBack }: { sessionId: string; onBack: 
                   ))}
                 </div>
               )}
-              {m.text}
-              {m.active && <span style={{ color: "var(--accent)" }}>▍</span>}
+              {m.role === "assistant" && m.text ? (
+                <MarkdownView streaming={m.active}>{m.text}</MarkdownView>
+              ) : (
+                m.text && <span className="msg-text-plain">{m.text}</span>
+              )}
+              {m.active && !m.text && (
+                <span className="msg-typing">
+                  <span className="typing-dot" />
+                  <span className="typing-dot" />
+                  <span className="typing-dot" />
+                </span>
+              )}
+              {m.active && m.text && <span className="msg-cursor" />}
             </div>
             {m.reasoning && (
-              <details style={{ width: "88%", marginTop: 6 }}>
-                <summary style={{ fontSize: 12, color: "var(--muted)", cursor: "pointer" }}>思考过程</summary>
-                <p style={{ fontSize: 12.5, color: "var(--muted)", whiteSpace: "pre-wrap", marginTop: 6, lineHeight: 1.5 }}>{m.reasoning}</p>
+              <details className="reasoning-block">
+                <summary className="reasoning-summary">
+                  <Brain size={13} style={{ color: "var(--muted)" }} />
+                  <span>思考过程</span>
+                </summary>
+                <div className="reasoning-body">{maybeMarkdown(m.reasoning)}</div>
               </details>
             )}
             {m.tools.length > 0 && (
-              <div style={{ width: "88%", marginTop: 6, display: "flex", flexDirection: "column", gap: 4 }}>
-                {m.tools.map((t) => (
-                  <div key={t.callID} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12.5, color: "var(--muted)" }}>
-                    <Wrench size={12} style={{ color: "var(--accent)" }} />
-                    <span style={{ flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                      {t.title ?? t.tool}
-                    </span>
-                    <span style={{ color: t.status === "completed" ? "var(--ok)" : t.status === "running" ? "var(--warn)" : "var(--muted)" }}>
-                      {t.status === "completed" ? "完成" : t.status === "running" ? "执行中" : t.status}
-                    </span>
-                  </div>
-                ))}
+              <div className="tools-block">
+                {m.tools.map((t) => {
+                  const running = t.status === "running";
+                  const done = t.status === "completed";
+                  return (
+                    <div key={t.callID} className={`tool-chip ${t.status}`}>
+                      {running ? (
+                        <LoaderCircle size={13} className="spin" style={{ color: "var(--warn)" }} />
+                      ) : done ? (
+                        <CheckCircle2 size={13} style={{ color: "var(--ok)" }} />
+                      ) : (
+                        <Circle size={13} style={{ color: "var(--muted)" }} />
+                      )}
+                      <Wrench size={11} style={{ color: "var(--muted)" }} />
+                      <span className="tool-name">{t.title ?? t.tool}</span>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
@@ -447,6 +489,16 @@ export function SessionPage({ sessionId, onBack }: { sessionId: string; onBack: 
           </button>
         </div>
       </div>
+
+      {interaction && (
+        <InteractionSheet
+          interaction={interaction}
+          onAnswerQuestion={(id, answers) => Promise.resolve(getClient()?.answerQuestion(id, answers))}
+          onRejectQuestion={(id) => Promise.resolve(getClient()?.rejectQuestion(id))}
+          onReplyPermission={(id, reply) => Promise.resolve(getClient()?.replyPermission(id, reply))}
+          onDismiss={() => setInteraction(null)}
+        />
+      )}
     </div>
   );
 }

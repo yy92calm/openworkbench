@@ -5,6 +5,7 @@ import { readFileSync } from "node:fs";
 import { extname, join, normalize, resolve } from "node:path";
 import { WebSocketServer, WebSocket } from "ws";
 import { AccountRegistry } from "./registry";
+import { RoomManager } from "./room";
 import type { RelayMessage } from "./protocol";
 import { parseConnectionParams } from "./protocol";
 
@@ -58,7 +59,13 @@ export class RelayServer {
   private readonly socketToken = new WeakMap<WebSocket, string>();
   /** Admin sessions: sessionId → expiry timestamp. In-memory only. */
   private readonly adminSessions = new Map<string, number>();
+  /** Room manager for peer connections (role=peer). */
+  private readonly rooms = new RoomManager();
   private heartbeat: NodeJS.Timeout | null = null;
+  /** Peer heartbeat — slower (3min) since rooms are notification-grade, not realtime. */
+  private peerHeartbeat: NodeJS.Timeout | null = null;
+  /** Peer heartbeat interval (6 × 30s = 3min). */
+  private static readonly PEER_HEARTBEAT_MS = 180_000;
 
   constructor(opts: RelayServerOptions) {
     this.opts = opts;
@@ -136,19 +143,23 @@ export class RelayServer {
       this.server.once("listening", onListening);
       this.server.listen(this.opts.port, this.opts.host ?? "0.0.0.0");
       this.heartbeat = setInterval(() => this.pingAll(), HEARTBEAT_MS);
+      this.peerHeartbeat = setInterval(() => this.pingPeers(), RelayServer.PEER_HEARTBEAT_MS);
     });
   }
 
   close(): Promise<void> {
     if (this.heartbeat) clearInterval(this.heartbeat);
+    if (this.peerHeartbeat) clearInterval(this.peerHeartbeat);
     this.registry.dispose();
     for (const ws of this.wss.clients) ws.terminate();
     return new Promise((resolveClose) => this.server.close(() => resolveClose()));
   }
 
   private handleConnection(ws: WebSocket, rawUrl: string): void {
-    (ws as WebSocket & { isAlive?: boolean }).isAlive = true;
-    ws.on("pong", () => { (ws as WebSocket & { isAlive?: boolean }).isAlive = true; });
+    const flag = ws as WebSocket & { isAlive?: boolean; relayRole?: string };
+    flag.isAlive = true;
+    flag.relayRole = "guest"; // default
+    ws.on("pong", () => { flag.isAlive = true; });
     const params = parseConnectionParams(rawUrl);
     if (!params || !this.registry.hasAccount(params.token)) {
       ws.close(4001, "unauthorized");
@@ -156,7 +167,13 @@ export class RelayServer {
     }
     this.socketToken.set(ws, params.token);
     if (params.role === "host") {
+      flag.relayRole = "host";
       this.handleHost(ws, params.token, params.device);
+      return;
+    }
+    if (params.role === "peer") {
+      flag.relayRole = "peer";
+      this.handlePeer(ws);
       return;
     }
     this.handleGuest(ws, params.token, params.device);
@@ -181,6 +198,17 @@ export class RelayServer {
       if (this.hosts.get(key) === ws) this.hosts.delete(key);
       this.failPending(502, "host disconnected");
     });
+  }
+
+  /** Peer: a room member (host or client) participating in E2E chat.
+   *  No device pairing — peers join rooms by invite code via `room.join`. */
+  private handlePeer(ws: WebSocket): void {
+    this.rooms.initPeer(ws);
+    ws.on("message", (data) => {
+      const parsed = this.parse<unknown>(data);
+      if (parsed) this.rooms.handlePeerMessage(ws, parsed);
+    });
+    ws.on("close", () => this.rooms.handlePeerClose(ws));
   }
 
   /** Guest: pair with a registered device, or serve control messages when no device. */
@@ -283,8 +311,12 @@ export class RelayServer {
     // before scheduling the next one. Doing reset-then-check in two passes
     // would terminate every connection, because pong callbacks run on a later
     // tick than the synchronous ping call.
+    //
+    // Peer connections are handled by pingPeers() on a slower 3-min cycle —
+    // skip them here so they aren't terminated by the 30s host/guest cycle.
     for (const ws of this.wss.clients) {
-      const flag = ws as WebSocket & { isAlive?: boolean };
+      const flag = ws as WebSocket & { isAlive?: boolean; relayRole?: string };
+      if (flag.relayRole === "peer") continue;
       if (flag.isAlive === false) {
         ws.terminate();
         this.guestKey.delete(ws);
@@ -297,14 +329,35 @@ export class RelayServer {
     }
   }
 
+  /** Peer-only heartbeat on a 3-min cycle. Same check-then-ping pattern as
+   *  pingAll, but only touches role=peer sockets. Dead peers are terminated,
+   *  which triggers RoomManager.handlePeerClose via the ws "close" event. */
+  private pingPeers(): void {
+    for (const ws of this.wss.clients) {
+      const flag = ws as WebSocket & { isAlive?: boolean; relayRole?: string };
+      if (flag.relayRole !== "peer") continue;
+      if (flag.isAlive === false) {
+        ws.terminate();
+        continue;
+      }
+      flag.isAlive = false;
+      ws.ping();
+    }
+  }
+
   // ── HTTP: admin API + static hosting ────────────────────────────────────
 
-  /** All HTTP requests enter here: /api/admin/* → JSON API, /relayadmin* →
-   *  the admin UI, everything else → the client build (SPA). */
+  /** All HTTP requests enter here: /api/admin/* → admin API,
+   *  /api/rooms → room API, /relayadmin* → the admin UI,
+   *  everything else → the client build (SPA). */
   private handleHttp(req: import("node:http").IncomingMessage, res: import("node:http").ServerResponse): void {
     const url = (req.url ?? "/").split("?")[0];
     if (url.startsWith("/api/admin/")) {
       this.handleAdminApi(req, res, url);
+      return;
+    }
+    if (url === "/api/rooms" || url.startsWith("/api/rooms/")) {
+      this.handleRoomsApi(req, res, url);
       return;
     }
     if ((url === "/relayadmin" || url.startsWith("/relayadmin/")) && this.opts.adminStaticDir) {
@@ -313,6 +366,114 @@ export class RelayServer {
     }
     if (!url.startsWith("/api/")) this.handleStatic(req, res);
     else res.writeHead(404).end();
+  }
+
+  // ── Rooms API (public, token-gated) ──────────────────────────────────────
+
+  /** Room endpoints used by clients to create/validate rooms before opening
+   *  a peer WebSocket. Auth: any valid account token (query param ?token=). */
+  private handleRoomsApi(
+    req: import("node:http").IncomingMessage,
+    res: import("node:http").ServerResponse,
+    url: string,
+  ): void {
+    // Token is required for all room operations (read from the raw URL —
+    // `url` has had its query string stripped by handleHttp).
+    const u = new URL(req.url ?? "/", "http://relay.local");
+    const token = u.searchParams.get("token");
+    if (!token || !this.registry.hasAccount(token)) {
+      this.sendJson(res, 401, { error: "unauthorized" });
+      return;
+    }
+    // POST /api/rooms — create a new room, return the invite code.
+    if (url === "/api/rooms" && req.method === "POST") {
+      const { roomId, inviteCode } = this.rooms.createRoom();
+      this.sendJson(res, 200, { roomId, inviteCode });
+      return;
+    }
+    // GET /api/rooms/:code — validate an invite code.
+    const m = url.match(/^\/api\/rooms\/([^/]+)$/);
+    if (m && req.method === "GET") {
+      const code = decodeURIComponent(m[1]);
+      const info = this.rooms.validateInvite(code);
+      if (!info.valid) {
+        this.sendJson(res, 404, { valid: false });
+        return;
+      }
+      this.sendJson(res, 200, { valid: true, memberCount: info.memberCount });
+      return;
+    }
+    // POST /api/rooms/:code/upload — upload a file blob (voice message or
+    // file attachment). Body is the raw binary; query carries filename/mime/duration.
+    // Returns { fileId } the caller references in the subsequent room.message.
+    const up = url.match(/^\/api\/rooms\/([^/]+)\/upload$/);
+    if (up && req.method === "POST") {
+      const code = decodeURIComponent(up[1]);
+      const info = this.rooms.validateInvite(code);
+      if (!info.valid) {
+        this.sendJson(res, 404, { error: "room not found" });
+        return;
+      }
+      const filename = u.searchParams.get("filename") ?? undefined;
+      const mime = u.searchParams.get("mime") ?? undefined;
+      const durationStr = u.searchParams.get("duration") ?? undefined;
+      const duration = durationStr ? Number(durationStr) : undefined;
+      // Collect raw bytes, enforcing max size.
+      const chunks: Buffer[] = [];
+      let size = 0;
+      const limit = RoomManager.MAX_FILE_BYTES_NUM;
+      let tooLarge = false;
+      req.on("data", (c: Buffer) => {
+        if (tooLarge) return;
+        size += c.length;
+        if (size > limit) {
+          tooLarge = true;
+          res.writeHead(413, { "content-type": "application/json" });
+          res.end(JSON.stringify({ error: "file too large", limit }));
+          return;
+        }
+        chunks.push(c);
+      });
+      req.on("end", () => {
+        if (tooLarge) return;
+        const data = Buffer.concat(chunks);
+        // Look up roomId by inviteCode — storeFile keys by roomId.
+        const roomId = this.rooms.getRoomIdByInviteCode(code);
+        if (!roomId) {
+          this.sendJson(res, 404, { error: "room not found" });
+          return;
+        }
+        const meta = { filename, size: data.length, mime, duration };
+        const fileId = this.rooms.storeFile(roomId, data, meta);
+        this.sendJson(res, 200, { fileId, size: data.length });
+      });
+      req.on("error", (err) => {
+        if (!tooLarge) this.sendJson(res, 500, { error: String(err) });
+      });
+      return;
+    }
+    // GET /api/rooms/files/:fileId — download a stored file blob.
+    const dl = url.match(/^\/api\/rooms\/files\/([^/]+)$/);
+    if (dl && req.method === "GET") {
+      const fileId = decodeURIComponent(dl[1]);
+      const file = this.rooms.getFile(fileId);
+      if (!file) {
+        this.sendJson(res, 404, { error: "file not found" });
+        return;
+      }
+      const headers: Record<string, string> = {
+        "content-type": file.meta.mime ?? "application/octet-stream",
+        "content-length": String(file.data.length),
+        "cache-control": "no-store",
+      };
+      if (file.meta.filename) {
+        headers["content-disposition"] = `inline; filename="${file.meta.filename.replace(/"/g, "_")}"`;
+      }
+      res.writeHead(200, headers);
+      res.end(file.data);
+      return;
+    }
+    this.sendJson(res, 404, { error: "not found" });
   }
 
   // ── Admin API ────────────────────────────────────────────────────────────

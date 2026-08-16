@@ -20,6 +20,7 @@ import { registerTerminalHandlers } from "./terminal";
 import { fetchPageContent, extractText } from "./browser";
 import { isWhisperAvailable, transcribeWav } from "./whisper";
 import { RelayHost, type RelayHostConfig } from "./relayHost";
+import { roomPeer } from "./roomPeer";
 
 /** Host-side relay instance (shared by IPC handlers). */
 export const relayHost = new RelayHost();
@@ -144,6 +145,120 @@ export function registerIpcHandlers(): void {
   relayHost.onRemoteSessionsChange(() => {
     for (const win of BrowserWindow.getAllWindows()) {
       win.webContents.send("relay-remote-sessions-changed");
+    }
+  });
+
+  // ---- Room (peer chat) ----
+  ipcMain.handle("room-create", async () => {
+    return { inviteCode: await roomPeer.createRoom() };
+  });
+  ipcMain.handle("room-validate", async (_e, code: string) => {
+    return roomPeer.validateInvite(code);
+  });
+  ipcMain.handle("room-join", (_e, inviteCode: string, nickname: string) => {
+    roomPeer.join(inviteCode, nickname);
+    return true;
+  });
+  ipcMain.handle("room-leave", () => {
+    roomPeer.stop();
+    return true;
+  });
+  ipcMain.handle("room-send", (_e, text: string, viewOnce: boolean) => {
+    return roomPeer.sendMessage(text, { viewOnce });
+  });
+  ipcMain.handle("room-send-file", (_e, fileId: string, kind: "audio" | "file", meta: {
+    filename?: string; size?: number; mime?: string; duration?: number;
+  }, viewOnce: boolean) => {
+    return roomPeer.sendFileMessage(fileId, kind, meta, { viewOnce });
+  });
+  ipcMain.handle("room-upload-file", async (_e, filePath: string, meta: {
+    filename?: string; mime?: string; duration?: number;
+  }) => {
+    return { fileId: await roomPeer.uploadFile(filePath, meta) };
+  });
+  ipcMain.handle("room-upload-blob", async (_e, base64Data: string, meta: {
+    filename?: string; mime?: string; duration?: number;
+  }) => {
+    return { fileId: await roomPeer.uploadBlob(base64Data, meta) };
+  });
+  ipcMain.handle("room-download-file", async (_e, fileId: string, filename?: string) => {
+    const tempPath = await roomPeer.downloadFile(fileId, filename);
+    // Offer a save dialog so the user picks the final location.
+    const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
+    if (!win) return { path: tempPath, saved: false };
+    const defaultName = filename ?? fileId;
+    const result = await dialog.showSaveDialog(win, {
+      defaultPath: defaultName,
+      title: "保存文件",
+    });
+    if (result.canceled || !result.filePath) {
+      return { path: tempPath, saved: false };
+    }
+    const { copyFile, rm } = await import("node:fs/promises");
+    await copyFile(tempPath, result.filePath);
+    // Clean up the temp copy.
+    await rm(tempPath, { force: true });
+    return { path: result.filePath, saved: true };
+  });
+  // Pick a file to send via OS dialog. Returns basic metadata.
+  ipcMain.handle("room-pick-file", async () => {
+    const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
+    if (!win) return null;
+    const result = await dialog.showOpenDialog(win, {
+      properties: ["openFile"],
+      title: "选择要发送的文件",
+    });
+    if (result.canceled || result.filePaths.length === 0) return null;
+    const filePath = result.filePaths[0];
+    const { stat } = await import("node:fs/promises");
+    const s = await stat(filePath);
+    const name = filePath.split(/[/\\]/).pop() ?? filePath;
+    // crude mime guess by extension
+    const ext = name.split(".").pop()?.toLowerCase() ?? "";
+    const mimeMap: Record<string, string> = {
+      png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif",
+      webp: "image/webp", bmp: "image/bmp",
+      pdf: "application/pdf",
+      doc: "application/msword", docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      xls: "application/vnd.ms-excel", xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      ppt: "application/vnd.ms-powerpoint", pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      zip: "application/zip", txt: "text/plain", md: "text/markdown",
+      mp3: "audio/mpeg", wav: "audio/wav", m4a: "audio/mp4",
+      mp4: "video/mp4", webm: "video/webm",
+    };
+    return {
+      path: filePath,
+      name,
+      size: s.size,
+      mime: mimeMap[ext] ?? "application/octet-stream",
+    };
+  });
+  // Open a save dialog for a downloaded room file.
+  ipcMain.handle("room-save-dialog", async (_e, defaultName: string) => {
+    const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
+    if (!win) return null;
+    const result = await dialog.showSaveDialog(win, {
+      defaultPath: defaultName,
+      title: "保存文件",
+    });
+    return result.canceled ? null : result.filePath;
+  });
+  ipcMain.handle("room-viewed", (_e, messageId: string) => {
+    roomPeer.replyViewed(messageId);
+    return true;
+  });
+  ipcMain.handle("room-status", () => {
+    return {
+      status: roomPeer.getStatus(),
+      inviteCode: roomPeer.getInviteCode(),
+      myMemberId: roomPeer.getMyMemberId(),
+      members: roomPeer.getMembers(),
+    };
+  });
+  // Forward room events to all renderer windows.
+  roomPeer.onEvent((e) => {
+    for (const win of BrowserWindow.getAllWindows()) {
+      win.webContents.send("room-event", e);
     }
   });
 
