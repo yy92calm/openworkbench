@@ -155,8 +155,8 @@ export function registerIpcHandlers(): void {
   ipcMain.handle("room-validate", async (_e, code: string) => {
     return roomPeer.validateInvite(code);
   });
-  ipcMain.handle("room-join", (_e, inviteCode: string, nickname: string) => {
-    roomPeer.join(inviteCode, nickname);
+  ipcMain.handle("room-join", (_e, inviteCode: string, nickname: string, opts?: { enforceViewOnce?: boolean }) => {
+    roomPeer.join(inviteCode, nickname, opts);
     return true;
   });
   ipcMain.handle("room-leave", () => {
@@ -246,6 +246,13 @@ export function registerIpcHandlers(): void {
   ipcMain.handle("room-viewed", (_e, messageId: string) => {
     roomPeer.replyViewed(messageId);
     return true;
+  });
+  ipcMain.handle("room-set-view-once", (_e, enforce: boolean) => {
+    roomPeer.roomSetViewOnce(enforce);
+    return true;
+  });
+  ipcMain.handle("room-send-session-share", (_e, payload: { title: string; sessionId: string; summary: string }, viewOnce?: boolean) => {
+    return roomPeer.sendSessionShare(payload, { viewOnce });
   });
   ipcMain.handle("room-status", () => {
     return {

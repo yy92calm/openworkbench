@@ -352,6 +352,18 @@ export class RelayServer {
    *  everything else → the client build (SPA). */
   private handleHttp(req: import("node:http").IncomingMessage, res: import("node:http").ServerResponse): void {
     const url = (req.url ?? "/").split("?")[0];
+    // Room endpoints are called cross-origin from the browser-based client
+    // (e.g. client served on :12959 calling relay on :12960). Allow CORS
+    // for /api/rooms/* and answer the preflight immediately.
+    if (url === "/api/rooms" || url.startsWith("/api/rooms/")) {
+      res.setHeader("access-control-allow-origin", "*");
+      res.setHeader("access-control-allow-methods", "GET,POST,OPTIONS");
+      res.setHeader("access-control-allow-headers", "content-type");
+      if (req.method === "OPTIONS") {
+        res.writeHead(204).end();
+        return;
+      }
+    }
     if (url.startsWith("/api/admin/")) {
       this.handleAdminApi(req, res, url);
       return;

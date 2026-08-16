@@ -831,7 +831,7 @@ export class OpenCodeClient {
           this.textStreams.set(t.id, { sessionId, text: t.text ?? "" });
           this.emit({ type: "text.updated", sessionId, partId: t.id, text: t.text ?? "" });
         } else if (part.type === "reasoning") {
-          const r = part as { id: string; text: string };
+          const r = part as unknown as { id: string; text: string };
           this.reasoningStreams.set(r.id, { sessionId, text: r.text ?? "" });
           this.emit({ type: "reasoning.updated", sessionId, partId: r.id, text: r.text ?? "", streaming: false });
         } else if (part.type === "tool") {

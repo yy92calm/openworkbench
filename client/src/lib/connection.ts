@@ -91,6 +91,21 @@ async function ensureEventStream(c: OpenCodeClient): Promise<void> {
   }
 }
 
+/** Device-sheet event bus: lets any tab request that the global DeviceBar
+ *  open its device picker (e.g. a "请先选择设备" CTA in SessionsPage). */
+const openSheetListeners = new Set<() => void>();
+
+export function openDeviceSheet(): void {
+  for (const cb of openSheetListeners) {
+    try { cb(); } catch { /* listener errors are isolated */ }
+  }
+}
+
+export function onOpenDeviceSheet(cb: () => void): () => void {
+  openSheetListeners.add(cb);
+  return () => openSheetListeners.delete(cb);
+}
+
 /** Reconnect after an unexpected disconnect. Keeps retrying with backoff. */
 function scheduleReconnect(): void {
   if (!cfg || reconnectTimer) return;
@@ -149,6 +164,13 @@ export function getClient(): OpenCodeClient | null {
 
 export function isConnected(): boolean {
   return client !== null;
+}
+
+/** Logged in = a relay+token config is saved (deviceId may be empty, in which
+ *  case isConnected() is still false). Used by App.tsx to decide whether to
+ *  show the ConnectPage or the main shell with a DeviceBar CTA. */
+export function isLoggedIn(): boolean {
+  return cfg !== null;
 }
 
 /** The live relay transport (for HostClient to reuse its fetchImpl). Null when

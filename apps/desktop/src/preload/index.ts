@@ -92,7 +92,8 @@ const api = {
   // Room (peer chat)
   roomCreate: () => ipcRenderer.invoke("room-create"),
   roomValidate: (code: string) => ipcRenderer.invoke("room-validate", code),
-  roomJoin: (inviteCode: string, nickname: string) => ipcRenderer.invoke("room-join", inviteCode, nickname),
+  roomJoin: (inviteCode: string, nickname: string, opts?: { enforceViewOnce?: boolean }) =>
+    ipcRenderer.invoke("room-join", inviteCode, nickname, opts),
   roomLeave: () => ipcRenderer.invoke("room-leave"),
   roomSend: (text: string, viewOnce: boolean) => ipcRenderer.invoke("room-send", text, viewOnce),
   roomPickFile: () => ipcRenderer.invoke("room-pick-file"),
@@ -110,6 +111,11 @@ const api = {
     ipcRenderer.invoke("room-download-file", fileId, filename),
   roomSaveDialog: (defaultName: string) => ipcRenderer.invoke("room-save-dialog", defaultName),
   roomViewed: (messageId: string) => ipcRenderer.invoke("room-viewed", messageId),
+  roomSetViewOnce: (enforce: boolean) => ipcRenderer.invoke("room-set-view-once", enforce),
+  roomSendSessionShare: (
+    payload: { title: string; sessionId: string; summary: string },
+    viewOnce?: boolean,
+  ) => ipcRenderer.invoke("room-send-session-share", payload, viewOnce),
   roomStatus: () => ipcRenderer.invoke("room-status"),
   onRoomEvent: (callback: (event: unknown) => void) => {
     const handler = (_event: Electron.IpcRendererEvent, data: unknown) => callback(data);

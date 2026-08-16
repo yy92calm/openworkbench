@@ -8,9 +8,11 @@
  * information. Messages are E2E encrypted on the client side; the relay
  * only routes ciphertexts by their `to` field.
  *
- * Rooms auto-destroy when the last member leaves. Invite codes are 6-char
- * base32 strings; they are not stored separately from the room — the code
- * IS the lookup key.
+ * Room lifecycle: the room lives as long as its creator is present. When
+ * the creator leaves, a 24h destruction countdown starts (visible to the
+ * remaining members); any member joining again cancels it. Invite codes are
+ * 6-char base32 strings; they are not stored separately from the room — the
+ * code IS the lookup key.
  */
 
 import { randomUUID, randomBytes } from "node:crypto";
@@ -22,22 +24,28 @@ import type {
   RoomMessage,
   RoomMessageMeta,
   RoomMessageViewed,
+  RoomSetViewOnce,
+  RoomViewOnceChanged,
   RoomJoined,
   RoomMemberJoined,
   RoomMemberLeft,
   RoomMessageRouted,
+  RoomDestroyCountdown,
+  RoomDestroyed,
   RoomError,
 } from "./protocol";
 
 /** Base32 alphabet (Crockford, no ambiguous chars). */
 const BASE32 = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
 
-/** Generate a 6-char invite code (~30 bits of entropy). */
+/** Generate a 6-char invite code (~30 bits of entropy). One fresh random
+ *  byte per character — reusing bytes would make positions 5–6 repeat
+ *  positions 1–2 (256 % 32 === 0, so `% 32` stays uniform). */
 export function generateInviteCode(): string {
-  const bytes = randomBytes(4);
+  const bytes = randomBytes(6);
   let out = "";
   for (let i = 0; i < 6; i++) {
-    out += BASE32[bytes[i % bytes.length] % 32];
+    out += BASE32[bytes[i] % 32];
   }
   return out;
 }
@@ -52,6 +60,15 @@ interface Room {
   id: string;
   inviteCode: string;
   members: Map<string, Member>; // memberId → member
+  /** 创建者离开时启动的销毁倒计时截止时间戳（ms）。null 表示创建者在场。 */
+  destroyExpiresAt: number | null;
+  /** 销毁定时器句柄；房间销毁前必须 clearTimeout。 */
+  destroyTimer: ReturnType<typeof setTimeout> | null;
+  /** When true, all messages sent in this room are forced viewOnce. */
+  enforceViewOnce: boolean;
+  /** The first member to join becomes the creator ( sole toggler of
+   *  enforceViewOnce). null until the first join succeeds. */
+  creatorMemberId: string | null;
 }
 
 /** Per-socket state for peer connections (set on the WebSocket instance). */
@@ -82,6 +99,8 @@ export class RoomManager {
   private readonly files = new Map<string, { roomId: string; data: Buffer; meta: RoomMessageMeta }>();
   /** Max file size: 50 MB. Voice messages and typical office docs fit. */
   private static readonly MAX_FILE_BYTES = 50 * 1024 * 1024;
+  /** Destruction TTL after the creator leaves: 24h. */
+  private static readonly EMPTY_TTL_MS = 24 * 60 * 60 * 1000;
 
   /** Store an uploaded file blob. Returns the fileId. */
   storeFile(roomId: string, data: Buffer, meta: RoomMessageMeta): string {
@@ -107,7 +126,15 @@ export class RoomManager {
       inviteCode = generateInviteCode();
     } while (this.rooms.has(inviteCode));
     const roomId = randomUUID();
-    const room: Room = { id: roomId, inviteCode, members: new Map() };
+    const room: Room = {
+      id: roomId,
+      inviteCode,
+      members: new Map(),
+      destroyExpiresAt: null,
+      destroyTimer: null,
+      enforceViewOnce: false,
+      creatorMemberId: null,
+    };
     this.rooms.set(inviteCode, room);
     this.roomsById.set(roomId, room);
     return { roomId, inviteCode };
@@ -150,6 +177,9 @@ export class RoomManager {
       case "room.message-viewed":
         this.handleMessageViewed(ws, m as unknown as RoomMessageViewed);
         return true;
+      case "room.set-view-once":
+        this.handleSetViewOnce(ws, m as unknown as RoomSetViewOnce);
+        return true;
       default:
         return false;
     }
@@ -181,6 +211,26 @@ export class RoomManager {
     };
     state.member = member;
     room.members.set(memberId, member);
+    // First member to join becomes the creator. They may set enforceViewOnce
+    // via room.join.enforceViewOnce on this first join; subsequent joins
+    // ignore that field. A rejoin by the original creator (identified by
+    // carrying their original memberId) restores creator status.
+    const creatorReturning = room.creatorMemberId !== null && msg.creatorId === room.creatorMemberId;
+    const isCreator = room.creatorMemberId === null || creatorReturning;
+    if (isCreator) {
+      room.creatorMemberId = memberId;
+      if (msg.enforceViewOnce === true) room.enforceViewOnce = true;
+    }
+    // The creator returning cancels the destruction countdown.
+    if (creatorReturning && room.destroyExpiresAt !== null) {
+      if (room.destroyTimer) {
+        clearTimeout(room.destroyTimer);
+        room.destroyTimer = null;
+      }
+      room.destroyExpiresAt = null;
+      const cancelled: RoomDestroyCountdown = { type: "room.destroy-countdown", expiresAt: null };
+      this.broadcast(room, cancelled);
+    }
     // Tell the new member they joined + the full member list.
     const members: RoomMember[] = [];
     for (const m of room.members.values()) {
@@ -191,6 +241,9 @@ export class RoomManager {
       roomId: room.id,
       inviteCode: room.inviteCode,
       members,
+      enforceViewOnce: room.enforceViewOnce,
+      isCreator,
+      destroyExpiresAt: room.destroyExpiresAt,
     } satisfies RoomJoined);
     // Tell everyone else a new member joined.
     const joinedMsg: RoomMemberJoined = {
@@ -243,6 +296,29 @@ export class RoomManager {
     this.broadcast(room, msg, state.member.id);
   }
 
+  /** Creator toggles the room's enforceViewOnce flag. */
+  private handleSetViewOnce(ws: WebSocket, msg: RoomSetViewOnce): void {
+    const state = peerState(ws);
+    if (!state?.member) return;
+    const room = this.roomsById.get(state.member.roomId!);
+    if (!room) return;
+    // Only the creator may toggle.
+    if (state.member.id !== room.creatorMemberId) {
+      this.send(ws, {
+        type: "room.error",
+        message: "only the creator can toggle view-once",
+      } satisfies RoomError);
+      return;
+    }
+    room.enforceViewOnce = msg.enforce;
+    // Broadcast to everyone (including the creator) for UI consistency.
+    const changed: RoomViewOnceChanged = {
+      type: "room.view-once-changed",
+      enforce: room.enforceViewOnce,
+    };
+    this.broadcast(room, changed);
+  }
+
   private removeMember(member: Member): void {
     const room = this.roomsById.get(member.roomId!);
     if (!room) return;
@@ -250,14 +326,40 @@ export class RoomManager {
     // Tell everyone else.
     const leftMsg: RoomMemberLeft = { type: "room.member-left", memberId: member.id };
     this.broadcast(room, leftMsg, member.id);
-    // Destroy room if empty.
-    if (room.members.size === 0) {
-      this.rooms.delete(room.inviteCode);
-      this.roomsById.delete(room.id);
-      // Clean up all files owned by this room.
-      for (const [fid, entry] of this.files) {
-        if (entry.roomId === room.id) this.files.delete(fid);
-      }
+    // The creator leaving starts the destruction countdown — regardless of
+    // whether other members remain. The room dies 24h after its creator left
+    // unless the creator returns (cancels via join with their memberId).
+    if (member.id === room.creatorMemberId && room.destroyExpiresAt === null) {
+      room.destroyExpiresAt = Date.now() + RoomManager.EMPTY_TTL_MS;
+      room.destroyTimer = setTimeout(() => {
+        // Re-check: the creator may have returned and cancelled the countdown.
+        if (room.destroyExpiresAt === null) return;
+        this.destroyRoom(room);
+      }, RoomManager.EMPTY_TTL_MS);
+      const countdown: RoomDestroyCountdown = {
+        type: "room.destroy-countdown",
+        expiresAt: room.destroyExpiresAt,
+      };
+      this.broadcast(room, countdown);
+    }
+  }
+
+  /** Actually destroy a room and clean up all its state. Notifies remaining
+   *  members first so their UIs can return to the room list.
+   *  Called when the destruction countdown elapses; safe to call multiple
+   *  times (members list is still intact until the maps are cleared). */
+  private destroyRoom(room: Room): void {
+    const destroyed: RoomDestroyed = { type: "room.destroyed" };
+    this.broadcast(room, destroyed);
+    if (room.destroyTimer) {
+      clearTimeout(room.destroyTimer);
+      room.destroyTimer = null;
+    }
+    this.rooms.delete(room.inviteCode);
+    this.roomsById.delete(room.id);
+    // Clean up all files owned by this room.
+    for (const [fid, entry] of this.files) {
+      if (entry.roomId === room.id) this.files.delete(fid);
     }
   }
 

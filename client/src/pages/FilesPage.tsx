@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
 import { ArrowLeft, File as FileIcon, FileText, Folder, ImageIcon, NotebookPen, Sheet, FolderCog } from "lucide-react";
 import type { DirEntry, WorkspaceInfo } from "@workbench/sdk";
-import { getHostClient } from "@/lib/connection";
+import { getHostClient, isConnected } from "@/lib/connection";
+import { DeviceRequiredCard } from "@/components/DeviceRequiredCard";
 
 interface Props {
   onOpenFile: (path: string, root?: string) => void;
@@ -55,8 +56,13 @@ export function FilesPage({ onOpenFile, onSwitchWorkspace }: Props) {
   }, [currentRel, workspace]);
 
   useEffect(() => {
+    if (!isConnected()) return;
     void refresh();
   }, [refresh]);
+
+  if (!isConnected()) {
+    return <DeviceRequiredCard />;
+  }
 
   const enterDir = (name: string) => {
     setStack((s) => [...s, { rel: s.map((f) => f.name).join("/") + "/" + name, name }]);

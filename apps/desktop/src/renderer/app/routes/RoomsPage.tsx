@@ -1,9 +1,8 @@
 import { useEffect, useState, useRef, useCallback } from "react";
-import { ArrowLeft, Lock, Plus, Radio, Paperclip, Mic } from "lucide-react";
+import { ArrowLeft, Lock, Plus, Radio, Paperclip, Mic, Trash2 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import {
   roomCreate,
-  roomValidate,
   roomJoin,
   roomLeave,
   roomSend,
@@ -13,12 +12,83 @@ import {
   roomSendFile,
   roomDownloadFile,
   roomViewed,
+  roomSetViewOnce,
+  roomSendSessionShare,
   onRoomEvent,
   type RoomStatus,
   type RoomMember,
   type RoomEvent,
   type RoomMessageMeta,
 } from "@/lib/electron";
+import { getClient } from "@/lib/runtime";
+import { compressSession } from "@/lib/roomShare";
+import { MarkdownViewer } from "@/components/markdown-viewer/MarkdownViewer";
+
+// ── Recent rooms (local-only history for the "recent rooms" list) ──────────
+// Mirrors the client-side helper. Same localStorage key on both sides; since
+// desktop and web client run in separate processes their storage is isolated
+// in practice, but the key is identical so a future sync layer can reuse it.
+
+const RECENT_ROOMS_KEY = "workbench.rooms.recent";
+const RECENT_ROOMS_MAX = 20;
+
+interface RecentRoom {
+  inviteCode: string;
+  nickname: string;
+  joinedAt: number;
+  lastVisitedAt: number;
+}
+
+function loadRecentRooms(): RecentRoom[] {
+  try {
+    const raw = localStorage.getItem(RECENT_ROOMS_KEY);
+    if (!raw) return [];
+    const arr = JSON.parse(raw) as RecentRoom[];
+    return Array.isArray(arr) ? arr : [];
+  } catch {
+    return [];
+  }
+}
+
+function recordRecentRoom(inviteCode: string, nickname: string): void {
+  const now = Date.now();
+  const existing = loadRecentRooms();
+  const idx = existing.findIndex((r) => r.inviteCode === inviteCode);
+  if (idx >= 0) {
+    const item = existing[idx];
+    existing.splice(idx, 1);
+    existing.unshift({
+      inviteCode,
+      nickname: nickname || item.nickname,
+      joinedAt: item.joinedAt,
+      lastVisitedAt: now,
+    });
+  } else {
+    existing.unshift({ inviteCode, nickname, joinedAt: now, lastVisitedAt: now });
+  }
+  try {
+    localStorage.setItem(RECENT_ROOMS_KEY, JSON.stringify(existing.slice(0, RECENT_ROOMS_MAX)));
+  } catch {
+    /* ignore */
+  }
+}
+
+function removeRecentRoom(inviteCode: string): void {
+  const existing = loadRecentRooms().filter((r) => r.inviteCode !== inviteCode);
+  try {
+    localStorage.setItem(RECENT_ROOMS_KEY, JSON.stringify(existing));
+  } catch {
+    /* ignore */
+  }
+}
+
+function formatRelativeTime(ts: number): string {
+  const diff = Date.now() - ts;
+  if (diff < 60_000) return "刚刚";
+  if (diff < 3_600_000) return `${Math.floor(diff / 60_000)} 分钟前`;
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)} 小时前`;
+  return `${Math.floor(diff / 86_400_000)} 天前`;
+}
 
 type Phase = "list" | "joining" | "in-room";
 type ChatMessage = {
@@ -26,54 +96,74 @@ type ChatMessage = {
   from: string;
   fromMe: boolean;
   text: string;
-  kind: "text" | "audio" | "file";
+  kind: "text" | "audio" | "file" | "session-share";
   fileId?: string;
   meta?: RoomMessageMeta;
   at: number;
   viewOnce?: boolean;
+  /** viewOnce: recipient has clicked "view" and the message is now burned. */
   viewed?: boolean;
+  /** Regular message: recipient has acked "viewed" (read receipt). */
+  read?: boolean;
 };
 
 export function RoomsPage() {
   const [phase, setPhase] = useState<Phase>("list");
   const [inviteCode, setInviteCode] = useState("");
   const [error, setError] = useState("");
+  const [creatorInitEnforce, setCreatorInitEnforce] = useState<boolean | undefined>(undefined);
   const [nickname, setNickname] = useState(() => localStorage.getItem("workbench.host.nickname") ?? "Host");
+  const [nicknameOpen, setNicknameOpen] = useState(false);
+  // Recent rooms: kept in React state, sourced from localStorage so the list
+  // re-renders after create/join/delete.
+  const [recent, setRecent] = useState<RecentRoom[]>(() => loadRecentRooms());
 
   const saveNickname = (v: string) => {
     setNickname(v);
     localStorage.setItem("workbench.host.nickname", v);
   };
 
+  const enterRoom = (code: string, opts?: { enforceViewOnce?: boolean }) => {
+    setInviteCode(code);
+    setError("");
+    setCreatorInitEnforce(opts?.enforceViewOnce);
+    setPhase("in-room");
+  };
+
   const handleCreate = async () => {
     setError("");
     try {
       const { inviteCode: code } = await roomCreate();
-      setInviteCode(code);
-      setPhase("in-room");
+      recordRecentRoom(code, nickname);
+      setRecent(loadRecentRooms());
+      // Creator creates the room then joins first; pass enforceViewOnce=false
+      // by default — creator can flip the switch inside the room.
+      enterRoom(code, { enforceViewOnce: false });
     } catch (e) {
       setError(e instanceof Error ? e.message : "创建失败");
     }
   };
 
-  const handleJoin = async () => {
+  const handleJoin = () => {
     setError("");
     const code = inviteCode.trim().toUpperCase();
     if (!code) {
       setError("请输入邀请码");
       return;
     }
-    try {
-      const ok = await roomValidate(code);
-      if (!ok) {
-        setError("邀请码无效或会话已解散");
-        return;
-      }
-      setInviteCode(code);
-      setPhase("in-room");
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "验证失败");
-    }
+    // No pre-validation: the relay will reject the join with `room.error` if
+    // the room no longer exists; the chat view surfaces that error.
+    enterRoom(code);
+  };
+
+  const handlePickRecent = (code: string) => {
+    setError("");
+    enterRoom(code);
+  };
+
+  const handleRemoveRecent = (code: string) => {
+    removeRecentRoom(code);
+    setRecent(loadRecentRooms());
   };
 
   if (phase === "in-room") {
@@ -81,105 +171,167 @@ export function RoomsPage() {
       <RoomChat
         inviteCode={inviteCode}
         nickname={nickname || "Host"}
-        onLeave={() => {
+        creatorInitEnforce={creatorInitEnforce}
+        onLeave={(errorMessage) => {
           setPhase("list");
           setInviteCode("");
+          setCreatorInitEnforce(undefined);
+          setRecent(loadRecentRooms());
+          if (errorMessage) setError(errorMessage);
         }}
       />
     );
   }
 
   return (
-    <div className="h-full overflow-y-auto">
-      <div className="mx-auto max-w-2xl px-8 py-8">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight text-text">会话分享</h1>
-          <p className="mt-1 text-sm text-muted">
-            创建或加入端到端加密的实时通信会话，与远程客户端协作
-          </p>
+    <div className="flex h-full flex-col">
+      {/* Chat-app style header */}
+      <div className="flex items-center gap-3 border-b border-border bg-surface px-6 py-4">
+        <div className="flex flex-1 items-center gap-2 min-w-0">
+          <h1 className="text-lg font-semibold tracking-tight text-text">会话分享</h1>
+          <button
+            onClick={() => setNicknameOpen((v) => !v)}
+            title="修改昵称"
+            className="max-w-[160px] truncate rounded-full border border-border bg-surface-2 px-2.5 py-0.5 text-xs text-muted hover:text-text"
+          >
+            {nickname || "匿名用户"}
+          </button>
         </div>
-
-        {phase === "list" && (
-          <div className="mt-6 space-y-4">
-            <div className="rounded-card border border-border bg-surface p-4">
-              <label className="block text-xs font-medium uppercase tracking-wider text-muted">昵称</label>
-              <input
-                value={nickname}
-                onChange={(e) => saveNickname(e.target.value)}
-                className="mt-2 w-full rounded-input border border-border-soft bg-bg px-3 py-2 text-sm text-text outline-none focus:border-accent/40"
-                placeholder="你的昵称"
-              />
-            </div>
-            <button
-              className="flex w-full items-center justify-center gap-1.5 rounded-input bg-accent px-3 py-2.5 text-sm font-medium text-accent-fg hover:opacity-90"
-              onClick={handleCreate}
-            >
-              <Plus size={16} />
-              创建会话
-            </button>
-            <button
-              className="flex w-full items-center justify-center gap-1.5 rounded-input border border-border bg-surface px-3 py-2.5 text-sm font-medium text-text hover:bg-surface-2"
-              onClick={() => setPhase("joining")}
-            >
-              <Radio size={16} />
-              加入会话
-            </button>
-
-            <div className="rounded-card border border-border-soft/60 bg-surface/40 p-4 text-xs text-muted">
-              <ul className="space-y-1.5 leading-relaxed">
-                <li>• 创建/加入会话后，与会话内成员实时通信</li>
-                <li>• 支持文字、语音消息和文件传输（图片 / Word / Excel 等）</li>
-                <li>• 消息不保存，刷新页面或退出后即消失</li>
-                <li>• 新成员看不到加入前的历史消息</li>
-                <li>• 阅后即焚消息查看后立即销毁</li>
-              </ul>
-            </div>
-          </div>
-        )}
-
-        {phase === "joining" && (
-          <div className="mt-6 space-y-4">
-            <div className="rounded-card border border-border bg-surface p-4">
-              <label className="block text-xs font-medium uppercase tracking-wider text-muted">邀请码</label>
-              <input
-                value={inviteCode}
-                onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
-                placeholder="6 位邀请码"
-                maxLength={6}
-                className="mt-2 w-full rounded-input border border-border-soft bg-bg px-3 py-2 text-center font-mono text-base tracking-[0.3em] text-text outline-none focus:border-accent/40"
-              />
-            </div>
-            {error && <div className="rounded-input bg-red-500/10 px-3 py-2 text-sm text-red-500">{error}</div>}
-            <button
-              className="flex w-full items-center justify-center gap-1.5 rounded-input bg-accent px-3 py-2.5 text-sm font-medium text-accent-fg hover:opacity-90"
-              onClick={handleJoin}
-            >
-              加入
-            </button>
-            <button
-              className="flex w-full items-center justify-center gap-1.5 rounded-input border border-border bg-surface px-3 py-2.5 text-sm font-medium text-text hover:bg-surface-2"
-              onClick={() => {
-                setPhase("list");
-                setError("");
-                setInviteCode("");
-              }}
-            >
-              返回
-            </button>
-          </div>
-        )}
-
-        {error && phase === "list" && (
-          <div className="mt-4 rounded-input bg-red-500/10 px-3 py-2 text-sm text-red-500">{error}</div>
+        {phase === "joining" ? (
+          <button
+            className="rounded-input border border-border px-3 py-1.5 text-xs text-muted hover:text-text"
+            onClick={() => { setPhase("list"); setError(""); setInviteCode(""); }}
+          >
+            返回
+          </button>
+        ) : (
+          <button
+            className="flex items-center gap-1 rounded-input border border-border px-3 py-1.5 text-xs font-medium text-accent hover:bg-surface-2"
+            onClick={() => setPhase("joining")}
+          >
+            <Radio size={13} />
+            加入会话
+          </button>
         )}
       </div>
+
+      {nicknameOpen && (
+        <div className="border-b border-border bg-surface px-6 py-3">
+          <input
+            value={nickname}
+            onChange={(e) => saveNickname(e.target.value)}
+            placeholder="你的昵称"
+            autoFocus
+            className="w-full max-w-xs rounded-input border border-border-soft bg-bg px-3 py-2 text-sm text-text outline-none focus:border-accent/40"
+          />
+        </div>
+      )}
+
+      {phase === "joining" && (
+        <div className="border-b border-border bg-surface px-6 py-4">
+          <label className="block text-xs font-medium uppercase tracking-wider text-muted">邀请码</label>
+          <input
+            value={inviteCode}
+            onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
+            placeholder="6 位邀请码"
+            maxLength={6}
+            className="mt-2 w-full max-w-xs rounded-input border border-border-soft bg-bg px-3 py-2 text-center font-mono text-base tracking-[0.3em] text-text outline-none focus:border-accent/40"
+          />
+          {error && <div className="mt-2 rounded-input bg-red-500/10 px-3 py-2 text-sm text-red-500">{error}</div>}
+          <button
+            className="mt-3 rounded-input bg-accent px-4 py-2 text-sm font-medium text-accent-fg hover:opacity-90"
+            onClick={handleJoin}
+          >
+            加入
+          </button>
+        </div>
+      )}
+
+      {/* Recent rooms as chat list */}
+      <div className="flex-1 overflow-y-auto px-4 py-4">
+        <div className="mx-auto flex max-w-2xl flex-col gap-2">
+          {recent.length === 0 && (
+            <div className="mt-16 text-center text-sm text-muted">
+              <p className="text-text">还没有会话</p>
+              <p className="mt-1 text-xs">创建或加入一个会话，与远程客户端实时通信</p>
+            </div>
+          )}
+          {recent.map((r) => (
+            <div
+              key={r.inviteCode}
+              className="flex items-stretch overflow-hidden rounded-card border border-border bg-surface"
+            >
+              <button
+                className="flex flex-1 items-center gap-3 px-3 py-2.5 text-left text-text hover:bg-surface-2"
+                onClick={() => handlePickRecent(r.inviteCode)}
+              >
+                <span className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-accent text-base font-semibold text-accent-fg">
+                  {r.inviteCode[0]}
+                </span>
+                <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                  <span className="flex items-center justify-between gap-2">
+                    <span className="font-mono text-sm font-semibold tracking-[0.15em]">
+                      {r.inviteCode}
+                    </span>
+                    <span className="text-[11px] text-muted">
+                      {formatRelativeTime(r.lastVisitedAt)}
+                    </span>
+                  </span>
+                  <span className="truncate text-xs text-muted">点击进入会话</span>
+                </span>
+              </button>
+              <button
+                className="flex w-9 flex-shrink-0 items-center justify-center border-l border-border-soft text-muted hover:bg-red-500/10 hover:text-red-500"
+                title="从列表删除"
+                onClick={() => handleRemoveRecent(r.inviteCode)}
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Bottom action bar */}
+      <div className="border-t border-border bg-surface px-6 py-3">
+        <div className="mx-auto flex max-w-2xl gap-3">
+          <button
+            className="flex flex-1 items-center justify-center gap-1.5 rounded-input bg-accent px-3 py-2.5 text-sm font-medium text-accent-fg hover:opacity-90"
+            onClick={handleCreate}
+          >
+            <Plus size={16} />
+            创建会话
+          </button>
+          <button
+            className="flex flex-1 items-center justify-center gap-1.5 rounded-input border border-border bg-surface px-3 py-2.5 text-sm font-medium text-text hover:bg-surface-2"
+            onClick={() => setPhase("joining")}
+          >
+            <Radio size={16} />
+            加入会话
+          </button>
+        </div>
+      </div>
+
+      {error && phase === "list" && (
+        <div className="mx-auto max-w-2xl px-6 pb-3">
+          <div className="rounded-input bg-red-500/10 px-3 py-2 text-sm text-red-500">{error}</div>
+        </div>
+      )}
     </div>
   );
 }
 
 // ── Room Chat ────────────────────────────────────────────────────────────
 
-function RoomChat({ inviteCode, nickname, onLeave }: { inviteCode: string; nickname: string; onLeave: () => void }) {
+function RoomChat({ inviteCode, nickname, creatorInitEnforce, onLeave }: {
+  inviteCode: string;
+  nickname: string;
+  creatorInitEnforce?: boolean;
+  /** Called when the user leaves manually, or automatically after a fatal
+      join error (e.g. the room was destroyed). errorMessage is only set for
+      the auto-return path, so the list can surface the reason. */
+  onLeave: (errorMessage?: string) => void;
+}) {
   const [status, setStatus] = useState<RoomStatus>("connecting");
   const [members, setMembers] = useState<RoomMember[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -191,6 +343,27 @@ function RoomChat({ inviteCode, nickname, onLeave }: { inviteCode: string; nickn
   const [busy, setBusy] = useState(false); // uploading or sending file
   const [recording, setRecording] = useState(false);
   const [recordSeconds, setRecordSeconds] = useState(0);
+  // "/" session-share picker state.
+  const [shareOpen, setShareOpen] = useState(false);
+  const [shareBusy, setShareBusy] = useState(false);
+  const [shareError, setShareError] = useState("");
+  // Room-level viewOnce flag (creator-controlled). When true, all outgoing
+  // messages are forced viewOnce, and the per-message 🔒 toggle is hidden.
+  const [enforceViewOnce, setEnforceViewOnce] = useState(false);
+  const [isCreator, setIsCreator] = useState(false);
+  // Destruction countdown started when the creator left (ms epoch deadline).
+  // null = no countdown (creator present or room healthy).
+  const [destroyExpiresAt, setDestroyExpiresAt] = useState<number | null>(null);
+  // Tick every second so the countdown banner stays current.
+  const [now, setNow] = useState(() => Date.now());
+  // Track which message ids we've already acked with `room.message-viewed`
+  // to avoid duplicate acks on re-renders / re-mounts.
+  const ackedRef = useRef<Set<string>>(new Set());
+  // Whether we've successfully joined the room. A `room.error` before that
+  // (e.g. "room not found") is fatal — the room is gone, so return to the list.
+  const joinedRef = useRef(false);
+  // Timer for the auto-return to the list after a fatal join error.
+  const returnTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
@@ -203,11 +376,11 @@ function RoomChat({ inviteCode, nickname, onLeave }: { inviteCode: string; nickn
 
   // Join the room on mount.
   useEffect(() => {
-    void roomJoin(inviteCode, nickname);
+    void roomJoin(inviteCode, nickname, creatorInitEnforce !== undefined ? { enforceViewOnce: creatorInitEnforce } : undefined);
     return () => {
       void roomLeave();
     };
-  }, [inviteCode, nickname]);
+  }, [inviteCode, nickname, creatorInitEnforce]);
 
   // Subscribe to room events.
   useEffect(() => {
@@ -218,11 +391,19 @@ function RoomChat({ inviteCode, nickname, onLeave }: { inviteCode: string; nickn
           setError(e.status === "error" ? "连接异常，正在重连…" : "");
           break;
         case "joined":
+          joinedRef.current = true;
           setMembers(e.members);
           setMyMemberId(
             e.members.find((m) => m.nickname === nickname)?.id ??
             e.members[e.members.length - 1]?.id ?? "",
           );
+          // Sync room-level viewOnce flag and creator status from the relay.
+          setEnforceViewOnce(e.enforceViewOnce === true);
+          setIsCreator(e.isCreator === true);
+          setDestroyExpiresAt(e.destroyExpiresAt);
+          // Record this room in the recent list now that the relay accepted
+          // our join (so the list reflects only rooms that still exist).
+          recordRecentRoom(inviteCode, nickname);
           break;
         case "member-joined":
           setMembers((cur) => [...cur, e.member]);
@@ -231,8 +412,9 @@ function RoomChat({ inviteCode, nickname, onLeave }: { inviteCode: string; nickn
           setMembers((cur) => cur.filter((m) => m.id !== e.memberId));
           break;
         case "message": {
-          const kind = (e.msg.kind ?? "text") as "text" | "audio" | "file";
-          const text = kind === "text" ? decodeMessage(e.msg.ct) : "";
+          const kind = (e.msg.kind ?? "text") as "text" | "audio" | "file" | "session-share";
+          const text = kind === "text" || kind === "session-share" ? decodeMessage(e.msg.ct) : "";
+          const viewOnce = e.msg.viewOnce === true;
           setMessages((cur) => [
             ...cur,
             {
@@ -244,33 +426,79 @@ function RoomChat({ inviteCode, nickname, onLeave }: { inviteCode: string; nickn
               fileId: e.msg.fileId,
               meta: e.msg.meta,
               at: e.msg.at,
-              viewOnce: e.msg.viewOnce,
+              viewOnce,
             },
           ]);
+          // For regular (non-viewOnce) messages: ack "viewed" once on receipt
+          // so the sender sees the "read" status. viewOnce messages are acked
+          // when the recipient actually clicks to view.
+          if (!viewOnce && e.msg.from !== myMemberIdRef.current) {
+            if (!ackedRef.current.has(e.msg.messageId)) {
+              ackedRef.current.add(e.msg.messageId);
+              void roomViewed(e.msg.messageId);
+            }
+          }
           break;
         }
         case "message-viewed":
           setMessages((cur) =>
-            cur.map((m) => (m.messageId === e.messageId ? { ...m, viewed: true } : m)),
+            cur.map((m) => (m.messageId === e.messageId ? { ...m, viewed: true, read: true } : m)),
           );
+          break;
+        case "view-once-changed":
+          setEnforceViewOnce(e.enforce);
+          // Reset per-message toggle so the room flag takes precedence.
+          setViewOnceMode(false);
+          break;
+        case "destroy-countdown":
+          setDestroyExpiresAt(e.expiresAt);
+          break;
+        case "destroyed":
+          // The room is gone — return to the list (same path as a fatal
+          // join error), surfaced via the list-level error line.
+          onLeave("房间已销毁");
           break;
         case "error":
           setError(e.message);
+          // A join-time error means the room is gone (destroyed). Show the
+          // error briefly, then auto-return to the room list. Errors after a
+          // successful join (e.g. permission errors) just surface the banner.
+          if (!joinedRef.current && !returnTimerRef.current) {
+            returnTimerRef.current = setTimeout(() => {
+              returnTimerRef.current = null;
+              onLeave(e.message);
+            }, 1500);
+          }
           break;
       }
     });
-    return unsub;
+    return () => {
+      unsub();
+      if (returnTimerRef.current) {
+        clearTimeout(returnTimerRef.current);
+        returnTimerRef.current = null;
+      }
+    };
   }, [nickname]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages]);
 
+  // While a destruction countdown is active, tick once per second so the
+  // banner's remaining time stays current.
+  useEffect(() => {
+    if (destroyExpiresAt === null) return;
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [destroyExpiresAt]);
+
   const handleSend = useCallback(async () => {
     const text = input.trim();
     if (!text || status !== "joined") return;
+    const willViewOnce = enforceViewOnce || viewOnceMode;
     try {
-      const messageId = await roomSend(text, viewOnceMode);
+      const messageId = await roomSend(text, willViewOnce);
       setMessages((cur) => [
         ...cur,
         {
@@ -280,19 +508,57 @@ function RoomChat({ inviteCode, nickname, onLeave }: { inviteCode: string; nickn
           text,
           kind: "text",
           at: Date.now(),
-          viewOnce: viewOnceMode,
+          viewOnce: willViewOnce,
         },
       ]);
       setInput("");
-      setViewOnceMode(false);
+      if (!enforceViewOnce) setViewOnceMode(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : "发送失败");
     }
-  }, [input, status, viewOnceMode, myMemberId]);
+  }, [input, status, viewOnceMode, enforceViewOnce, myMemberId]);
+
+  // ── Session share ("/") ───────────────────────────────────────────────
+  const handleShareSession = useCallback(async (session: { id: string; title: string }) => {
+    const client = getClient();
+    if (!client) {
+      setShareError("请先选择设备");
+      return;
+    }
+    setShareBusy(true);
+    setShareError("");
+    const willViewOnce = enforceViewOnce || viewOnceMode;
+    try {
+      const messages = await client.getMessages(session.id);
+      const payload = compressSession(session.title, session.id, messages);
+      const messageId = await roomSendSessionShare(payload, willViewOnce);
+      setMessages((cur) => [
+        ...cur,
+        {
+          messageId,
+          from: myMemberId,
+          fromMe: true,
+          text: payload.summary,
+          kind: "session-share",
+          meta: { sessionTitle: payload.title, sessionId: payload.sessionId },
+          at: Date.now(),
+          viewOnce: willViewOnce,
+        },
+      ]);
+      setInput("");
+      setShareOpen(false);
+      if (!enforceViewOnce) setViewOnceMode(false);
+    } catch (err) {
+      setShareError(err instanceof Error ? err.message : "分享失败");
+    } finally {
+      setShareBusy(false);
+    }
+  }, [enforceViewOnce, viewOnceMode, myMemberId]);
 
   // ── File attachment ─────────────────────────────────────────────────────
   const handlePickFile = useCallback(async () => {
     if (status !== "joined" || busy) return;
+    const willViewOnce = enforceViewOnce || viewOnceMode;
     try {
       const picked = await roomPickFile();
       if (!picked) return;
@@ -307,7 +573,7 @@ function RoomChat({ inviteCode, nickname, onLeave }: { inviteCode: string; nickn
         size: picked.size,
         mime: picked.mime,
       };
-      const messageId = await roomSendFile(fileId, "file", meta, viewOnceMode);
+      const messageId = await roomSendFile(fileId, "file", meta, willViewOnce);
       setMessages((cur) => [
         ...cur,
         {
@@ -319,16 +585,16 @@ function RoomChat({ inviteCode, nickname, onLeave }: { inviteCode: string; nickn
           fileId,
           meta,
           at: Date.now(),
-          viewOnce: viewOnceMode,
+          viewOnce: willViewOnce,
         },
       ]);
-      setViewOnceMode(false);
+      if (!enforceViewOnce) setViewOnceMode(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : "文件发送失败");
     } finally {
       setBusy(false);
     }
-  }, [status, busy, viewOnceMode, myMemberId]);
+  }, [status, busy, viewOnceMode, enforceViewOnce, myMemberId]);
 
   // ── Voice recording (Electron renderer supports MediaRecorder) ─────────
   const startRecording = useCallback(async () => {
@@ -349,6 +615,7 @@ function RoomChat({ inviteCode, nickname, onLeave }: { inviteCode: string; nickn
           setBusy(false);
           return;
         }
+        const willViewOnce = enforceViewOnce || viewOnceMode;
         try {
           setBusy(true);
           // Convert blob to base64 and send via IPC to the main process,
@@ -363,7 +630,7 @@ function RoomChat({ inviteCode, nickname, onLeave }: { inviteCode: string; nickn
           const base64 = btoa(binary);
           const { fileId } = await roomUploadBlob(base64, { mime, duration });
           const meta: RoomMessageMeta = { mime, size: blob.size, duration };
-          const messageId = await roomSendFile(fileId, "audio", meta, viewOnceMode);
+          const messageId = await roomSendFile(fileId, "audio", meta, willViewOnce);
           setMessages((cur) => [
             ...cur,
             {
@@ -375,10 +642,10 @@ function RoomChat({ inviteCode, nickname, onLeave }: { inviteCode: string; nickn
               fileId,
               meta,
               at: Date.now(),
-              viewOnce: viewOnceMode,
+              viewOnce: willViewOnce,
             },
           ]);
-          setViewOnceMode(false);
+          if (!enforceViewOnce) setViewOnceMode(false);
         } catch (e) {
           setError(e instanceof Error ? e.message : "语音上传失败");
         } finally {
@@ -396,7 +663,7 @@ function RoomChat({ inviteCode, nickname, onLeave }: { inviteCode: string; nickn
     } catch (e) {
       setError(e instanceof Error ? e.message : "无法访问麦克风");
     }
-  }, [status, busy, viewOnceMode, myMemberId]);
+  }, [status, busy, viewOnceMode, enforceViewOnce, myMemberId]);
 
   const stopRecording = useCallback(() => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
@@ -418,7 +685,12 @@ function RoomChat({ inviteCode, nickname, onLeave }: { inviteCode: string; nickn
   const handleViewMessage = async (msg: ChatMessage) => {
     if (!msg.viewOnce || msg.fromMe) return;
     setViewingMessage(msg);
-    await roomViewed(msg.messageId);
+    // Ack once per message id; the message is burned after viewing so this
+    // normally fires a single time, but guard against re-renders / re-mounts.
+    if (!ackedRef.current.has(msg.messageId)) {
+      ackedRef.current.add(msg.messageId);
+      await roomViewed(msg.messageId);
+    }
   };
 
   const closeViewOnce = () => {
@@ -438,11 +710,14 @@ function RoomChat({ inviteCode, nickname, onLeave }: { inviteCode: string; nickn
     return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
   };
 
-  const formatSize = (bytes?: number) => {
-    if (!bytes) return "";
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  /** Format the remaining time until `expiresAt` as HH:MM:SS. */
+  const formatCountdown = (expiresAt: number) => {
+    const remain = Math.max(0, expiresAt - now);
+    const totalSec = Math.floor(remain / 1000);
+    const h = Math.floor(totalSec / 3600);
+    const m = Math.floor((totalSec % 3600) / 60);
+    const s = totalSec % 60;
+    return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
   };
 
   const online = status === "joined";
@@ -464,6 +739,21 @@ function RoomChat({ inviteCode, nickname, onLeave }: { inviteCode: string; nickn
             {online ? `${members.length} 人在线` : status === "connecting" ? "连接中…" : "未连接"}
           </div>
         </div>
+        {isCreator && (
+          <button
+            onClick={() => void roomSetViewOnce(!enforceViewOnce)}
+            disabled={!online}
+            title={enforceViewOnce ? "已开启房间阅后即焚" : "开启房间阅后即焚"}
+            className={cn(
+              "rounded-input border px-2.5 py-1 text-xs font-medium disabled:opacity-40",
+              enforceViewOnce
+                ? "border-accent bg-accent text-accent-fg"
+                : "border-border bg-surface-2 text-muted hover:text-text",
+            )}
+          >
+            {enforceViewOnce ? "🔒 强制阅后即焚" : "🔓 默认模式"}
+          </button>
+        )}
         <button
           onClick={handleLeave}
           className="rounded-input border border-border px-2.5 py-1 text-xs text-red-500 hover:bg-red-500/10"
@@ -475,6 +765,11 @@ function RoomChat({ inviteCode, nickname, onLeave }: { inviteCode: string; nickn
       {error && (
         <div className="border-b border-red-500/30 bg-red-500/10 px-4 py-2 text-center text-xs text-red-500">
           {error}
+        </div>
+      )}
+      {destroyExpiresAt !== null && (
+        <div className="border-b border-amber-500/30 bg-amber-500/10 px-4 py-2 text-center text-xs text-amber-500">
+          ⚠️ 创建者已离开，房间将在 {formatCountdown(destroyExpiresAt)} 后销毁
         </div>
       )}
 
@@ -489,11 +784,9 @@ function RoomChat({ inviteCode, nickname, onLeave }: { inviteCode: string; nickn
           )}
           {messages.map((m) => (
             <div key={m.messageId} className={cn("flex flex-col", m.fromMe ? "items-end" : "items-start")}>
-              {!m.fromMe && (
-                <div className="mb-0.5 px-1 text-xs text-muted">
-                  {members.find((x) => x.id === m.from)?.nickname ?? "未知"}
-                </div>
-              )}
+              <div className="mb-0.5 px-1 text-xs text-muted">
+                {members.find((x) => x.id === m.from)?.nickname ?? "未知"}
+              </div>
               {m.viewOnce && !m.fromMe ? (
                 <button
                   onClick={() => handleViewMessage(m)}
@@ -512,31 +805,51 @@ function RoomChat({ inviteCode, nickname, onLeave }: { inviteCode: string; nickn
               ) : (
                 <MessageContent msg={m} fromMe={m.fromMe} />
               )}
-              <div className="mt-0.5 px-1 text-[10px] text-muted">{formatTime(m.at)}</div>
+              <div className="mt-0.5 flex items-center gap-1 px-1 text-[10px] text-muted">
+                {formatTime(m.at)}
+                {m.fromMe && !m.viewOnce && (m.read ? <span>· 已读</span> : <span>· 未读</span>)}
+              </div>
             </div>
           ))}
         </div>
       </div>
 
       {/* Input */}
-      <div className="border-t border-border bg-surface px-4 py-3">
-        <div className="mx-auto flex max-w-3xl items-center gap-2">
-          <button
-            onClick={() => setViewOnceMode(!viewOnceMode)}
-            disabled={recording || busy}
-            className={cn(
-              "flex h-9 w-9 shrink-0 items-center justify-center rounded-full border",
-              viewOnceMode ? "border-accent bg-accent text-accent-fg" : "border-border bg-surface-2 text-muted hover:text-text",
-            )}
-            title="阅后即焚"
-          >
-            <Lock size={15} />
-          </button>
+      <div className="border-t border-border bg-surface">
+        {shareOpen && (
+          <SessionSharePicker
+            busy={shareBusy}
+            error={shareError}
+            onPick={(s) => void handleShareSession(s)}
+            onClose={() => { setShareOpen(false); setShareError(""); }}
+          />
+        )}
+        <div className="px-4 py-3">
+          <div className="mx-auto flex max-w-3xl items-center gap-2">
+          {!enforceViewOnce && (
+            <button
+              onClick={() => setViewOnceMode(!viewOnceMode)}
+              disabled={recording || busy}
+              className={cn(
+                "flex h-9 w-9 shrink-0 items-center justify-center rounded-full border",
+                viewOnceMode ? "border-accent bg-accent text-accent-fg" : "border-border bg-surface-2 text-muted hover:text-text",
+              )}
+              title="阅后即焚"
+            >
+              <Lock size={15} />
+            </button>
+          )}
           <input
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={(e) => {
+              const v = e.target.value;
+              setInput(v);
+              // "/" opens the session-share picker (Slack-style command).
+              setShareOpen(v.startsWith("/"));
+              if (v.startsWith("/")) setShareError("");
+            }}
             onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), handleSend())}
-            placeholder={viewOnceMode ? "阅后即焚消息…" : "输入消息…"}
+            placeholder={enforceViewOnce ? "强制阅后即焚消息…" : viewOnceMode ? "阅后即焚消息…" : "输入消息…（/ 分享历史会话）"}
             disabled={!online || recording}
             className="flex-1 rounded-full border border-border-soft bg-bg px-4 py-2 text-sm text-text outline-none placeholder:text-muted focus:border-accent/40 disabled:opacity-50"
           />
@@ -578,6 +891,7 @@ function RoomChat({ inviteCode, nickname, onLeave }: { inviteCode: string; nickn
         {busy && (
           <div className="mx-auto mt-1 max-w-3xl text-center text-xs text-muted">上传中…</div>
         )}
+        </div>
       </div>
 
       {/* View-once modal */}
@@ -609,6 +923,15 @@ function RoomChat({ inviteCode, nickname, onLeave }: { inviteCode: string; nickn
 }
 
 // ── Message content renderer ─────────────────────────────────────────────
+
+/** Format a byte size into a human-readable string. Module-level so
+ *  MessageContent (a separate component from RoomChat) can use it. */
+function formatSize(bytes?: number): string {
+  if (!bytes) return "";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
 
 function MessageContent({
   msg,
@@ -687,8 +1010,100 @@ function MessageContent({
     );
   }
 
+  if (msg.kind === "session-share") {
+    return <SessionShareCard msg={msg} />;
+  }
+
   return (
     <div className={cn(bubble, "whitespace-pre-wrap break-words")}>{msg.text}</div>
+  );
+}
+
+/** Collapsible card for a shared session: shows the title + preview, expands
+ *  to reveal the compressed conversation summary. */
+function SessionShareCard({ msg }: { msg: ChatMessage }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className={cn(
+      "w-full max-w-[320px] overflow-hidden rounded-card border border-border bg-surface",
+      open && "max-w-[420px]",
+    )}>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-text hover:bg-surface-2"
+      >
+        <span>📎</span>
+        <span className="min-w-0 flex-1 truncate font-semibold">
+          会话分享：{msg.meta?.sessionTitle ?? "未命名会话"}
+        </span>
+        <span className="shrink-0 text-xs text-accent">{open ? "收起" : "展开查看"}</span>
+      </button>
+      {open && (
+        <div className="max-h-80 overflow-y-auto border-t border-border bg-bg px-3 py-2">
+          <MarkdownViewer variant="chat" className="text-xs leading-relaxed">{msg.text}</MarkdownViewer>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** "/" session-share picker: lists history sessions for the user to pick. */
+function SessionSharePicker({ busy, error, onPick, onClose }: {
+  busy: boolean;
+  error: string;
+  onPick: (session: { id: string; title: string }) => void;
+  onClose: () => void;
+}) {
+  const [sessions, setSessions] = useState<Array<{ id: string; title: string }>>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    const client = getClient();
+    if (!client) {
+      setLoading(false);
+      return;
+    }
+    client.listSessions()
+      .then((list) => { if (!cancelled) setSessions(list); })
+      .catch(() => { /* surfaced via parent error */ })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
+
+  return (
+    <div className="mx-auto max-w-3xl border-b border-border bg-surface">
+      <div className="flex items-center justify-between border-b border-border px-4 py-2">
+        <span className="text-xs font-semibold uppercase tracking-wider text-muted">分享历史会话</span>
+        <button
+          onClick={onClose}
+          className="text-lg leading-none text-muted hover:text-text"
+          aria-label="关闭"
+        >
+          ×
+        </button>
+      </div>
+      {error && <div className="border-b border-border px-4 py-1.5 text-xs text-red-500">{error}</div>}
+      {!getClient() && <div className="border-b border-border px-4 py-1.5 text-xs text-red-500">请先在顶部选择设备</div>}
+      {loading ? (
+        <div className="px-4 py-3 text-center text-xs text-muted">加载中…</div>
+      ) : sessions.length === 0 ? (
+        <div className="px-4 py-3 text-center text-xs text-muted">暂无历史会话</div>
+      ) : (
+        <div className="max-h-52 overflow-y-auto py-1">
+          {sessions.map((s) => (
+            <button
+              key={s.id}
+              onClick={() => onPick(s)}
+              disabled={busy}
+              className="flex w-full items-center justify-between gap-2 px-4 py-2 text-left text-sm text-text hover:bg-surface-2 disabled:opacity-50"
+            >
+              <span className="min-w-0 flex-1 truncate">{s.title || "未命名会话"}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 

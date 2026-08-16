@@ -71,10 +71,12 @@ export interface ElectronAPI {
   // Room (peer chat)
   roomCreate: () => Promise<{ inviteCode: string }>;
   roomValidate: (code: string) => Promise<boolean>;
-  roomJoin: (inviteCode: string, nickname: string) => Promise<boolean>;
+  roomJoin: (inviteCode: string, nickname: string, opts?: { enforceViewOnce?: boolean }) => Promise<boolean>;
   roomLeave: () => Promise<boolean>;
   roomSend: (text: string, viewOnce: boolean) => Promise<string>;
   roomViewed: (messageId: string) => Promise<boolean>;
+  roomSetViewOnce: (enforce: boolean) => Promise<boolean>;
+  roomSendSessionShare: (payload: { title: string; sessionId: string; summary: string }, viewOnce?: boolean) => Promise<string>;
   roomStatus: () => Promise<{
     status: "off" | "connecting" | "joined" | "error";
     inviteCode: string;

@@ -99,12 +99,19 @@ export interface RoomCiphertext {
 }
 
 /** Peer → relay: join a room by invite code. Carries the peer's nickname and
- *  X25519 public key for E2E key agreement. */
+ *  X25519 public key for E2E key agreement.
+ *  `enforceViewOnce` is honored only when sent by the first member to join
+ *  (the creator); subsequent joins ignore it.
+ *  `creatorId` lets the original creator rejoin after leaving: when it matches
+ *  the room's recorded creator, the member rejoins as creator and the
+ *  destruction countdown is cancelled. */
 export interface RoomJoin {
   type: "room.join";
   inviteCode: string;
   nickname?: string;
   pubKey?: string;
+  enforceViewOnce?: boolean;
+  creatorId?: string;
 }
 
 /** Peer → relay: leave the current room. */
@@ -127,13 +134,17 @@ export interface RoomMessageMeta {
   mime?: string;
   /** Audio duration in seconds (for "audio" kind). */
   duration?: number;
+  /** kind="session-share": the shared session's title. */
+  sessionTitle?: string;
+  /** kind="session-share": the shared session's id. */
+  sessionId?: string;
 }
 
 export interface RoomMessage {
   type: "room.message";
   messageId: string;
   ciphertexts: RoomCiphertext[];
-  kind?: "text" | "audio" | "file";
+  kind?: "text" | "audio" | "file" | "session-share";
   /** For audio/file messages: the upload id returned by /api/rooms/:code/upload.
    *  The relay stores the binary blob in memory and serves it on
    *  /api/rooms/files/:fileId. Recipients fetch it after receiving the message.
@@ -145,20 +156,43 @@ export interface RoomMessage {
   at: number;
 }
 
-/** Peer → relay → sender: acknowledge that a viewOnce message was viewed.
+/** Peer → relay → sender: acknowledge that a message was viewed.
+ *  For viewOnce messages this triggers destruction on the sender side too;
+ *  for regular messages it just marks "read" on the sender's UI.
  *  The relay forwards this to the original sender only. */
 export interface RoomMessageViewed {
   type: "room.message-viewed";
   messageId: string;
 }
 
+/** Peer → relay: creator toggles the room's enforceViewOnce flag.
+ *  Non-creators are rejected with `room.error`. */
+export interface RoomSetViewOnce {
+  type: "room.set-view-once";
+  enforce: boolean;
+}
+
+/** Relay → peer: the room's enforceViewOnce flag changed. Broadcast to all
+ *  members so they can update their input UI accordingly. */
+export interface RoomViewOnceChanged {
+  type: "room.view-once-changed";
+  enforce: boolean;
+}
+
 /** Relay → peer: join succeeded. Returns the room id, invite code, and the
- *  full member list (including the joining peer). */
+ *  full member list (including the joining peer).
+ *  `enforceViewOnce` reflects the room's current flag.
+ *  `isCreator` is true for the member who first joined the room.
+ *  `destroyExpiresAt` is the destruction countdown deadline (ms epoch) started
+ *  when the creator left the room; null = no countdown (creator is present). */
 export interface RoomJoined {
   type: "room.joined";
   roomId: string;
   inviteCode: string;
   members: RoomMember[];
+  enforceViewOnce: boolean;
+  isCreator: boolean;
+  destroyExpiresAt: number | null;
 }
 
 /** Relay → peer: a new member joined the room. */
@@ -173,6 +207,21 @@ export interface RoomMemberLeft {
   memberId: string;
 }
 
+/** Relay → peer: the room's destruction countdown changed. The countdown
+ *  starts when the creator leaves and expires 24h later; the creator
+ *  returning cancels it. `expiresAt` is the deadline (ms epoch), null =
+ *  cancelled. */
+export interface RoomDestroyCountdown {
+  type: "room.destroy-countdown";
+  expiresAt: number | null;
+}
+
+/** Relay → peer: the room was destroyed (countdown expired). Remaining
+ *  members should return to the room list. */
+export interface RoomDestroyed {
+  type: "room.destroyed";
+}
+
 /** Relay → peer: a broadcast message routed to this member. Contains only
  *  this member's ciphertext entry (not the full ciphertexts array). */
 export interface RoomMessageRouted {
@@ -181,7 +230,7 @@ export interface RoomMessageRouted {
   from: string;
   nonce: string;
   ct: string;
-  kind?: "text" | "audio" | "file";
+  kind?: "text" | "audio" | "file" | "session-share";
   fileId?: string;
   meta?: RoomMessageMeta;
   viewOnce?: boolean;
@@ -206,9 +255,13 @@ export type RelayMessage =
   | RoomLeave
   | RoomMessage
   | RoomMessageViewed
+  | RoomSetViewOnce
+  | RoomViewOnceChanged
   | RoomJoined
   | RoomMemberJoined
   | RoomMemberLeft
+  | RoomDestroyCountdown
+  | RoomDestroyed
   | RoomMessageRouted
   | RoomError;
 

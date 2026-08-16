@@ -13,9 +13,14 @@ import type {
 } from "./relay-protocol";
 import { getStore } from "./store";
 
-const STORE_NAME = "workbench.relay";
-
 export type RoomPeerStatus = "off" | "connecting" | "joined" | "error";
+
+/** Normalize a relay URL to an http(s) base for `fetch`.
+ *  The stored `relayUrl` may use `ws://` / `wss://` (for the WebSocket peer
+ *  connection), but Node's `fetch` rejects non-http schemes. */
+function httpBase(relayUrl: string): string {
+  return relayUrl.replace(/^ws:\/\//, "http://").replace(/^wss:\/\//, "https://");
+}
 
 export interface RoomPeerConfig {
   relayUrl: string;
@@ -24,11 +29,14 @@ export interface RoomPeerConfig {
 
 export type RoomPeerEvent =
   | { type: "status"; status: RoomPeerStatus }
-  | { type: "joined"; roomId: string; inviteCode: string; members: RoomMember[] }
+  | { type: "joined"; roomId: string; inviteCode: string; members: RoomMember[]; enforceViewOnce: boolean; isCreator: boolean; destroyExpiresAt: number | null }
   | { type: "member-joined"; member: RoomMember }
   | { type: "member-left"; memberId: string }
   | { type: "message"; msg: RoomMessageRouted }
   | { type: "message-viewed"; messageId: string }
+  | { type: "view-once-changed"; enforce: boolean }
+  | { type: "destroy-countdown"; expiresAt: number | null }
+  | { type: "destroyed" }
   | { type: "error"; message: string };
 
 /** Independent peer WebSocket connection for room chat. This is completely
@@ -43,9 +51,15 @@ export class RoomPeer {
   private stopped = true;
   private status: RoomPeerStatus = "off";
   private myMemberId = "";
+  /** The creator's memberId, remembered so a rejoin after leaving identifies
+   *  the creator to the relay (which then cancels the destruction countdown). */
+  private myCreatorId = "";
   private inviteCode = "";
   private nickname = "";
   private members: RoomMember[] = [];
+  /** Initial enforceViewOnce the creator wants on first join. Undefined
+   *  means "not setting it" (regular members). */
+  private enforceViewOnceInit: boolean | undefined;
   private readonly listeners = new Set<(e: RoomPeerEvent) => void>();
 
   private static readonly RECONNECT_BASE_MS = 1_000;
@@ -86,10 +100,11 @@ export class RoomPeer {
 
   /** Join a room by invite code. Opens a peer WebSocket to the relay and
    *  sends `room.join`. Returns immediately; listen via onEvent. */
-  join(inviteCode: string, nickname: string): void {
+  join(inviteCode: string, nickname: string, opts?: { enforceViewOnce?: boolean }): void {
     this.stop();
     this.inviteCode = inviteCode;
     this.nickname = nickname;
+    this.enforceViewOnceInit = opts?.enforceViewOnce;
     this.stopped = false;
     this.attempts = 0;
     this.connect();
@@ -112,11 +127,9 @@ export class RoomPeer {
   async createRoom(): Promise<string> {
     const cfg = this.loadConfig();
     if (!cfg) throw new Error("relay not configured");
-    const url = new URL("/api/rooms", cfg.relayUrl);
-    const res = await fetch(url.toString(), {
-      method: "POST",
-      headers: { Authorization: `Bearer ${cfg.token}` },
-    });
+    const url = new URL("/api/rooms", httpBase(cfg.relayUrl));
+    url.searchParams.set("token", cfg.token);
+    const res = await fetch(url.toString(), { method: "POST" });
     if (!res.ok) throw new Error(`create room failed: ${res.status}`);
     const data = (await res.json()) as { inviteCode?: string };
     if (!data.inviteCode) throw new Error("missing inviteCode in response");
@@ -127,16 +140,17 @@ export class RoomPeer {
   async validateInvite(code: string): Promise<boolean> {
     const cfg = this.loadConfig();
     if (!cfg) throw new Error("relay not configured");
-    const url = new URL(`/api/rooms/${encodeURIComponent(code)}`, cfg.relayUrl);
-    const res = await fetch(url.toString(), {
-      headers: { Authorization: `Bearer ${cfg.token}` },
-    });
+    const url = new URL(`/api/rooms/${encodeURIComponent(code)}`, httpBase(cfg.relayUrl));
+    url.searchParams.set("token", cfg.token);
+    const res = await fetch(url.toString());
     return res.ok;
   }
 
   private loadConfig(): RoomPeerConfig | null {
     try {
-      const relay = getStore(STORE_NAME).get("relay") as Partial<{
+      // Relay config lives in the default settings store under the "relay"
+      // key (same place index.ts / relayHost.ts read from).
+      const relay = getStore().get("relay") as Partial<{
         relayUrl: string;
         token: string;
       }> | undefined;
@@ -164,11 +178,16 @@ export class RoomPeer {
     ws.on("open", () => {
       this.attempts = 0;
       // Send room.join immediately after opening.
-      ws.send(JSON.stringify({
+      const joinMsg: Record<string, unknown> = {
         type: "room.join",
         inviteCode: this.inviteCode,
         nickname: this.nickname,
-      } satisfies RelayMessage));
+      };
+      if (this.enforceViewOnceInit !== undefined) joinMsg.enforceViewOnce = this.enforceViewOnceInit;
+      // The creator carries their original memberId so a rejoin cancels the
+      // destruction countdown and restores creator status.
+      if (this.myCreatorId) joinMsg.creatorId = this.myCreatorId;
+      ws.send(JSON.stringify(joinMsg as RelayMessage));
     });
     ws.on("message", (data) => void this.handleMessage(data));
     ws.on("close", () => {
@@ -217,12 +236,16 @@ export class RoomPeer {
           j.members.find((m) => m.nickname === this.nickname)?.id ??
           j.members[j.members.length - 1]?.id ??
           "";
+        if (j.isCreator) this.myCreatorId = this.myMemberId;
         this.setStatus("joined");
         this.emit({
           type: "joined",
           roomId: j.roomId,
           inviteCode: j.inviteCode,
           members: j.members,
+          enforceViewOnce: j.enforceViewOnce === true,
+          isCreator: j.isCreator === true,
+          destroyExpiresAt: j.destroyExpiresAt ?? null,
         });
         break;
       }
@@ -242,6 +265,15 @@ export class RoomPeer {
       }
       case "room.message-viewed":
         this.emit({ type: "message-viewed", messageId: (msg as { messageId: string }).messageId });
+        break;
+      case "room.view-once-changed":
+        this.emit({ type: "view-once-changed", enforce: (msg as { enforce: boolean }).enforce });
+        break;
+      case "room.destroy-countdown":
+        this.emit({ type: "destroy-countdown", expiresAt: (msg as { expiresAt: number | null }).expiresAt });
+        break;
+      case "room.destroyed":
+        this.emit({ type: "destroyed" });
         break;
       case "room.error":
         this.emit({ type: "error", message: (msg as { message: string }).message });
@@ -306,7 +338,7 @@ export class RoomPeer {
   ): Promise<string> {
     const cfg = this.loadConfig();
     if (!cfg) throw new Error("relay not configured");
-    const url = new URL(`/api/rooms/${encodeURIComponent(this.inviteCode)}/upload`, cfg.relayUrl);
+    const url = new URL(`/api/rooms/${encodeURIComponent(this.inviteCode)}/upload`, httpBase(cfg.relayUrl));
     url.searchParams.set("token", cfg.token);
     if (meta.filename) url.searchParams.set("filename", meta.filename);
     if (meta.mime) url.searchParams.set("mime", meta.mime);
@@ -345,6 +377,34 @@ export class RoomPeer {
     return messageId;
   }
 
+  /** Send a compressed session share (kind="session-share"). The summary
+   *  travels in `ct` (base64 plaintext, same as text messages until E2E);
+   *  meta carries the source session's title/id for the card UI. */
+  sendSessionShare(
+    payload: { title: string; sessionId: string; summary: string },
+    opts?: { viewOnce?: boolean },
+  ): string {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      throw new Error("not connected to room");
+    }
+    const messageId = randomUUID();
+    const encoded = Buffer.from(payload.summary, "utf-8").toString("base64");
+    const ciphertexts = this.members
+      .filter((m) => m.id !== this.myMemberId)
+      .map((m) => ({ to: m.id, nonce: "", ct: encoded }));
+    const msg: RelayMessage = {
+      type: "room.message",
+      messageId,
+      ciphertexts,
+      kind: "session-share",
+      meta: { sessionTitle: payload.title, sessionId: payload.sessionId },
+      viewOnce: opts?.viewOnce ?? false,
+      at: Date.now(),
+    };
+    this.ws.send(JSON.stringify(msg));
+    return messageId;
+  }
+
   /** Download a file blob by fileId to a temp directory. Returns the local
    *  file path so the renderer can open/save it. */
   async downloadFile(fileId: string, filename?: string): Promise<string> {
@@ -370,6 +430,17 @@ export class RoomPeer {
     const msg: RelayMessage = {
       type: "room.message-viewed",
       messageId,
+    };
+    this.ws.send(JSON.stringify(msg));
+  }
+
+  /** Creator: toggle the room's enforceViewOnce flag. The relay broadcasts
+   *  `room.view-once-changed` to all members (including the creator). */
+  roomSetViewOnce(enforce: boolean): void {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+    const msg: RelayMessage = {
+      type: "room.set-view-once",
+      enforce,
     };
     this.ws.send(JSON.stringify(msg));
   }

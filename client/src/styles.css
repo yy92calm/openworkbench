@@ -1031,6 +1031,14 @@ textarea {
   font-size: 12px;
   text-align: center;
 }
+.room-countdown-banner {
+  padding: 8px 12px;
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+  font-size: 12px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
 .room-messages {
   flex: 1;
   overflow-y: auto;
@@ -1060,6 +1068,11 @@ textarea {
   color: var(--muted);
   margin-bottom: 2px;
   margin-left: 4px;
+}
+.room-msg.mine .room-msg-from {
+  text-align: right;
+  margin-left: 0;
+  margin-right: 4px;
 }
 .room-msg-bubble {
   background: var(--surface-2);
@@ -1109,6 +1122,293 @@ textarea {
 .room-msg.mine .room-msg-time {
   text-align: right;
   margin-right: 4px;
+}
+.room-msg-read {
+  font-size: 10px;
+  color: var(--muted);
+  text-align: right;
+  margin: 2px 4px 0 0;
+}
+
+/* ── Rooms page: chat-app style list ──────────────────────────────────── */
+.rooms-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+.rooms-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 16px 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.rooms-nickname-chip {
+  font-size: 12px;
+  color: var(--muted);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 3px 10px;
+  max-width: 120px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+.rooms-header-action {
+  font-size: 13px;
+  color: var(--accent);
+  background: transparent;
+  border: none;
+  padding: 6px 8px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.rooms-nickname-row {
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+.rooms-nickname-row input {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 14px;
+  color: var(--text);
+  outline: none;
+}
+.rooms-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.rooms-empty {
+  text-align: center;
+  padding: 48px 16px;
+  color: var(--text);
+}
+.rooms-list-item {
+  display: flex;
+  align-items: stretch;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.rooms-list-main {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  min-width: 0;
+}
+.rooms-list-main:hover { background: var(--surface-2); }
+.rooms-list-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--accent-fg, #fff);
+  font-size: 17px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.rooms-list-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.rooms-list-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.rooms-list-code {
+  font-family: var(--font-mono, monospace);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 1px;
+}
+.rooms-list-time {
+  font-size: 11px;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+.rooms-list-sub {
+  font-size: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rooms-list-remove {
+  width: 36px;
+  flex-shrink: 0;
+  background: transparent;
+  border: none;
+  border-left: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 18px;
+  cursor: pointer;
+}
+.rooms-list-remove:hover { color: var(--error); background: var(--surface-2); }
+.rooms-actions {
+  display: flex;
+  gap: 8px;
+  padding: 10px 12px;
+  padding-bottom: max(10px, env(safe-area-inset-bottom));
+  border-top: 1px solid var(--border);
+  background: var(--surface);
+}
+.rooms-join {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+/* ── Session share picker ("/") ───────────────────────────────────────── */
+.room-input-wrap {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+.room-share-picker {
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  max-height: 260px;
+  display: flex;
+  flex-direction: column;
+}
+.room-share-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+}
+.room-share-close {
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 18px;
+  cursor: pointer;
+  padding: 0 4px;
+}
+.room-share-error {
+  padding: 8px 12px;
+  font-size: 12px;
+  color: #f87171;
+  border-bottom: 1px solid var(--border);
+}
+.room-share-empty {
+  padding: 20px 12px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--muted);
+}
+.room-share-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px;
+}
+.room-share-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 10px;
+  cursor: pointer;
+  color: var(--text);
+  text-align: left;
+}
+.room-share-item:hover { background: var(--surface-2); }
+.room-share-item:disabled { opacity: 0.5; }
+.room-share-item-title {
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.room-share-item-time {
+  font-size: 11px;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+/* ── Session share message card ───────────────────────────────────────── */
+.room-msg-share {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  max-width: 100%;
+}
+.room-msg-share-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  background: transparent;
+  border: none;
+  padding: 9px 12px;
+  cursor: pointer;
+  color: var(--text);
+  text-align: left;
+  font-size: 13px;
+}
+.room-msg-share-head:hover { background: var(--surface); }
+.room-msg-share-icon { flex-shrink: 0; }
+.room-msg-share-title {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 600;
+}
+.room-msg-share-toggle {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--accent);
+}
+.room-msg-share-body {
+  padding: 10px 12px;
+  border-top: 1px solid var(--border);
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text);
+  max-height: 320px;
+  overflow-y: auto;
+  background: var(--bg);
 }
 .room-input-bar {
   display: flex;
@@ -1492,3 +1792,174 @@ textarea {
   color: var(--error);
 }
 .sheet-actions > button.btn-danger:hover:not(:disabled) { background: color-mix(in srgb, var(--error) 12%, transparent); }
+
+/* ── DeviceBar (global top bar) ─────────────────────────────────────────── */
+.device-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 14px;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.device-bar:hover { background: var(--surface-2); }
+.device-bar.not-selected {
+  background: color-mix(in srgb, var(--warn) 10%, var(--surface));
+  color: var(--warn);
+}
+.device-bar.not-selected:hover { background: color-mix(in srgb, var(--warn) 16%, var(--surface)); }
+.device-bar-id {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono, monospace);
+}
+.device-bar-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+.device-bar-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.device-bar-cta {
+  font-size: 12px;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+/* ── DeviceSheet (bottom-up picker) ───────────────────────────────────────
+   Reuses the shared .sheet-backdrop + .sheet-actions, but uses its own
+   card layout (sheet-handle / sheet-header / sheet-list / sheet-item). */
+.device-sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 101;
+  max-width: 560px;
+  margin: 0 auto;
+  max-height: 80dvh;
+  overflow-y: auto;
+  background: var(--surface);
+  border-top-left-radius: 18px;
+  border-top-right-radius: 18px;
+  border: 1px solid var(--border);
+  border-bottom: none;
+  box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.4);
+  animation: sheet-up 0.22s cubic-bezier(0.32, 0.72, 0, 1);
+  padding: 8px 16px calc(16px + env(safe-area-inset-bottom));
+}
+.sheet-handle {
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border);
+  margin: 0 auto 8px;
+}
+.sheet-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0 10px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 10px;
+}
+.sheet-title {
+  flex: 1;
+  font-size: 15px;
+  font-weight: 600;
+}
+.sheet-error {
+  color: var(--error);
+  font-size: 13px;
+  padding: 6px 0;
+}
+.sheet-empty {
+  color: var(--muted);
+  font-size: 13px;
+  padding: 24px 0;
+  text-align: center;
+}
+.sheet-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+.sheet-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 9px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+.sheet-item:hover { background: var(--surface-2); }
+.sheet-item.selected {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+.sheet-item.offline { opacity: 0.6; }
+.sheet-item-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.sheet-item-id {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono, monospace);
+  font-size: 12.5px;
+}
+.sheet-item-status {
+  font-size: 11px;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+/* ── DeviceRequiredCard (empty-state CTA) ───────────────────────────────── */
+.device-required-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 64px 24px;
+  text-align: center;
+}
+.device-required-title {
+  font-size: 16px;
+  font-weight: 600;
+}
+.device-required-desc {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+  max-width: 280px;
+}
+

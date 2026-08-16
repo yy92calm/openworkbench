@@ -12,6 +12,7 @@ import { WorkspaceSwitchPage } from "@/pages/WorkspaceSwitchPage";
 import { SettingsPage } from "@/pages/SettingsPage";
 import { RoomsPage } from "@/pages/RoomsPage";
 import { TabBar, type TabKey } from "@/components/TabBar";
+import { DeviceBar } from "@/components/DeviceBar";
 
 /** Stack entry for pages pushed on top of a tab (e.g. session view, task form,
  *  file preview). Each entry knows how to render itself and how to go back. */
@@ -29,18 +30,34 @@ export function App() {
   const [stack, setStack] = useState<StackEntry[]>([]);
 
   // Auto-reconnect from the saved config on reload; only show the connect form
-  // when there is nothing saved or the connection fails.
+  // when there is nothing saved. If a device was picked before, try to restore
+  // the full connection; if not, just enter the main shell (ready=true) so the
+  // user can use device-independent tabs (Rooms / Settings).
   useEffect(() => {
-    if (isConnected()) return;
+    if (isConnected()) {
+      setReady(true);
+      setTrying(false);
+      return;
+    }
     const cfg = loadConfig();
     if (!cfg) {
       setTrying(false);
       return;
     }
-    connect(cfg)
-      .then(() => setReady(true))
-      .catch(() => setReady(false))
-      .finally(() => setTrying(false));
+    if (cfg.deviceId) {
+      // Previously picked a device — try to reconnect; either way enter the
+      // main shell so the user can retry from the DeviceBar on failure.
+      connect(cfg)
+        .catch(() => { /* surfaced via DeviceBar status */ })
+        .finally(() => {
+          setReady(true);
+          setTrying(false);
+        });
+    } else {
+      // Logged in but no device picked — straight to main shell.
+      setReady(true);
+      setTrying(false);
+    }
   }, []);
 
   const push = (entry: StackEntry) => setStack((s) => [...s, entry]);
@@ -56,7 +73,6 @@ export function App() {
   if (!ready) {
     return <ConnectPage onConnected={() => setReady(true)} />;
   }
-  if (!getClient()) return null; // ready implies a live client
 
   // Render the top of the stack (a pushed page) over the current tab.
   if (stack.length > 0) {
@@ -84,7 +100,12 @@ export function App() {
         page = <WorkspaceSwitchPage onBack={pop} />;
         break;
     }
-    return <div className="app-shell">{page}</div>;
+    return (
+      <div className="app-shell">
+        <DeviceBar />
+        <div className="tab-content">{page}</div>
+      </div>
+    );
   }
 
   // Tab root pages.
@@ -120,6 +141,7 @@ export function App() {
 
   return (
     <div className="app-shell">
+      <DeviceBar />
       <div className="tab-content">{page}</div>
       <TabBar active={tab} onChange={setTab} />
     </div>

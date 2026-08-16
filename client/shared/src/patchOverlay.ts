@@ -152,7 +152,7 @@ export function applyProfilePatch(base: string, spec: UserPatchSpec): string {
   const ops = spec.patch ?? [];
   for (const op of ops) {
     if (FORBIDDEN_ROOTS.has(op.path)) throw new PatchPolicyError(`path ${op.path} is not patchable`);
-    if (op.from && FORBIDDEN_ROOTS.has(op.from)) throw new PatchPolicyError(`path ${op.from} is not patchable`);
+    if ("from" in op && op.from && FORBIDDEN_ROOTS.has(op.from)) throw new PatchPolicyError(`path ${op.from} is not patchable`);
   }
   const doc: unknown = JSON.parse(JSON.stringify(baseDoc));
   for (const op of ops) applyOp(doc, op);

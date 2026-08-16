@@ -28,6 +28,9 @@ export type RoomEvent =
   | { type: "member-left"; data: RoomMemberLeft }
   | { type: "message"; data: RoomMessageRouted }
   | { type: "message-viewed"; messageId: string }
+  | { type: "view-once-changed"; enforce: boolean }
+  | { type: "destroy-countdown"; expiresAt: number | null }
+  | { type: "destroyed" }
   | { type: "error"; message: string }
   | { type: "disconnected" };
 
@@ -36,16 +39,20 @@ export interface RoomMessageItem {
   from: string; // member id
   fromMe: boolean;
   text: string;
-  kind: "text" | "audio" | "file";
+  kind: "text" | "audio" | "file" | "session-share";
   fileId?: string;
-  meta?: { filename?: string; size?: number; mime?: string; duration?: number };
+  meta?: { filename?: string; size?: number; mime?: string; duration?: number; sessionTitle?: string; sessionId?: string };
   at: number;
   viewOnce?: boolean;
-  viewed?: boolean; // for viewOnce messages I sent — true after recipient viewed
+  viewed?: boolean; // for messages I sent — true after recipient viewed
+  read?: boolean;   // alias for `viewed` on regular messages
 }
 
 let ws: WebSocket | null = null;
 let myMemberId = "";
+/** The creator's memberId, remembered so a rejoin after leaving identifies
+ *  the creator to the relay (which then cancels the destruction countdown). */
+let myCreatorId = "";
 let inviteCode = "";
 let members: RoomMember[] = [];
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -65,6 +72,14 @@ function wsUrl(relayWsUrl: string, token: string): string {
   return `${wsBase}?role=peer&token=${encodeURIComponent(token)}`;
 }
 
+/** Inverse of wsUrl: relayUrl may be stored as ws:// by the login flow, but
+ *  fetch() requires an http(s) scheme — failed-to-fetch otherwise. */
+function httpUrl(relayUrl: string): string {
+  return relayUrl
+    .replace(/^ws:\/\//, "http://")
+    .replace(/^wss:\/\//, "https://");
+}
+
 function drainQueue(): void {
   if (!ws || ws.readyState !== WebSocket.OPEN) return;
   while (messageQueue.length > 0) {
@@ -73,14 +88,20 @@ function drainQueue(): void {
   }
 }
 
-function handleOpen(socket: WebSocket, code: string, nickname: string): void {
+function handleOpen(socket: WebSocket, code: string, nickname: string, opts?: { enforceViewOnce?: boolean }): void {
   // Send room.join as soon as the WS opens.
-  const joinMsg = JSON.stringify({
+  const joinMsg: Record<string, unknown> = {
     type: "room.join",
     inviteCode: code,
     nickname,
-  });
-  socket.send(joinMsg);
+  };
+  // Only honor `enforceViewOnce` on the first join (the creator); the relay
+  // ignores this field for subsequent joins, so it is safe to always send.
+  if (opts?.enforceViewOnce !== undefined) joinMsg.enforceViewOnce = opts.enforceViewOnce;
+  // The creator carries their original memberId so a rejoin cancels the
+  // destruction countdown and restores creator status.
+  if (myCreatorId) joinMsg.creatorId = myCreatorId;
+  socket.send(JSON.stringify(joinMsg));
 }
 
 function handleMessage(data: string): void {
@@ -94,6 +115,7 @@ function handleMessage(data: string): void {
     case "room.joined": {
       const j = msg as unknown as RoomJoined;
       myMemberId = j.members[j.members.length - 1]?.id ?? "";
+      if (j.isCreator) myCreatorId = myMemberId;
       members = j.members;
       inviteCode = j.inviteCode;
       emit({ type: "joined", data: j });
@@ -121,6 +143,19 @@ function handleMessage(data: string): void {
       emit({ type: "message-viewed", messageId: m.messageId });
       break;
     }
+    case "room.view-once-changed": {
+      const m = msg as unknown as { enforce: boolean };
+      emit({ type: "view-once-changed", enforce: m.enforce });
+      break;
+    }
+    case "room.destroy-countdown": {
+      const m = msg as unknown as { expiresAt: number | null };
+      emit({ type: "destroy-countdown", expiresAt: m.expiresAt });
+      break;
+    }
+    case "room.destroyed":
+      emit({ type: "destroyed" });
+      break;
     case "room.error": {
       const m = msg as unknown as RoomError;
       emit({ type: "error", message: m.message });
@@ -140,7 +175,7 @@ function scheduleReconnect(code: string, nickname: string): void {
 }
 
 /** Join a room by invite code. Returns a cleanup function. */
-export function joinRoom(code: string, nickname: string): () => void {
+export function joinRoom(code: string, nickname: string, opts?: { enforceViewOnce?: boolean }): () => void {
   const cfg = loadConfig();
   if (!cfg) throw new Error("not connected to relay");
   inviteCode = code;
@@ -151,7 +186,7 @@ export function joinRoom(code: string, nickname: string): () => void {
   ws = new WebSocket(url);
   ws.onopen = () => {
     attempts = 0;
-    handleOpen(ws!, code, nickname);
+    handleOpen(ws!, code, nickname, opts);
     drainQueue();
   };
   ws.onmessage = (e) => {
@@ -191,7 +226,7 @@ export function onRoomEvent(cb: (e: RoomEvent) => void): () => void {
 export async function createRoom(): Promise<string> {
   const cfg = loadConfig();
   if (!cfg) throw new Error("not connected to relay");
-  const res = await fetch(`${cfg.relayUrl}/api/rooms?token=${encodeURIComponent(cfg.token)}`, {
+  const res = await fetch(`${httpUrl(cfg.relayUrl)}/api/rooms?token=${encodeURIComponent(cfg.token)}`, {
     method: "POST",
   });
   if (!res.ok) throw new Error(`create room failed: ${res.status}`);
@@ -204,7 +239,7 @@ export async function validateInvite(code: string): Promise<boolean> {
   const cfg = loadConfig();
   if (!cfg) throw new Error("not connected to relay");
   const res = await fetch(
-    `${cfg.relayUrl}/api/rooms/${encodeURIComponent(code)}?token=${encodeURIComponent(cfg.token)}`,
+    `${httpUrl(cfg.relayUrl)}/api/rooms/${encodeURIComponent(code)}?token=${encodeURIComponent(cfg.token)}`,
   );
   return res.ok;
 }
@@ -246,7 +281,7 @@ export async function uploadRoomBlob(
   if (meta.mime) params.set("mime", meta.mime);
   if (meta.duration !== undefined) params.set("duration", String(meta.duration));
   const res = await fetch(
-    `${cfg.relayUrl}/api/rooms/${encodeURIComponent(inviteCode)}/upload?${params}`,
+    `${httpUrl(cfg.relayUrl)}/api/rooms/${encodeURIComponent(inviteCode)}/upload?${params}`,
     { method: "POST", body: blob },
   );
   if (!res.ok) throw new Error(`upload failed: ${res.status}`);
@@ -285,12 +320,40 @@ export function sendFileMessage(
   return messageId;
 }
 
+/** Send a compressed session share (kind="session-share"). The summary text
+ *  travels in `ct` (same base64 plaintext encoding as text messages until E2E
+ *  lands); meta carries the source session's title/id for the card UI. */
+export function sendSessionShare(
+  payload: { title: string; sessionId: string; summary: string },
+  opts?: { viewOnce?: boolean },
+): string {
+  if (!ws || ws.readyState !== WebSocket.OPEN) {
+    throw new Error("not connected to room");
+  }
+  const messageId = crypto.randomUUID();
+  const encoded = btoa(unescape(encodeURIComponent(payload.summary)));
+  const ciphertexts = members
+    .filter((m) => m.id !== myMemberId)
+    .map((m) => ({ to: m.id, nonce: "", ct: encoded }));
+  const msg = JSON.stringify({
+    type: "room.message",
+    messageId,
+    ciphertexts,
+    kind: "session-share",
+    meta: { sessionTitle: payload.title, sessionId: payload.sessionId },
+    viewOnce: opts?.viewOnce ?? false,
+    at: Date.now(),
+  });
+  ws.send(msg);
+  return messageId;
+}
+
 /** Download a file blob by fileId (for audio playback or file save). */
 export async function downloadRoomBlob(fileId: string): Promise<Blob> {
   const cfg = loadConfig();
   if (!cfg) throw new Error("not connected to relay");
   const res = await fetch(
-    `${cfg.relayUrl}/api/rooms/files/${encodeURIComponent(fileId)}?token=${encodeURIComponent(cfg.token)}`,
+    `${httpUrl(cfg.relayUrl)}/api/rooms/files/${encodeURIComponent(fileId)}?token=${encodeURIComponent(cfg.token)}`,
   );
   if (!res.ok) throw new Error(`download failed: ${res.status}`);
   return await res.blob();
@@ -300,6 +363,13 @@ export async function downloadRoomBlob(fileId: string): Promise<Blob> {
 export function replyViewed(messageId: string): void {
   if (!ws || ws.readyState !== WebSocket.OPEN) return;
   ws.send(JSON.stringify({ type: "room.message-viewed", messageId }));
+}
+
+/** Creator: toggle the room's enforceViewOnce flag. The relay broadcasts
+ *  `room.view-once-changed` to all members (including the creator). */
+export function roomSetViewOnce(enforce: boolean): void {
+  if (!ws || ws.readyState !== WebSocket.OPEN) return;
+  ws.send(JSON.stringify({ type: "room.set-view-once", enforce }));
 }
 
 /** Leave the current room. */
@@ -328,5 +398,66 @@ export function decodeMessage(ct: string, _nonce: string, _fromPubKey?: string):
     return decodeURIComponent(escape(atob(ct)));
   } catch {
     return "[无法解码的消息]";
+  }
+}
+
+// ── Recent rooms (local history for the RoomsPage list) ───────────────────
+// Persisted to localStorage so the user can re-enter recently visited rooms
+// without retyping the invite code. The relay still owns the source of truth
+// (whether a room still exists); these records only drive the UI list.
+
+const RECENT_ROOMS_KEY = "workbench.rooms.recent";
+const RECENT_ROOMS_MAX = 20;
+
+export interface RecentRoom {
+  inviteCode: string;
+  nickname: string;
+  joinedAt: number;
+  lastVisitedAt: number;
+}
+
+export function loadRecentRooms(): RecentRoom[] {
+  try {
+    const raw = localStorage.getItem(RECENT_ROOMS_KEY);
+    if (!raw) return [];
+    const arr = JSON.parse(raw) as RecentRoom[];
+    return Array.isArray(arr) ? arr : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Insert or update a room in the recent list. Bumps lastVisitedAt to now,
+ *  keeps the original joinedAt, dedupes by inviteCode, and trims to the
+ *  configured max length (most recent first). */
+export function recordRecentRoom(inviteCode: string, nickname: string): void {
+  const now = Date.now();
+  const existing = loadRecentRooms();
+  const idx = existing.findIndex((r) => r.inviteCode === inviteCode);
+  if (idx >= 0) {
+    const item = existing[idx];
+    existing.splice(idx, 1);
+    existing.unshift({
+      inviteCode,
+      nickname: nickname || item.nickname,
+      joinedAt: item.joinedAt,
+      lastVisitedAt: now,
+    });
+  } else {
+    existing.unshift({ inviteCode, nickname, joinedAt: now, lastVisitedAt: now });
+  }
+  try {
+    localStorage.setItem(RECENT_ROOMS_KEY, JSON.stringify(existing.slice(0, RECENT_ROOMS_MAX)));
+  } catch {
+    /* localStorage unavailable — UI just won't persist */
+  }
+}
+
+export function removeRecentRoom(inviteCode: string): void {
+  const existing = loadRecentRooms().filter((r) => r.inviteCode !== inviteCode);
+  try {
+    localStorage.setItem(RECENT_ROOMS_KEY, JSON.stringify(existing));
+  } catch {
+    /* ignore */
   }
 }

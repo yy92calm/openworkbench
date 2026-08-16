@@ -340,7 +340,7 @@ export interface RoomMessageMeta {
 
 export type RoomEvent =
   | { type: "status"; status: RoomStatus }
-  | { type: "joined"; roomId: string; inviteCode: string; members: RoomMember[] }
+  | { type: "joined"; roomId: string; inviteCode: string; members: RoomMember[]; enforceViewOnce: boolean; isCreator: boolean; destroyExpiresAt: number | null }
   | { type: "member-joined"; member: RoomMember }
   | { type: "member-left"; memberId: string }
   | {
@@ -358,6 +358,9 @@ export type RoomEvent =
       };
     }
   | { type: "message-viewed"; messageId: string }
+  | { type: "view-once-changed"; enforce: boolean }
+  | { type: "destroy-countdown"; expiresAt: number | null }
+  | { type: "destroyed" }
   | { type: "error"; message: string };
 
 export async function roomCreate(): Promise<{ inviteCode: string }> {
@@ -368,8 +371,8 @@ export async function roomValidate(code: string): Promise<boolean> {
   return api().roomValidate(code);
 }
 
-export async function roomJoin(inviteCode: string, nickname: string): Promise<boolean> {
-  return api().roomJoin(inviteCode, nickname);
+export async function roomJoin(inviteCode: string, nickname: string, opts?: { enforceViewOnce?: boolean }): Promise<boolean> {
+  return api().roomJoin(inviteCode, nickname, opts);
 }
 
 export async function roomLeave(): Promise<boolean> {
@@ -434,6 +437,17 @@ export async function roomSaveDialog(
 
 export async function roomViewed(messageId: string): Promise<boolean> {
   return api().roomViewed(messageId);
+}
+
+export async function roomSetViewOnce(enforce: boolean): Promise<boolean> {
+  return api().roomSetViewOnce(enforce);
+}
+
+export async function roomSendSessionShare(
+  payload: { title: string; sessionId: string; summary: string },
+  viewOnce?: boolean,
+): Promise<string> {
+  return api().roomSendSessionShare(payload, viewOnce);
 }
 
 export async function roomStatus(): Promise<{

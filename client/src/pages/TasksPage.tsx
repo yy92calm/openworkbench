@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
 import { Clock, Play, Plus, RefreshCw, Trash2, ChevronRight } from "lucide-react";
 import type { ScheduledTask } from "@workbench/sdk";
-import { getHostClient } from "@/lib/connection";
+import { getHostClient, isConnected } from "@/lib/connection";
 import { humanCron, timeAgo, timeUntil } from "@/lib/format";
 import { ActionSheet } from "@/components/ActionSheet";
+import { DeviceRequiredCard } from "@/components/DeviceRequiredCard";
 
 interface Props {
   onNew: () => void;
@@ -32,10 +33,15 @@ export function TasksPage({ onNew, onEdit, onHistory }: Props) {
   }, []);
 
   useEffect(() => {
+    if (!isConnected()) return;
     void refresh();
     const t = setInterval(() => void refresh(), 15000);
     return () => clearInterval(t);
   }, [refresh]);
+
+  if (!isConnected()) {
+    return <DeviceRequiredCard />;
+  }
 
   const showToast = (msg: string) => {
     setToast(msg);

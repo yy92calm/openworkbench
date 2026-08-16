@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { RadioTower, Copy, Check, LogOut } from "lucide-react";
 import type { RelayHostStatusInfo } from "@workbench/sdk";
-import { getHostClient, loadConfig, disconnect } from "@/lib/connection";
+import { getHostClient, isConnected, loadConfig, disconnect, openDeviceSheet } from "@/lib/connection";
 
 const STATUS_LABEL: Record<RelayHostStatusInfo["status"], string> = {
   off: "未连接",
@@ -29,6 +29,10 @@ export function SettingsPage({ onDisconnected }: Props) {
   const cfg = loadConfig();
 
   const refresh = useCallback(async () => {
+    if (!isConnected()) {
+      setLoading(false);
+      return;
+    }
     try {
       setStatus(await getHostClient().getRelayStatus());
       setError("");
@@ -40,6 +44,10 @@ export function SettingsPage({ onDisconnected }: Props) {
   }, []);
 
   useEffect(() => {
+    if (!isConnected()) {
+      setLoading(false);
+      return;
+    }
     void refresh();
     const t = setInterval(() => void refresh(), 5000);
     return () => clearInterval(t);
@@ -81,7 +89,16 @@ export function SettingsPage({ onDisconnected }: Props) {
           )}
         </div>
 
-        {loading ? (
+        {!isConnected() ? (
+          <div className="settings-row">
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <span style={{ color: "var(--muted)", fontSize: 13 }}>未选择设备</span>
+              <button className="btn-primary" onClick={() => openDeviceSheet()}>
+                <RadioTower size={15} /> 选择设备
+              </button>
+            </div>
+          </div>
+        ) : loading ? (
           <div className="settings-row">加载中…</div>
         ) : status ? (
           <>
