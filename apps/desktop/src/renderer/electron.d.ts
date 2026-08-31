@@ -78,14 +78,23 @@ export interface ElectronAPI {
   /** Remote relay (host side). */
   relayStatus: () => Promise<{
     status: 'off' | 'connecting' | 'connected' | 'error';
-    config: { enabled: boolean; relayUrl: string; deviceId: string; tokenSet: boolean };
+    config: {
+      enabled: boolean;
+      relayUrl: string;
+      deviceId: string;
+      tokenSet: boolean;
+      keepAwake: boolean;
+    };
   }>;
   relayStart: (config: {
     relayUrl: string;
     deviceId: string;
     token: string;
+    keepAwake?: boolean;
   }) => Promise<'off' | 'connecting' | 'connected' | 'error'>;
   relayStop: () => Promise<string>;
+  /** Toggle keep-awake live (applies without reconnecting). */
+  relaySetKeepAwake: (on: boolean) => Promise<void>;
   onRelayStatus: (callback: (status: string) => void) => () => void;
   /** Session IDs created by remote guests via relay (for sidebar badge). */
   relayRemoteSessions: () => Promise<string[]>;

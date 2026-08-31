@@ -56,8 +56,9 @@ const en: TranslationMap = {
   'settings.remote.subtitle':
     'Clients sign in with the account token and pick this device from their device list',
   'settings.remote.relayUrl': 'Relay server (ws:// or wss://)',
-  'settings.remote.deviceId':
-    "Device ID (stable across upgrades; shown in the client's device list)",
+  'settings.remote.deviceId': "Device ID (editable; shown in the client's device list)",
+  'settings.remote.deviceIdHint': 'Reconnect to apply changes',
+  'settings.remote.keepAwake': 'Keep awake while connected (prevents system sleep)',
   'settings.remote.token': "Account token (the client's login credential)",
   'settings.remote.connect': 'Save & connect',
   'settings.remote.disconnect': 'Disconnect',
@@ -155,7 +156,9 @@ const zhCN: TranslationMap = {
   'settings.remote.title': '远程访问',
   'settings.remote.subtitle': '客户端用账号令牌登录后，会从该账号的设备列表里选择本机',
   'settings.remote.relayUrl': '中继服务器地址（ws:// 或 wss://）',
-  'settings.remote.deviceId': '设备 ID（升级不变，会出现在客户端的设备列表里）',
+  'settings.remote.deviceId': '设备 ID（可修改，会出现在客户端的设备列表里）',
+  'settings.remote.deviceIdHint': '修改后断开并重新连接生效',
+  'settings.remote.keepAwake': '保持唤醒（连接期间阻止系统睡眠）',
   'settings.remote.token': '账号令牌（客户端的登录凭证）',
   'settings.remote.connect': '保存并连接',
   'settings.remote.disconnect': '断开连接',

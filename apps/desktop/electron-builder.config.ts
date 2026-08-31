@@ -14,9 +14,9 @@ const config: Configuration = {
       filter: [
         'opencode',
         'opencode.exe',
-        'whisper/whisper-cli',
-        'whisper/whisper-cli.exe',
-        'whisper/ggml-tiny-q5_1.bin',
+        // 整个 whisper/ 目录：whisper-cli（macOS 自 brew 拷贝 / Windows 自编译）
+        // + ggml-tiny-q5_1.bin 模型。精确文件名 filter 匹配不到子目录文件。
+        'whisper/**',
       ],
     },
     {

@@ -1,6 +1,7 @@
 import { existsSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 
+import { powerSaveBlocker } from 'electron';
 import { WebSocket } from 'ws';
 
 import * as artifactFile from './artifact_file';
@@ -23,6 +24,8 @@ export interface RelayHostConfig {
   relayUrl: string;
   deviceId: string;
   token: string;
+  /** Prevent system sleep while the relay connection is active. */
+  keepAwake: boolean;
 }
 
 export type RelayHostStatus = 'off' | 'connecting' | 'connected' | 'error';
@@ -50,6 +53,8 @@ export class RelayHost {
    *  survives host restarts. */
   private remoteSessionIds: Set<string> = new Set();
   private readonly remoteListeners = new Set<() => void>();
+  /** powerSaveBlocker id while keepAwake is active (null when released). */
+  private powerSaveBlockerId: number | null = null;
 
   constructor() {
     this.loadRemoteSessions();
@@ -110,12 +115,14 @@ export class RelayHost {
     this.config = config;
     this.stopped = false;
     this.attempts = 0;
+    this.applyKeepAwake();
     this.connect();
     return this.status;
   }
 
   stop(): void {
     this.stopped = true;
+    this.applyKeepAwake();
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
@@ -125,6 +132,25 @@ export class RelayHost {
     this.ws?.close();
     this.ws = null;
     this.setStatus('off');
+  }
+
+  /** Toggle keep-awake live (no reconnect) — used by the settings switch. */
+  setKeepAwake(on: boolean): void {
+    if (this.config) this.config.keepAwake = on;
+    this.applyKeepAwake();
+  }
+
+  /** Hold/release the system sleep blocker according to config + connection
+   *  intent. The blocker stays while the relay is active (including reconnect
+   *  backoff) and is released on stop(). */
+  private applyKeepAwake(): void {
+    const want = !this.stopped && !!this.config?.keepAwake;
+    if (want && this.powerSaveBlockerId === null) {
+      this.powerSaveBlockerId = powerSaveBlocker.start('prevent-display-sleep');
+    } else if (!want && this.powerSaveBlockerId !== null) {
+      powerSaveBlocker.stop(this.powerSaveBlockerId);
+      this.powerSaveBlockerId = null;
+    }
   }
 
   private setStatus(next: RelayHostStatus): void {

@@ -7,7 +7,9 @@ set -euo pipefail
 # Model:   ggml-tiny-q5_1.bin (~31MB quantized) from HuggingFace
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+# scripts/dev → 项目根（两级；与 fetch-opencode.sh 一致——之前多算一级
+# 会把产物写到 ~/Desktop/apps/...）
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 TARGET="$PROJECT_ROOT/apps/desktop/binaries/whisper"
 
 echo "=== Whisper.cpp 模型下载 ==="

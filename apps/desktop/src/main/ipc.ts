@@ -146,6 +146,7 @@ export function registerIpcHandlers(): void {
         relayUrl: cfg?.relayUrl ?? 'ws://43.133.82.137:8080',
         deviceId: cfg?.deviceId ?? '',
         tokenSet: !!cfg?.token,
+        keepAwake: !!cfg?.keepAwake,
       },
     };
   });
@@ -157,9 +158,16 @@ export function registerIpcHandlers(): void {
       relayUrl: input.relayUrl?.trim() || existing?.relayUrl || 'ws://43.133.82.137:8080',
       deviceId: input.deviceId?.trim() || existing?.deviceId || randomUUID(),
       token: input.token?.trim() || existing?.token || randomUUID(),
+      keepAwake: !!input.keepAwake,
     };
     store.set('relay', cfg);
     return relayHost.start(cfg);
+  });
+  ipcMain.handle('relay-set-keep-awake', (_e, on: boolean) => {
+    const store = getStore();
+    const cfg = store.get('relay') as Partial<RelayHostConfig> | undefined;
+    if (cfg) store.set('relay', { ...cfg, keepAwake: !!on });
+    relayHost.setKeepAwake(!!on);
   });
   ipcMain.handle('relay-stop', () => {
     const store = getStore();

@@ -22,6 +22,7 @@ export function RemoteCard() {
   const [deviceId, setDeviceId] = useState('');
   const [token, setToken] = useState('');
   const [tokenSet, setTokenSet] = useState(false);
+  const [keepAwake, setKeepAwake] = useState(false);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -31,6 +32,7 @@ export function RemoteCard() {
     setRelayUrl(config.relayUrl);
     setDeviceId(config.deviceId);
     setTokenSet(config.tokenSet);
+    setKeepAwake(config.keepAwake);
   };
 
   useEffect(() => {
@@ -42,7 +44,7 @@ export function RemoteCard() {
   const connect = async () => {
     setBusy(true);
     try {
-      const s = await window.electronAPI.relayStart({ relayUrl, deviceId, token });
+      const s = await window.electronAPI.relayStart({ relayUrl, deviceId, token, keepAwake });
       setStatus(s as RelayStatus);
       setTokenSet(true);
       setToken('');
@@ -59,6 +61,12 @@ export function RemoteCard() {
     } finally {
       setBusy(false);
     }
+  };
+
+  const toggleKeepAwake = async () => {
+    const next = !keepAwake;
+    setKeepAwake(next);
+    await window.electronAPI.relaySetKeepAwake(next);
   };
 
   const copyDevice = async () => {
@@ -99,7 +107,13 @@ export function RemoteCard() {
           <label className="block flex-1">
             <span className="text-xs text-muted">{t('settings.remote.deviceId')}</span>
             <div className="mt-1 flex h-9 items-center gap-1 rounded-input border border-border bg-surface px-3 font-mono text-[13px] text-text">
-              <span className="flex-1 truncate">{deviceId || '—'}</span>
+              <input
+                value={deviceId}
+                onChange={(e) => setDeviceId(e.target.value)}
+                placeholder="必填"
+                spellCheck={false}
+                className="min-w-0 flex-1 bg-transparent text-[13px] text-text outline-none placeholder:text-muted"
+              />
               <button
                 onClick={() => void copyDevice()}
                 disabled={!deviceId}
@@ -109,6 +123,7 @@ export function RemoteCard() {
                 {copied ? <Check size={13} className="text-ok" /> : <Copy size={13} />}
               </button>
             </div>
+            <p className="mt-1 text-[11px] text-muted">{t('settings.remote.deviceIdHint')}</p>
           </label>
           <label className="block flex-1">
             <span className="text-xs text-muted">{t('settings.remote.token')}</span>
@@ -121,6 +136,26 @@ export function RemoteCard() {
               className="mt-1 h-9 w-full rounded-input border border-border bg-surface px-3 font-mono text-[13px] text-text outline-none placeholder:text-muted focus:border-accent/60"
             />
           </label>
+        </div>
+        <div className="flex items-center justify-between rounded-input border border-border bg-surface px-3 py-2">
+          <span className="text-xs text-text">{t('settings.remote.keepAwake')}</span>
+          <button
+            onClick={() => void toggleKeepAwake()}
+            role="switch"
+            aria-checked={keepAwake}
+            aria-label={t('settings.remote.keepAwake')}
+            className={cn(
+              'relative h-5 w-9 shrink-0 rounded-full transition-colors',
+              keepAwake ? 'bg-accent' : 'bg-surface-2',
+            )}
+          >
+            <span
+              className={cn(
+                'absolute top-0.5 h-4 w-4 rounded-full bg-surface shadow transition-transform',
+                keepAwake ? 'left-[18px]' : 'left-0.5',
+              )}
+            />
+          </button>
         </div>
         <div className="flex items-center gap-3 pt-1">
           {status === 'off' || status === 'error' ? (
