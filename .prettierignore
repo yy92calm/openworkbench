@@ -1,0 +1,14 @@
+# Prettier 忽略清单。
+# - node_modules / 构建产物：格式化没有意义。
+# - docs/**/*.md：中文方案文档由 markdownlint 管理（见 .prettierrc.toml 动机说明）。
+# - relay / client 的 lockfile 与 dist：独立 workspace 自持，避免跨 workspace 误格式化。
+# - .reasonix/：app 运行时状态（topic 元数据），格式不受 prettier 管。
+
+node_modules
+**/node_modules
+**/out
+**/dist
+docs/**/*.md
+**/pnpm-lock.yaml
+.reasonix/
+relay/admin-web/

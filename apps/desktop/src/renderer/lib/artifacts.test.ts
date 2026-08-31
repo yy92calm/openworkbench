@@ -1,6 +1,7 @@
-import { describe, expect, it } from "vitest";
-import type { ToolUpdatedEvent } from "@workbench/sdk";
-import type { ArtifactInspector } from "@workbench/shared";
+import type { ToolUpdatedEvent } from '@workbench/sdk';
+import type { ArtifactInspector } from '@workbench/shared';
+import { describe, expect, it } from 'vitest';
+
 import {
   artifactBlockToInspector,
   deriveArtifact,
@@ -11,204 +12,204 @@ import {
   previewKindForName,
   refToArtifactBlock,
   resolveArtifactContent,
-} from "./artifacts";
+} from './artifacts';
 
-const write = (input: Record<string, unknown>, over: Partial<ToolUpdatedEvent> = {}): ToolUpdatedEvent => ({
-  type: "tool.updated",
-  sessionId: "s",
-  callId: "c",
-  tool: "write",
-  status: "success",
+const write = (
+  input: Record<string, unknown>,
+  over: Partial<ToolUpdatedEvent> = {},
+): ToolUpdatedEvent => ({
+  type: 'tool.updated',
+  sessionId: 's',
+  callId: 'c',
+  tool: 'write',
+  status: 'success',
   input,
   ...over,
 });
 
-describe("extToKind", () => {
-  it("maps extensions to kinds and defaults unknown to data", () => {
-    expect(extToKind("png")).toBe("figure");
-    expect(extToKind("PY")).toBe("script");
-    expect(extToKind("csv")).toBe("table");
-    expect(extToKind("ipynb")).toBe("notebook");
-    expect(extToKind("pdf")).toBe("report");
-    expect(extToKind("xyz")).toBe("data");
+describe('extToKind', () => {
+  it('maps extensions to kinds and defaults unknown to data', () => {
+    expect(extToKind('png')).toBe('figure');
+    expect(extToKind('PY')).toBe('script');
+    expect(extToKind('csv')).toBe('table');
+    expect(extToKind('ipynb')).toBe('notebook');
+    expect(extToKind('pdf')).toBe('report');
+    expect(extToKind('xyz')).toBe('data');
   });
 });
 
-describe("deriveArtifact", () => {
-  it("derives a script artifact with content + language from a write tool", () => {
-    const a = deriveArtifact(write({ filePath: "src/make_fig.py", content: "print(1)" }));
+describe('deriveArtifact', () => {
+  it('derives a script artifact with content + language from a write tool', () => {
+    const a = deriveArtifact(write({ filePath: 'src/make_fig.py', content: 'print(1)' }));
     expect(a).toMatchObject({
-      kind: "artifact",
-      filename: "make_fig.py",
-      artifact: "script",
-      tool: "write",
-      content: "print(1)",
-      language: "python",
+      kind: 'artifact',
+      filename: 'make_fig.py',
+      artifact: 'script',
+      tool: 'write',
+      content: 'print(1)',
+      language: 'python',
     });
   });
 
-  it("classifies an image write as a figure (no text content required)", () => {
-    const a = deriveArtifact(write({ path: "figures/atlas.png" }));
-    expect(a?.artifact).toBe("figure");
-    expect(a?.filename).toBe("atlas.png");
+  it('classifies an image write as a figure (no text content required)', () => {
+    const a = deriveArtifact(write({ path: 'figures/atlas.png' }));
+    expect(a?.artifact).toBe('figure');
+    expect(a?.filename).toBe('atlas.png');
     expect(a?.content).toBeUndefined();
   });
 
-  it("returns null for non-write tools, failures, and missing paths", () => {
-    expect(deriveArtifact(write({ filePath: "a.py" }, { tool: "bash" }))).toBeNull();
-    expect(deriveArtifact(write({ filePath: "a.py" }, { status: "running" }))).toBeNull();
-    expect(deriveArtifact(write({ content: "x" }))).toBeNull();
+  it('returns null for non-write tools, failures, and missing paths', () => {
+    expect(deriveArtifact(write({ filePath: 'a.py' }, { tool: 'bash' }))).toBeNull();
+    expect(deriveArtifact(write({ filePath: 'a.py' }, { status: 'running' }))).toBeNull();
+    expect(deriveArtifact(write({ content: 'x' }))).toBeNull();
   });
 });
 
-describe("resolveArtifactContent", () => {
+describe('resolveArtifactContent', () => {
   const data: ArtifactInspector = {
-    variant: "artifact",
-    title: "fig.py",
-    versions: [
-      { label: "v1", code: "old" },
-      { label: "v2" },
-    ],
-    activeVersion: "v2",
+    variant: 'artifact',
+    title: 'fig.py',
+    versions: [{ label: 'v1', code: 'old' }, { label: 'v2' }],
+    activeVersion: 'v2',
     inputs: [],
-    code: "new",
-    language: "python",
+    code: 'new',
+    language: 'python',
   };
 
-  it("uses the version override when present", () => {
-    const r = resolveArtifactContent(data, "v1");
-    expect(r.code).toBe("old");
+  it('uses the version override when present', () => {
+    const r = resolveArtifactContent(data, 'v1');
+    expect(r.code).toBe('old');
   });
 
-  it("falls back to inspector-level fields when the version omits them", () => {
-    const r = resolveArtifactContent(data, "v2");
-    expect(r.code).toBe("new");
-  });
-});
-
-describe("extractArtifactRefs", () => {
-  it("finds files produced by running code, even in prose/backticks", () => {
-    const md = "Generated `canvas-project/canvas.pdf` (A4) and a preview at report/index.html.";
-    expect(extractArtifactRefs(md)).toEqual(["canvas-project/canvas.pdf", "report/index.html"]);
-  });
-
-  it("dedupes and ignores URLs", () => {
-    const md = "See figs/a.png and figs/a.png, not https://example.com/b.png";
-    expect(extractArtifactRefs(md)).toEqual(["figs/a.png"]);
-  });
-
-  it("returns nothing when no artifact-like paths are present", () => {
-    expect(extractArtifactRefs("just a sentence about e.g. things")).toEqual([]);
-  });
-
-  it("finds Office documents (docx/xlsx/pptx)", () => {
-    const md = "Wrote project.docx, project.xlsx and project.pptx.";
-    expect(extractArtifactRefs(md)).toEqual(["project.docx", "project.xlsx", "project.pptx"]);
+  it('falls back to inspector-level fields when the version omits them', () => {
+    const r = resolveArtifactContent(data, 'v2');
+    expect(r.code).toBe('new');
   });
 });
 
-describe("previewKind", () => {
-  it("maps extensions to a preview strategy", () => {
-    expect(previewKind("html")).toBe("html");
-    expect(previewKind("pdf")).toBe("pdf");
-    expect(previewKind("png")).toBe("image");
-    expect(previewKind("svg")).toBe("image");
-    expect(previewKind("py")).toBe("text");
+describe('extractArtifactRefs', () => {
+  it('finds files produced by running code, even in prose/backticks', () => {
+    const md = 'Generated `canvas-project/canvas.pdf` (A4) and a preview at report/index.html.';
+    expect(extractArtifactRefs(md)).toEqual(['canvas-project/canvas.pdf', 'report/index.html']);
   });
 
-  it("renders markdown files as a formatted document, not plain code", () => {
-    expect(previewKind("md")).toBe("markdown");
-    expect(previewKind("markdown")).toBe("markdown");
+  it('dedupes and ignores URLs', () => {
+    const md = 'See figs/a.png and figs/a.png, not https://example.com/b.png';
+    expect(extractArtifactRefs(md)).toEqual(['figs/a.png']);
   });
 
-  it("gives Office documents their own inline preview kinds", () => {
-    expect(previewKind("docx")).toBe("docx");
-    expect(previewKind("xlsx")).toBe("xlsx");
-    expect(previewKind("pptx")).toBe("pptx");
+  it('returns nothing when no artifact-like paths are present', () => {
+    expect(extractArtifactRefs('just a sentence about e.g. things')).toEqual([]);
   });
-});
 
-describe("previewKindForName", () => {
-  it("falls back to the extension registry", () => {
-    expect(previewKindForName("plot.png")).toBe("image");
-    expect(previewKindForName("notes.md")).toBe("markdown");
-    expect(previewKindForName("main.py")).toBe("text");
+  it('finds Office documents (docx/xlsx/pptx)', () => {
+    const md = 'Wrote project.docx, project.xlsx and project.pptx.';
+    expect(extractArtifactRefs(md)).toEqual(['project.docx', 'project.xlsx', 'project.pptx']);
   });
 });
 
-describe("refToArtifactBlock", () => {
-  it("builds a path-only artifact block from a mentioned file", () => {
-    expect(refToArtifactBlock("canvas-project/canvas.pdf")).toMatchObject({
-      kind: "artifact",
-      path: "canvas-project/canvas.pdf",
-      filename: "canvas.pdf",
-      artifact: "report",
-      tool: "output",
+describe('previewKind', () => {
+  it('maps extensions to a preview strategy', () => {
+    expect(previewKind('html')).toBe('html');
+    expect(previewKind('pdf')).toBe('pdf');
+    expect(previewKind('png')).toBe('image');
+    expect(previewKind('svg')).toBe('image');
+    expect(previewKind('py')).toBe('text');
+  });
+
+  it('renders markdown files as a formatted document, not plain code', () => {
+    expect(previewKind('md')).toBe('markdown');
+    expect(previewKind('markdown')).toBe('markdown');
+  });
+
+  it('gives Office documents their own inline preview kinds', () => {
+    expect(previewKind('docx')).toBe('docx');
+    expect(previewKind('xlsx')).toBe('xlsx');
+    expect(previewKind('pptx')).toBe('pptx');
+  });
+});
+
+describe('previewKindForName', () => {
+  it('falls back to the extension registry', () => {
+    expect(previewKindForName('plot.png')).toBe('image');
+    expect(previewKindForName('notes.md')).toBe('markdown');
+    expect(previewKindForName('main.py')).toBe('text');
+  });
+});
+
+describe('refToArtifactBlock', () => {
+  it('builds a path-only artifact block from a mentioned file', () => {
+    expect(refToArtifactBlock('canvas-project/canvas.pdf')).toMatchObject({
+      kind: 'artifact',
+      path: 'canvas-project/canvas.pdf',
+      filename: 'canvas.pdf',
+      artifact: 'report',
+      tool: 'output',
     });
   });
 });
 
-describe("artifactBlockToInspector", () => {
-  it("shows text content for a text artifact", () => {
+describe('artifactBlockToInspector', () => {
+  it('shows text content for a text artifact', () => {
     const insp = artifactBlockToInspector({
-      kind: "artifact",
-      path: "a.py",
-      filename: "a.py",
-      artifact: "script",
-      tool: "write",
-      content: "print(1)",
-      language: "python",
+      kind: 'artifact',
+      path: 'a.py',
+      filename: 'a.py',
+      artifact: 'script',
+      tool: 'write',
+      content: 'print(1)',
+      language: 'python',
     });
-    expect(insp.code).toBe("print(1)");
-    expect(insp.language).toBe("python");
+    expect(insp.code).toBe('print(1)');
+    expect(insp.language).toBe('python');
   });
 
-  it("surfaces the notebook a jupyter MCP tool works on as a live artifact", () => {
+  it('surfaces the notebook a jupyter MCP tool works on as a live artifact', () => {
     const a = deriveArtifact(
       write(
-        { notebook_name: "scatter-demo", notebook_path: "scatter-demo.ipynb", mode: "create" },
-        { tool: "jupyter_use_notebook" },
+        { notebook_name: 'scatter-demo', notebook_path: 'scatter-demo.ipynb', mode: 'create' },
+        { tool: 'jupyter_use_notebook' },
       ),
     );
     expect(a).toMatchObject({
-      kind: "artifact",
-      path: "scatter-demo.ipynb",
-      artifact: "notebook",
-      tool: "jupyter_use_notebook",
+      kind: 'artifact',
+      path: 'scatter-demo.ipynb',
+      artifact: 'notebook',
+      tool: 'jupyter_use_notebook',
     });
     // Cell-level tools carry no path — no artifact, no crash.
-    expect(deriveArtifact(write({ cell_index: 0 }, { tool: "jupyter_execute_cell" }))).toBeNull();
+    expect(deriveArtifact(write({ cell_index: 0 }, { tool: 'jupyter_execute_cell' }))).toBeNull();
   });
 
-  it("routes .ipynb artifacts to the runnable notebook editor, others to file preview", () => {
+  it('routes .ipynb artifacts to the runnable notebook editor, others to file preview', () => {
     const nb = fileInspectorFromBlock({
-      kind: "artifact",
-      path: "analysis/run.ipynb",
-      filename: "run.ipynb",
-      artifact: "notebook",
-      tool: "write",
+      kind: 'artifact',
+      path: 'analysis/run.ipynb',
+      filename: 'run.ipynb',
+      artifact: 'notebook',
+      tool: 'write',
     });
-    expect(nb).toEqual({ variant: "notebook-file", path: "analysis/run.ipynb" });
+    expect(nb).toEqual({ variant: 'notebook-file', path: 'analysis/run.ipynb' });
 
     const file = fileInspectorFromBlock({
-      kind: "artifact",
-      path: "fig.png",
-      filename: "fig.png",
-      artifact: "figure",
-      tool: "write",
+      kind: 'artifact',
+      path: 'fig.png',
+      filename: 'fig.png',
+      artifact: 'figure',
+      tool: 'write',
     });
-    expect(file.variant).toBe("file");
+    expect(file.variant).toBe('file');
   });
 
-  it("shows a placeholder for a binary artifact", () => {
+  it('shows a placeholder for a binary artifact', () => {
     const insp = artifactBlockToInspector({
-      kind: "artifact",
-      path: "figures/atlas.png",
-      filename: "atlas.png",
-      artifact: "figure",
-      tool: "write",
+      kind: 'artifact',
+      path: 'figures/atlas.png',
+      filename: 'atlas.png',
+      artifact: 'figure',
+      tool: 'write',
     });
-    expect(insp.code).toContain("Binary artifact");
-    expect(insp.code).toContain("figures/atlas.png");
+    expect(insp.code).toContain('Binary artifact');
+    expect(insp.code).toContain('figures/atlas.png');
   });
 });

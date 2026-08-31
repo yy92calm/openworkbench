@@ -9,7 +9,7 @@
 # 多账号: 设 RELAY_ADMIN_TOKENS="t1,t2" 启动时预置账号；部署后用管理 CLI 增删：
 #   ssh root@HOST "cd /opt/workbench-relay/relay && RELAY_DATA_DIR=/opt/workbench-relay/data pnpm exec tsx src/admin.ts add --token T --note 名字"
 # relay 目录自包含：管理界面源码在 relay/admin（构建产物输出到 relay/admin-web，
-# 已入库），Web 客户端不在 relay 部署范围内。
+# 不入库，部署时本地构建后上传），Web 客户端不在 relay 部署范围内。
 set -euo pipefail
 
 SERVER="${1:-root@43.133.82.137}"

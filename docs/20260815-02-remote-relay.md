@@ -16,7 +16,7 @@
 
 当前连接链（已核实代码）：
 
-```
+```text
 渲染进程 UI ──IPC──> Electron 主进程 ──HTTP+SSE──> OpenCode sidecar (127.0.0.1:随机端口)
 ```
 
@@ -43,7 +43,7 @@
 
 ### 总体架构
 
-```
+```text
 公网服务器 43.133.82.137
 ┌──────────────────────────────────────────────┐
 │  relay-server (Node)                         │
@@ -83,7 +83,7 @@
 
 ### 中继协议（WS 文本消息，JSON）
 
-```
+```text
 App → Relay → Host:
   { id, method, path, headers?, body? }        // HTTP 请求
 Host → Relay → App:

@@ -16,7 +16,7 @@
 
 /** Guest → host: an HTTP request to perform against the local sidecar. */
 export interface RelayRequest {
-  type: "request";
+  type: 'request';
   /** Unique request id — enables concurrent requests on one socket. */
   id: string;
   method: string;
@@ -29,7 +29,7 @@ export interface RelayRequest {
 
 /** Host → guest: response status line. Always precedes chunks. */
 export interface RelayResponseHead {
-  type: "head";
+  type: 'head';
   id: string;
   status: number;
   headers: Record<string, string>;
@@ -37,21 +37,21 @@ export interface RelayResponseHead {
 
 /** Host → guest: one body chunk (SSE frames ride these). */
 export interface RelayChunk {
-  type: "chunk";
+  type: 'chunk';
   id: string;
   chunk: string;
 }
 
 /** Host → guest: response finished; the guest closes the fetch stream. */
 export interface RelayDone {
-  type: "done";
+  type: 'done';
   id: string;
 }
 
 /** Guest → relay (control): list the devices registered under the account
  *  (only valid on a guest connection without a device, i.e. device="" ). */
 export interface RelayListDevices {
-  type: "list-devices";
+  type: 'list-devices';
   id: string;
 }
 
@@ -64,7 +64,7 @@ export interface RelayDeviceInfo {
 
 /** Relay → guest: reply to list-devices. */
 export interface RelayDeviceList {
-  type: "device-list";
+  type: 'device-list';
   id: string;
   devices: RelayDeviceInfo[];
 }
@@ -73,7 +73,7 @@ export interface RelayDeviceList {
  *  that started it disconnects, so the host aborts the sidecar fetch instead
  *  of leaving it (e.g. an SSE stream) hanging forever and leaking connections. */
 export interface RelayCancel {
-  type: "cancel";
+  type: 'cancel';
   id: string;
 }
 
@@ -106,7 +106,7 @@ export interface RoomCiphertext {
  *  the room's recorded creator, the member rejoins as creator and the
  *  destruction countdown is cancelled. */
 export interface RoomJoin {
-  type: "room.join";
+  type: 'room.join';
   inviteCode: string;
   nickname?: string;
   pubKey?: string;
@@ -116,7 +116,7 @@ export interface RoomJoin {
 
 /** Peer → relay: leave the current room. */
 export interface RoomLeave {
-  type: "room.leave";
+  type: 'room.leave';
 }
 
 /** Peer → relay: broadcast an E2E encrypted message to all other members.
@@ -141,10 +141,10 @@ export interface RoomMessageMeta {
 }
 
 export interface RoomMessage {
-  type: "room.message";
+  type: 'room.message';
   messageId: string;
   ciphertexts: RoomCiphertext[];
-  kind?: "text" | "audio" | "file" | "session-share";
+  kind?: 'text' | 'audio' | 'file' | 'session-share';
   /** For audio/file messages: the upload id returned by /api/rooms/:code/upload.
    *  The relay stores the binary blob in memory and serves it on
    *  /api/rooms/files/:fileId. Recipients fetch it after receiving the message.
@@ -161,21 +161,21 @@ export interface RoomMessage {
  *  for regular messages it just marks "read" on the sender's UI.
  *  The relay forwards this to the original sender only. */
 export interface RoomMessageViewed {
-  type: "room.message-viewed";
+  type: 'room.message-viewed';
   messageId: string;
 }
 
 /** Peer → relay: creator toggles the room's enforceViewOnce flag.
  *  Non-creators are rejected with `room.error`. */
 export interface RoomSetViewOnce {
-  type: "room.set-view-once";
+  type: 'room.set-view-once';
   enforce: boolean;
 }
 
 /** Relay → peer: the room's enforceViewOnce flag changed. Broadcast to all
  *  members so they can update their input UI accordingly. */
 export interface RoomViewOnceChanged {
-  type: "room.view-once-changed";
+  type: 'room.view-once-changed';
   enforce: boolean;
 }
 
@@ -188,7 +188,7 @@ export interface RoomViewOnceChanged {
  *  Joining always cancels an active countdown, so this is null on every join
  *  in practice — it is carried for protocol completeness. */
 export interface RoomJoined {
-  type: "room.joined";
+  type: 'room.joined';
   roomId: string;
   inviteCode: string;
   members: RoomMember[];
@@ -199,13 +199,13 @@ export interface RoomJoined {
 
 /** Relay → peer: a new member joined the room. */
 export interface RoomMemberJoined {
-  type: "room.member-joined";
+  type: 'room.member-joined';
   member: RoomMember;
 }
 
 /** Relay → peer: a member left the room. */
 export interface RoomMemberLeft {
-  type: "room.member-left";
+  type: 'room.member-left';
   memberId: string;
 }
 
@@ -213,25 +213,25 @@ export interface RoomMemberLeft {
  *  starts when the creator leaves and expires 24h later; any member joining
  *  cancels it. `expiresAt` is the deadline (ms epoch), null = cancelled. */
 export interface RoomDestroyCountdown {
-  type: "room.destroy-countdown";
+  type: 'room.destroy-countdown';
   expiresAt: number | null;
 }
 
 /** Relay → peer: the room was destroyed (countdown expired). Remaining
  *  members should return to the room list. */
 export interface RoomDestroyed {
-  type: "room.destroyed";
+  type: 'room.destroyed';
 }
 
 /** Relay → peer: a broadcast message routed to this member. Contains only
  *  this member's ciphertext entry (not the full ciphertexts array). */
 export interface RoomMessageRouted {
-  type: "room.message";
+  type: 'room.message';
   messageId: string;
   from: string;
   nonce: string;
   ct: string;
-  kind?: "text" | "audio" | "file" | "session-share";
+  kind?: 'text' | 'audio' | 'file' | 'session-share';
   fileId?: string;
   meta?: RoomMessageMeta;
   viewOnce?: boolean;
@@ -240,7 +240,7 @@ export interface RoomMessageRouted {
 
 /** Relay → peer: error (e.g. unknown invite code, not in a room). */
 export interface RoomError {
-  type: "room.error";
+  type: 'room.error';
   message: string;
 }
 
@@ -275,7 +275,7 @@ export type RelayMessage =
  *  specific room by invite code (carrying nickname + pubKey). The relay does
  *  not add the peer to any room until `room.join` arrives. */
 export interface RelayConnectionParams {
-  role: "host" | "guest" | "peer";
+  role: 'host' | 'guest' | 'peer';
   device: string;
   token: string;
 }
@@ -283,12 +283,12 @@ export interface RelayConnectionParams {
 export function parseConnectionParams(url: string): RelayConnectionParams | null {
   try {
     // req.url is a relative path (no host) — supply a base for URL parsing.
-    const u = new URL(url, "http://relay.local");
-    const role = u.searchParams.get("role");
-    const token = u.searchParams.get("token");
-    if (role !== "host" && role !== "guest" && role !== "peer") return null;
+    const u = new URL(url, 'http://relay.local');
+    const role = u.searchParams.get('role');
+    const token = u.searchParams.get('token');
+    if (role !== 'host' && role !== 'guest' && role !== 'peer') return null;
     if (!token) return null;
-    return { role, device: u.searchParams.get("device") ?? "", token };
+    return { role, device: u.searchParams.get('device') ?? '', token };
   } catch {
     return null;
   }

@@ -1,5 +1,4 @@
-import { X } from "lucide-react";
-import { cn } from "@/lib/cn";
+import { X } from 'lucide-react';
 
 interface ShortcutGroup {
   label: string;
@@ -8,31 +7,31 @@ interface ShortcutGroup {
 
 const GROUPS: ShortcutGroup[] = [
   {
-    label: "通用",
+    label: '通用',
     items: [
-      { keys: ["Cmd", "K"], desc: "打开命令面板" },
-      { keys: ["Cmd", "B"], desc: "切换侧边栏" },
-      { keys: ["Cmd", "+"], desc: "放大字体" },
-      { keys: ["Cmd", "-"], desc: "缩小字体" },
-      { keys: ["Cmd", "0"], desc: "重置字体大小" },
+      { keys: ['Cmd', 'K'], desc: '打开命令面板' },
+      { keys: ['Cmd', 'B'], desc: '切换侧边栏' },
+      { keys: ['Cmd', '+'], desc: '放大字体' },
+      { keys: ['Cmd', '-'], desc: '缩小字体' },
+      { keys: ['Cmd', '0'], desc: '重置字体大小' },
     ],
   },
   {
-    label: "对话",
+    label: '对话',
     items: [
-      { keys: ["Enter"], desc: "发送消息" },
-      { keys: ["Shift", "Enter"], desc: "换行" },
-      { keys: ["↑"], desc: "上一条历史输入" },
-      { keys: ["↓"], desc: "下一条历史输入" },
-      { keys: ["Esc"], desc: "中断 Agent 回复" },
+      { keys: ['Enter'], desc: '发送消息' },
+      { keys: ['Shift', 'Enter'], desc: '换行' },
+      { keys: ['↑'], desc: '上一条历史输入' },
+      { keys: ['↓'], desc: '下一条历史输入' },
+      { keys: ['Esc'], desc: '中断 Agent 回复' },
     ],
   },
   {
-    label: "编辑器",
+    label: '编辑器',
     items: [
-      { keys: ["/"], desc: "输入命令（斜杠命令）" },
-      { keys: ["@"], desc: "引用文件" },
-      { keys: ["!"], desc: "Shell 模式" },
+      { keys: ['/'], desc: '输入命令（斜杠命令）' },
+      { keys: ['@'], desc: '引用文件' },
+      { keys: ['!'], desc: 'Shell 模式' },
     ],
   },
 ];

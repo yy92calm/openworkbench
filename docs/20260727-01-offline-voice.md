@@ -28,17 +28,20 @@
 ### TTS 实现
 
 **触发方式**：
+
 - AI 消息气泡上方新增「朗读」按钮（Volume2 / Speaker 图标）
 - 点击开始朗读，再次点击停止
 - 朗读中的消息有视觉反馈（图标变为脉冲动画）
 
 **可控参数**（设置页 → 语音选项卡）：
+
 - 启用/禁用语音
 - 选择系统语音（`speechSynthesis.getVoices()`）
 - 语速（rate，0.5~2.0）
 - 音调（pitch，0~2）
 
 **关键文件**：
+
 - `apps/desktop/src/renderer/lib/tts.ts` — TTS 工具模块
 - `apps/desktop/src/renderer/components/thread/MessageBubble.tsx` — 添加朗读按钮
 - `apps/desktop/src/renderer/app/routes/SettingsPage.tsx` — 语音设置选项卡
@@ -46,17 +49,20 @@
 ### STT 实现
 
 **触发方式**：
+
 - Composer 输入框工具栏新增「麦克风」按钮
 - 点击开始录音（16kHz mono PCM），再次点击停止 → 转写 → 文字填入输入框
 - 录音中麦克风图标脉冲动画；转写中显示 Loader2 旋转
 
 **技术路径**：
+
 1. Renderer: `AudioContext` + `ScriptProcessorNode` 录制 16kHz mono PCM
 2. 编码为 WAV（16-bit PCM）
 3. IPC `whisper-transcribe` → 主进程 spawn `whisper-cli -m model -f wav --no-timestamps -l zh`
 4. 返回转写文字 → 追加到输入框
 
 **关键文件**：
+
 - `apps/desktop/src/main/whisper.ts` — 主进程 Whisper 桥接模块
 - `apps/desktop/src/renderer/lib/stt.ts` — Renderer WAV 录音 + IPC 转写
 - `apps/desktop/src/renderer/components/thread/Composer.tsx` — 麦克风按钮
@@ -66,13 +72,14 @@
 ### 设置页语音选项卡
 
 新增 `Section = "voice"` 选项卡：
+
 - TTS 开关 + 语音选择下拉 + 语速/音调滑块
 - STT 开关
 - 测试按钮（播放一段示例语音）
 
 ### 数据流
 
-```
+```text
 TTS: MessageBubble 朗读按钮 → tts.ts speak(text, opts) → speechSynthesis.speak()
 STT: Composer 麦克风 → stt.ts 录音 → encodeWav → IPC whisper-transcribe → main spawn whisper-cli → text → setValue
 设置: electron-store key="voice-config" → { ttsEnabled, voiceURI, rate, pitch, sttEnabled }
@@ -80,7 +87,7 @@ STT: Composer 麦克风 → stt.ts 录音 → encodeWav → IPC whisper-transcri
 
 ### UI 布局
 
-```
+```text
 设置页侧边栏：
   通用 | 模型配置 | 运行时 | 语音 | 工作区 | 隐私 | 关于
 
@@ -102,7 +109,7 @@ STT: Composer 麦克风 → stt.ts 录音 → encodeWav → IPC whisper-transcri
 
 输入框工具栏新增麦克风按钮（在文件附件按钮左侧）：
 
-```
+```text
 [🎤] [📎]                    [发送/停止]
 ```
 

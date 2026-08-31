@@ -1,55 +1,54 @@
-import { describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { Composer } from "./Composer";
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
+
+import { Composer } from './Composer';
 
 // Desktop-only attach behaviors, with the Tauri bridge mocked out.
-vi.mock("@/lib/tauri", () => ({
+vi.mock('@/lib/tauri', () => ({
   isTauri: true,
-  addFilesToWorkspace: vi.fn(async () => ["data.csv"]),
-  addTextToWorkspace: vi.fn(async () => "pasted.txt"),
+  addFilesToWorkspace: vi.fn(async () => ['data.csv']),
+  addTextToWorkspace: vi.fn(async () => 'pasted.txt'),
 }));
 
-describe("Composer attachments (desktop)", () => {
-  it("adds picked files as removable chips and sends them as a file note", async () => {
+describe('Composer attachments (desktop)', () => {
+  it('adds picked files as removable chips and sends them as a file note', async () => {
     const onSend = vi.fn();
     render(<Composer onSend={onSend} />);
 
-    fireEvent.click(screen.getByLabelText("添加文件"));
-    await waitFor(() => expect(screen.getByText("data.csv")).toBeTruthy());
+    fireEvent.click(screen.getByLabelText('添加文件'));
+    await waitFor(() => expect(screen.getByText('data.csv')).toBeTruthy());
 
     // Chip is outside the textarea - typing text is independent of the file.
-    const input = screen.getByLabelText("有什么想问的？");
-    fireEvent.change(input, { target: { value: "analyze this" } });
-    fireEvent.keyDown(input, { key: "Enter" });
+    const input = screen.getByLabelText('有什么想问的？');
+    fireEvent.change(input, { target: { value: 'analyze this' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
 
-    expect(onSend).toHaveBeenCalledWith(
-      "analyze this\n\nFiles added to the workspace: data.csv",
-    );
+    expect(onSend).toHaveBeenCalledWith('analyze this\n\nFiles added to the workspace: data.csv');
     // Chips are cleared after sending.
-    expect(screen.queryByText("data.csv")).toBeNull();
+    expect(screen.queryByText('data.csv')).toBeNull();
   });
 
-  it("removes a chip via its X button without touching the text", async () => {
+  it('removes a chip via its X button without touching the text', async () => {
     render(<Composer onSend={vi.fn()} />);
-    fireEvent.click(screen.getByLabelText("添加文件"));
-    await waitFor(() => expect(screen.getByText("data.csv")).toBeTruthy());
+    fireEvent.click(screen.getByLabelText('添加文件'));
+    await waitFor(() => expect(screen.getByText('data.csv')).toBeTruthy());
 
-    fireEvent.click(screen.getByLabelText("移除 data.csv"));
-    expect(screen.queryByText("data.csv")).toBeNull();
+    fireEvent.click(screen.getByLabelText('移除 data.csv'));
+    expect(screen.queryByText('data.csv')).toBeNull();
   });
 
-  it("turns an oversized paste into a workspace file chip, keeping the box clean", async () => {
+  it('turns an oversized paste into a workspace file chip, keeping the box clean', async () => {
     render(<Composer onSend={vi.fn()} />);
-    const input = screen.getByLabelText("有什么想问的？") as HTMLTextAreaElement;
+    const input = screen.getByLabelText('有什么想问的？') as HTMLTextAreaElement;
 
     fireEvent.paste(input, {
-      clipboardData: { getData: () => "x".repeat(3000) },
+      clipboardData: { getData: () => 'x'.repeat(3000) },
     });
-    await waitFor(() => expect(screen.getByText("pasted.txt")).toBeTruthy());
-    expect(input.value).toBe("");
+    await waitFor(() => expect(screen.getByText('pasted.txt')).toBeTruthy());
+    expect(input.value).toBe('');
 
     // A short paste stays a normal paste (no new chip).
-    fireEvent.paste(input, { clipboardData: { getData: () => "short text" } });
-    expect(screen.getAllByText("pasted.txt")).toHaveLength(1);
+    fireEvent.paste(input, { clipboardData: { getData: () => 'short text' } });
+    expect(screen.getAllByText('pasted.txt')).toHaveLength(1);
   });
 });

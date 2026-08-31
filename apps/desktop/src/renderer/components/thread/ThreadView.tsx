@@ -1,10 +1,11 @@
-import { Link } from "react-router-dom";
-import { Sparkles } from "lucide-react";
-import type { Session } from "@workbench/shared";
-import { BlockList } from "./BlockList";
+import type { Session } from '@workbench/shared';
+import { Sparkles } from 'lucide-react';
+import { Link } from 'react-router-dom';
+
+import { BlockList } from './BlockList';
 
 export function ThreadView({ session }: { session: Session }) {
-  const isExample = session.group === "Examples";
+  const isExample = session.group === 'Examples';
   return (
     <div className="flex h-full min-w-0 flex-col">
       <div className="flex items-center gap-2 border-b border-border px-6 py-2.5">

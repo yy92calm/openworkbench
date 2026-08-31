@@ -1,16 +1,24 @@
-import { useEffect, useMemo, useState } from "react";
-import { Brain, Check, ChevronDown, ChevronRight, Loader2, X } from "lucide-react";
-import type { ArtifactBlock, FigureAnnotation, ReasoningBlock, ThreadBlock, ToolCallBlock } from "@workbench/shared";
-import { cn } from "@/lib/cn";
-import { useUiStore } from "@/lib/store";
-import { AgentMessage, DataTable, RunningJobsOverlay, StatusLine, UserMessage } from "./atoms";
-import { ToolCallRow } from "./ToolCallRow";
-import { StepSummaryRow } from "./StepSummaryRow";
-import { FigureBlock } from "./FigureBlock";
-import { ArtifactCard } from "./ArtifactCard";
-import { TurnDivider } from "./TurnDivider";
-import { ReasoningCard } from "./ReasoningCard";
-import { ShellCard } from "./ShellCard";
+import type {
+  ArtifactBlock,
+  FigureAnnotation,
+  ReasoningBlock,
+  ThreadBlock,
+  ToolCallBlock,
+} from '@workbench/shared';
+import { Brain, Check, ChevronDown, ChevronRight, Loader2, X } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+
+import { cn } from '@/lib/cn';
+import { useUiStore } from '@/lib/store';
+
+import { ArtifactCard } from './ArtifactCard';
+import { AgentMessage, DataTable, RunningJobsOverlay, StatusLine, UserMessage } from './atoms';
+import { FigureBlock } from './FigureBlock';
+import { ReasoningCard } from './ReasoningCard';
+import { ShellCard } from './ShellCard';
+import { StepSummaryRow } from './StepSummaryRow';
+import { ToolCallRow } from './ToolCallRow';
+import { TurnDivider } from './TurnDivider';
 
 export interface BlockHandlers {
   /** Open an artifact in the inspector (live session). */
@@ -26,8 +34,8 @@ export interface BlockHandlers {
 /** A renderable item: either a single block or a merged group of consecutive
  *  reasoning + tool-call blocks (a "step" run). */
 type RenderItem =
-  | { type: "block"; block: ThreadBlock; key: number }
-  | { type: "step-group"; blocks: ThreadBlock[]; key: number };
+  | { type: 'block'; block: ThreadBlock; key: number }
+  | { type: 'step-group'; blocks: ThreadBlock[]; key: number };
 
 /** Pre-process blocks: merge consecutive reasoning + tool-call blocks into a
  *  single collapsible group so thinking and tools fold together. A lone block
@@ -37,17 +45,21 @@ function prepareItems(blocks: ThreadBlock[]): RenderItem[] {
   let i = 0;
   while (i < blocks.length) {
     const b = blocks[i];
-    if (b.kind === "reasoning" || b.kind === "tool-call") {
+    if (b.kind === 'reasoning' || b.kind === 'tool-call') {
       const start = i;
-      while (i < blocks.length && (blocks[i].kind === "reasoning" || blocks[i].kind === "tool-call")) i++;
+      while (
+        i < blocks.length &&
+        (blocks[i].kind === 'reasoning' || blocks[i].kind === 'tool-call')
+      )
+        i++;
       const run = blocks.slice(start, i);
       if (run.length >= 2) {
-        items.push({ type: "step-group", blocks: run, key: start });
+        items.push({ type: 'step-group', blocks: run, key: start });
       } else {
-        items.push({ type: "block", block: run[0], key: start });
+        items.push({ type: 'block', block: run[0], key: start });
       }
     } else {
-      items.push({ type: "block", block: b, key: i });
+      items.push({ type: 'block', block: b, key: i });
       i++;
     }
   }
@@ -55,41 +67,43 @@ function prepareItems(blocks: ThreadBlock[]): RenderItem[] {
 }
 
 /** Spacing rhythm: different block transitions need different visual gaps. */
-function spacingBefore(kind: ThreadBlock["kind"]): string {
+function spacingBefore(kind: ThreadBlock['kind']): string {
   switch (kind) {
-    case "user":
-      return "mt-5";
-    case "agent":
-      return "mt-4";
-    case "tool-call":
-    case "step-summary":
-      return "mt-1.5";
-    case "reasoning":
-      return "mt-3";
-    case "turn-divider":
-      return "mt-2";
+    case 'user':
+      return 'mt-5';
+    case 'agent':
+      return 'mt-4';
+    case 'tool-call':
+    case 'step-summary':
+      return 'mt-1.5';
+    case 'reasoning':
+      return 'mt-3';
+    case 'turn-divider':
+      return 'mt-2';
     default:
-      return "mt-2";
+      return 'mt-2';
   }
 }
 
-export function renderBlock(block: ThreadBlock, i: number, handlers?: BlockHandlers, prevKind?: ThreadBlock["kind"]) {
+export function renderBlock(
+  block: ThreadBlock,
+  i: number,
+  handlers?: BlockHandlers,
+  prevKind?: ThreadBlock['kind'],
+) {
   const sp = spacingBefore(block.kind);
   switch (block.kind) {
-    case "turn-divider":
+    case 'turn-divider':
       return <TurnDivider key={i} block={block} />;
-    case "user":
+    case 'user':
       return (
-        <div key={i} id={`block-${i}`} className={prevKind ? sp : ""}>
-          <UserMessage
-            block={block}
-            onEdit={handlers?.onUserMessageEdit}
-          />
+        <div key={i} id={`block-${i}`} className={prevKind ? sp : ''}>
+          <UserMessage block={block} onEdit={handlers?.onUserMessageEdit} />
         </div>
       );
-    case "agent":
+    case 'agent':
       return (
-        <div key={i} className={prevKind ? sp : ""}>
+        <div key={i} className={prevKind ? sp : ''}>
           <AgentMessage
             markdown={block.markdown}
             timestamp={block.timestamp}
@@ -98,17 +112,29 @@ export function renderBlock(block: ThreadBlock, i: number, handlers?: BlockHandl
           />
         </div>
       );
-    case "reasoning":
-      return <div key={i} className={prevKind ? sp : ""}><ReasoningCard block={block} /></div>;
-    case "step-summary":
-      return <div key={i} className={prevKind ? sp : ""}><StepSummaryRow block={block} /></div>;
-    case "tool-call":
+    case 'reasoning':
+      return (
+        <div key={i} className={prevKind ? sp : ''}>
+          <ReasoningCard block={block} />
+        </div>
+      );
+    case 'step-summary':
+      return (
+        <div key={i} className={prevKind ? sp : ''}>
+          <StepSummaryRow block={block} />
+        </div>
+      );
+    case 'tool-call':
       // Shell commands get their own card
       if (block.shellCommand) {
-        return <div key={i} className={prevKind ? sp : ""}><ShellCard block={block} /></div>;
+        return (
+          <div key={i} className={prevKind ? sp : ''}>
+            <ShellCard block={block} />
+          </div>
+        );
       }
       return (
-        <div key={i} className={prevKind ? sp : ""}>
+        <div key={i} className={prevKind ? sp : ''}>
           <ToolCallRow
             block={block}
             activity={
@@ -117,16 +143,36 @@ export function renderBlock(block: ThreadBlock, i: number, handlers?: BlockHandl
           />
         </div>
       );
-    case "table":
-      return <div key={i} className={prevKind ? sp : ""}><DataTable block={block} /></div>;
-    case "figure":
-      return <div key={i} className={prevKind ? sp : ""}><FigureBlock block={block} onComment={handlers?.onFigureComment} /></div>;
-    case "artifact":
-      return <div key={i} className={prevKind ? sp : ""}><ArtifactCard block={block} onOpen={handlers?.onArtifactOpen} /></div>;
-    case "running-jobs":
-      return <div key={i} className={prevKind ? sp : ""}><RunningJobsOverlay block={block} /></div>;
-    case "status-line":
-      return <div key={i} className={prevKind ? sp : ""}><StatusLine block={block} /></div>;
+    case 'table':
+      return (
+        <div key={i} className={prevKind ? sp : ''}>
+          <DataTable block={block} />
+        </div>
+      );
+    case 'figure':
+      return (
+        <div key={i} className={prevKind ? sp : ''}>
+          <FigureBlock block={block} onComment={handlers?.onFigureComment} />
+        </div>
+      );
+    case 'artifact':
+      return (
+        <div key={i} className={prevKind ? sp : ''}>
+          <ArtifactCard block={block} onOpen={handlers?.onArtifactOpen} />
+        </div>
+      );
+    case 'running-jobs':
+      return (
+        <div key={i} className={prevKind ? sp : ''}>
+          <RunningJobsOverlay block={block} />
+        </div>
+      );
+    case 'status-line':
+      return (
+        <div key={i} className={prevKind ? sp : ''}>
+          <StatusLine block={block} />
+        </div>
+      );
   }
 }
 
@@ -170,18 +216,24 @@ export function BlockList({
         </button>
       )}
       {items.map((item, idx) => {
-        if (item.type === "block") {
-          const prevKind = idx > 0
-            ? (items[idx - 1].type === "step-group" ? "tool-call" as const : (items[idx - 1] as { type: "block"; block: ThreadBlock }).block.kind)
-            : undefined;
+        if (item.type === 'block') {
+          const prevKind =
+            idx > 0
+              ? items[idx - 1].type === 'step-group'
+                ? ('tool-call' as const)
+                : (items[idx - 1] as { type: 'block'; block: ThreadBlock }).block.kind
+              : undefined;
           return renderBlock(item.block, item.key, handlers, prevKind);
         }
         // Step group (reasoning + tool calls merged)
-        const prevKind = idx > 0
-          ? (items[idx - 1].type === "step-group" ? "tool-call" as const : (items[idx - 1] as { type: "block"; block: ThreadBlock }).block.kind)
-          : undefined;
+        const prevKind =
+          idx > 0
+            ? items[idx - 1].type === 'step-group'
+              ? ('tool-call' as const)
+              : (items[idx - 1] as { type: 'block'; block: ThreadBlock }).block.kind
+            : undefined;
         return (
-          <div key={item.key} className={prevKind ? spacingBefore("tool-call") : ""}>
+          <div key={item.key} className={prevKind ? spacingBefore('tool-call') : ''}>
             <StepGroup blocks={item.blocks} handlers={handlers} />
           </div>
         );
@@ -199,21 +251,25 @@ function ReasoningInline({ block }: { block: ReasoningBlock }) {
     <div className="relative flex">
       <div
         className={cn(
-          "w-[2px] shrink-0 rounded-full mr-3 transition-all duration-300",
+          'w-[2px] shrink-0 rounded-full mr-3 transition-all duration-300',
           isStreaming
-            ? "bg-gradient-to-b from-accent via-accent/50 to-transparent bg-[length:2px_200%] animate-[gradient-shimmer_2s_linear_infinite]"
-            : "bg-border",
+            ? 'bg-gradient-to-b from-accent via-accent/50 to-transparent bg-[length:2px_200%] animate-[gradient-shimmer_2s_linear_infinite]'
+            : 'bg-border',
         )}
       />
       <div
         className={cn(
-          "min-w-0 flex-1 rounded-lg border transition-colors",
-          isStreaming ? "border-accent/20 bg-accent/[0.02]" : "border-border-soft bg-surface/50",
+          'min-w-0 flex-1 rounded-lg border transition-colors',
+          isStreaming ? 'border-accent/20 bg-accent/[0.02]' : 'border-border-soft bg-surface/50',
         )}
       >
         <div className="flex items-center gap-2 px-3 py-1.5 text-[12px] font-medium text-text-dim">
-          {isStreaming ? <Loader2 size={12} className="animate-spin text-accent" /> : <Brain size={12} className="text-accent/70" />}
-          <span>{isStreaming ? "思考中…" : "思考过程"}</span>
+          {isStreaming ? (
+            <Loader2 size={12} className="animate-spin text-accent" />
+          ) : (
+            <Brain size={12} className="text-accent/70" />
+          )}
+          <span>{isStreaming ? '思考中…' : '思考过程'}</span>
         </div>
         <pre className="max-h-64 overflow-y-auto whitespace-pre-wrap break-words px-3 pb-2.5 pt-0.5 font-mono text-[12px] leading-relaxed text-text-dim">
           {block.text}
@@ -227,16 +283,10 @@ function ReasoningInline({ block }: { block: ReasoningBlock }) {
  *  fold together); expanding shows the reasoning text inline plus each tool
  *  row (which still has its own detail fold). Auto-expands while streaming so
  *  live thinking/running tools stay visible. */
-function StepGroup({
-  blocks,
-  handlers,
-}: {
-  blocks: ThreadBlock[];
-  handlers?: BlockHandlers;
-}) {
+function StepGroup({ blocks, handlers }: { blocks: ThreadBlock[]; handlers?: BlockHandlers }) {
   const isStreaming =
-    blocks.some((b) => b.kind === "reasoning" && b.streaming) ||
-    blocks.some((b) => b.kind === "tool-call" && b.status === "running");
+    blocks.some((b) => b.kind === 'reasoning' && b.streaming) ||
+    blocks.some((b) => b.kind === 'tool-call' && b.status === 'running');
   // Default fold follows the global setting; streaming does NOT auto-expand -
   // the user opted into collapsed, so a live indicator on the header is enough
   // and they can expand by hand. Setting changes apply immediately (re-folds
@@ -247,17 +297,20 @@ function StepGroup({
     setExpanded(expandDefault);
   }, [expandDefault]);
 
-  const reasoningCount = blocks.filter((b) => b.kind === "reasoning").length;
-  const toolBlocks = blocks.filter((b): b is ToolCallBlock => b.kind === "tool-call");
+  const reasoningCount = blocks.filter((b) => b.kind === 'reasoning').length;
+  const toolBlocks = blocks.filter((b): b is ToolCallBlock => b.kind === 'tool-call');
   const toolCount = toolBlocks.length;
-  const failed = toolBlocks.filter((b) => b.status === "failed").length;
+  const failed = toolBlocks.filter((b) => b.status === 'failed').length;
   const allDone =
-    toolCount > 0 && toolBlocks.every((b) => b.status === "success" || b.status === "failed" || b.status === "warning");
+    toolCount > 0 &&
+    toolBlocks.every(
+      (b) => b.status === 'success' || b.status === 'failed' || b.status === 'warning',
+    );
 
   const parts: string[] = [];
-  if (reasoningCount) parts.push(`思考过程${reasoningCount > 1 ? ` ×${reasoningCount}` : ""}`);
+  if (reasoningCount) parts.push(`思考过程${reasoningCount > 1 ? ` ×${reasoningCount}` : ''}`);
   if (toolCount) parts.push(`${toolCount} 个工具`);
-  const summary = parts.join(" · ") || "步骤";
+  const summary = parts.join(' · ') || '步骤';
 
   return (
     <div className="rounded-lg border border-border-soft bg-surface/40">
@@ -268,7 +321,10 @@ function StepGroup({
         aria-expanded={expanded}
       >
         <ChevronRight
-          className={cn("h-3.5 w-3.5 shrink-0 transition-transform duration-150", expanded && "rotate-90")}
+          className={cn(
+            'h-3.5 w-3.5 shrink-0 transition-transform duration-150',
+            expanded && 'rotate-90',
+          )}
         />
         {/* Streaming pulse / done / failed marker */}
         {isStreaming ? (
@@ -278,17 +334,20 @@ function StepGroup({
         ) : failed > 0 ? (
           <X size={13} className="shrink-0 text-error" />
         ) : null}
-        <span className={cn("flex-1 truncate", isStreaming ? "text-text" : allDone ? "text-text-dim" : "text-muted")}>
+        <span
+          className={cn(
+            'flex-1 truncate',
+            isStreaming ? 'text-text' : allDone ? 'text-text-dim' : 'text-muted',
+          )}
+        >
           {summary}
         </span>
-        {isStreaming && (
-          <Loader2 size={12} className="shrink-0 animate-spin text-accent" />
-        )}
+        {isStreaming && <Loader2 size={12} className="shrink-0 animate-spin text-accent" />}
       </button>
       {expanded && (
         <div className="flex flex-col gap-1.5 border-t border-border-soft px-2 py-2">
           {blocks.map((b, i) =>
-            b.kind === "reasoning" ? (
+            b.kind === 'reasoning' ? (
               <ReasoningInline key={i} block={b} />
             ) : (
               renderBlock(b, i, handlers)

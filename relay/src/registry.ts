@@ -1,12 +1,5 @@
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  renameSync,
-  watch,
-  writeFileSync,
-} from "node:fs";
-import { dirname, join } from "node:path";
+import { existsSync, mkdirSync, readFileSync, renameSync, watch, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 
 /**
  * Account registry: account token → registered devices.
@@ -35,9 +28,12 @@ export interface RegistryState {
 
 export function loadRegistry(dataDir?: string): RegistryState {
   if (!dataDir) return { accounts: {} };
-  const file = join(dataDir, "accounts.json");
+  const file = join(dataDir, 'accounts.json');
   try {
-    const raw = JSON.parse(readFileSync(file, "utf8")) as Record<string, { note?: string; devices?: string[] }>;
+    const raw = JSON.parse(readFileSync(file, 'utf8')) as Record<
+      string,
+      { note?: string; devices?: string[] }
+    >;
     const accounts: Record<string, AccountRecord> = {};
     for (const [token, rec] of Object.entries(raw)) {
       accounts[token] = {
@@ -62,7 +58,7 @@ export class AccountRegistry {
   constructor(dataDir?: string, opts: { watch?: boolean } = {}) {
     this.state = loadRegistry(dataDir);
     this.dataDir = dataDir;
-    this.file = dataDir ? join(dataDir, "accounts.json") : undefined;
+    this.file = dataDir ? join(dataDir, 'accounts.json') : undefined;
     if (this.file && (opts.watch ?? true)) this.startWatching();
   }
 
@@ -86,7 +82,7 @@ export class AccountRegistry {
 
   /** Device ids registered under the token (sorted for stable output). */
   listDevices(token: string): string[] {
-    return [...this.state.accounts[token]?.devices ?? []].sort();
+    return [...(this.state.accounts[token]?.devices ?? [])].sort();
   }
 
   /** Mark a device as belonging to the account (idempotent). */
@@ -161,7 +157,11 @@ export class AccountRegistry {
     // The file may not exist yet; watch the directory so first writes load.
     const dir = dirname(this.file!);
     if (!existsSync(dir)) {
-      try { mkdirSync(dir, { recursive: true }); } catch { return; }
+      try {
+        mkdirSync(dir, { recursive: true });
+      } catch {
+        return;
+      }
     }
     let reloading = false;
     const reload = () => {
@@ -175,13 +175,15 @@ export class AccountRegistry {
         this.onChange?.();
       } finally {
         // Defer clearing so burst writes (tmp+rename) coalesce.
-        setTimeout(() => { reloading = false; }, 50);
+        setTimeout(() => {
+          reloading = false;
+        }, 50);
       }
     };
     try {
       this.watcher = watch(dir, (event, filename) => {
-        if (event === "rename" || event === "change") {
-          if (filename === "accounts.json") reload();
+        if (event === 'rename' || event === 'change') {
+          if (filename === 'accounts.json') reload();
         }
       });
     } catch {

@@ -1,31 +1,39 @@
-import { useEffect, useState } from "react";
-import { ChevronDown, ChevronRight, Loader2, MessageSquare, Package, RotateCcw } from "lucide-react";
-import { useNavigate } from "react-router-dom";
-import type { ProvenanceRecord } from "@workbench/shared";
-import { listProvenance, readEnvLockfile } from "@/lib/provenance";
-import { useUiStore } from "@/lib/store";
-import { CodeViewer } from "@/components/code-viewer/CodeViewer";
-import { cn } from "@/lib/cn";
+import type { ProvenanceRecord } from '@workbench/shared';
+import {
+  ChevronDown,
+  ChevronRight,
+  Loader2,
+  MessageSquare,
+  Package,
+  RotateCcw,
+} from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+
+import { CodeViewer } from '@/components/code-viewer/CodeViewer';
+import { cn } from '@/lib/cn';
+import { listProvenance, readEnvLockfile } from '@/lib/provenance';
+import { useUiStore } from '@/lib/store';
 
 /** The prompt the Reproduce action drafts — prefilled, reviewed, user-sent. */
 export function reproducePrompt(r: ProvenanceRecord): string {
   const pkgs = r.env?.packages;
   const pkgNote = pkgs
     ? ` The environment had ${pkgs.count} installed Python packages, listed in \`.workbench/env/${pkgs.hash}.txt\` — if the regenerated result differs, install matching versions from that lockfile and re-run.`
-    : "";
+    : '';
   const env = r.env
-    ? ` It was produced with${r.env.python ? ` Python ${r.env.python} on` : ""} ${r.env.platform}.${pkgNote}`
-    : "";
-  const content = r.content ?? "";
+    ? ` It was produced with${r.env.python ? ` Python ${r.env.python} on` : ''} ${r.env.platform}.${pkgNote}`
+    : '';
+  const content = r.content ?? '';
   // A fence longer than any backtick run in the content, so embedded ``` in
   // the recorded code (e.g. a generated report.md) cannot close it early.
-  const fence = "`".repeat(Math.max(3, longestBacktickRun(content) + 1));
+  const fence = '`'.repeat(Math.max(3, longestBacktickRun(content) + 1));
   // Records are capped at 100 KB (provenance.rs cap_content) — a truncated
   // record is not runnable, so tell the agent where the full code lives.
-  const truncNote = content.endsWith("[truncated]")
+  const truncNote = content.endsWith('[truncated]')
     ? " NOTE: the recorded code below is truncated at the store's size cap — read the full " +
       `record for \`${r.path}\` from \`.workbench/provenance.jsonl\` before re-running.`
-    : "";
+    : '';
   return (
     `Reproduce \`${r.path}\` (provenance v${r.version}).${env} ` +
     `Re-run its recorded generating code below, then compare the regenerated file ` +
@@ -61,7 +69,9 @@ export function ProvenancePanel({ path, language }: { path: string; language?: s
     }
     setLockfile({ hash, text: null });
     void readEnvLockfile(hash).then((text) =>
-      setLockfile((cur) => (cur?.hash === hash ? { hash, text: text ?? "(lockfile unavailable)" } : cur)),
+      setLockfile((cur) =>
+        cur?.hash === hash ? { hash, text: text ?? '(lockfile unavailable)' } : cur,
+      ),
     );
   };
 
@@ -69,7 +79,7 @@ export function ProvenancePanel({ path, language }: { path: string; language?: s
   // the user reviews and sends it (human in the loop, never auto-run).
   const reproduce = (r: ProvenanceRecord) => {
     setComposerDraft(reproducePrompt(r));
-    navigate(r.sessionId ? `/live/${r.sessionId}` : "/live");
+    navigate(r.sessionId ? `/live/${r.sessionId}` : '/live');
   };
 
   useEffect(() => {
@@ -96,9 +106,9 @@ export function ProvenancePanel({ path, language }: { path: string; language?: s
   if (records.length === 0) {
     return (
       <div className="p-4 text-sm text-muted">
-        No versions recorded yet. Each time the agent writes{" "}
-        <span className="font-mono text-text">{path}</span>, a version is added here with the
-        code, model, and conversation that produced it.
+        No versions recorded yet. Each time the agent writes{' '}
+        <span className="font-mono text-text">{path}</span>, a version is added here with the code,
+        model, and conversation that produced it.
       </div>
     );
   }
@@ -139,14 +149,14 @@ export function ProvenancePanel({ path, language }: { path: string; language?: s
                     >
                       {[r.env.python && `py ${r.env.python}`, r.env.platform, `app ${r.env.app}`]
                         .filter(Boolean)
-                        .join(" · ")}
+                        .join(' · ')}
                     </span>
                   )}
                   {r.env?.packages && (
                     <button
                       className={cn(
-                        "flex items-center gap-1 rounded px-1.5 py-0.5 font-mono hover:bg-surface-2 hover:text-text",
-                        lockfile?.hash === r.env.packages.hash && "bg-surface-2 text-text",
+                        'flex items-center gap-1 rounded px-1.5 py-0.5 font-mono hover:bg-surface-2 hover:text-text',
+                        lockfile?.hash === r.env.packages.hash && 'bg-surface-2 text-text',
                       )}
                       onClick={() => toggleLockfile(r.env!.packages!.hash)}
                       title="View the captured pip freeze lockfile for this version"
@@ -195,7 +205,7 @@ export function ProvenancePanel({ path, language }: { path: string; language?: s
                 {r.content ? (
                   <CodeViewer code={r.content} language={language} />
                 ) : (
-                  <div className={cn("text-xs text-muted")}>
+                  <div className={cn('text-xs text-muted')}>
                     Content not captured for this version (binary or produced by running code).
                   </div>
                 )}
@@ -211,9 +221,9 @@ export function ProvenancePanel({ path, language }: { path: string; language?: s
 function formatTs(ts: number): string {
   const d = new Date(ts * 1000);
   return d.toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
   });
 }

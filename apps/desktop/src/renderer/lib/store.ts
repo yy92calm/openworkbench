@@ -1,52 +1,61 @@
-import { create } from "zustand";
-import type { ArtifactBlock, FileRoot, RendererManifest, UiDefaults } from "@workbench/shared";
-import { loadLocale, persistLocale, type Locale } from "./i18n";
+import type { ArtifactBlock, FileRoot, RendererManifest, UiDefaults } from '@workbench/shared';
+import { create } from 'zustand';
 
-export type Theme = "light" | "warm" | "cool" | "dark" | "black" | "system";
-export type AgentRuntimeKind = "opencode" | "claude-code";
+import { loadLocale, type Locale, persistLocale } from './i18n';
+
+export type Theme = 'light' | 'warm' | 'cool' | 'dark' | 'black' | 'system';
+export type AgentRuntimeKind = 'opencode' | 'claude-code';
 
 /** A main-area tab. Session tabs switch the active conversation (single
  *  instance - the agent keeps running in the background via the global event
  *  stream); file tabs show an artifact preview in the main area. */
 export type Tab =
-  | { id: string; kind: "session"; sessionId: string | null; title: string }
-  | { id: string; kind: "file"; artifact: ArtifactBlock; title: string; root?: FileRoot };
+  | { id: string; kind: 'session'; sessionId: string | null; title: string }
+  | { id: string; kind: 'file'; artifact: ArtifactBlock; title: string; root?: FileRoot };
 
-const THEME_KEY = "workbench.theme";
-const RUNTIME_KIND_KEY = "workbench.agentRuntimeKind";
-const SIDEBAR_KEY = "workbench.sidebarWidth";
-const SIDEBAR_COLLAPSED_KEY = "workbench.sidebarCollapsed";
-const EXPAND_DETAILS_KEY = "workbench.expandThreadDetails";
+const THEME_KEY = 'workbench.theme';
+const RUNTIME_KIND_KEY = 'workbench.agentRuntimeKind';
+const SIDEBAR_KEY = 'workbench.sidebarWidth';
+const SIDEBAR_COLLAPSED_KEY = 'workbench.sidebarCollapsed';
+const EXPAND_DETAILS_KEY = 'workbench.expandThreadDetails';
 
 function initialTheme(): Theme {
-  if (typeof window === "undefined") return "light";
+  if (typeof window === 'undefined') return 'light';
   const saved = window.localStorage.getItem(THEME_KEY);
-  if (saved === "light" || saved === "warm" || saved === "cool" || saved === "dark" || saved === "black" || saved === "system") return saved;
-  const prefersDark = window.matchMedia?.("(prefers-color-scheme: dark)").matches;
-  return prefersDark ? "dark" : "light";
+  if (
+    saved === 'light' ||
+    saved === 'warm' ||
+    saved === 'cool' ||
+    saved === 'dark' ||
+    saved === 'black' ||
+    saved === 'system'
+  )
+    return saved;
+  const prefersDark = window.matchMedia?.('(prefers-color-scheme: dark)').matches;
+  return prefersDark ? 'dark' : 'light';
 }
 
 function initialSidebarWidth(): number {
-  if (typeof window === "undefined") return 200;
+  if (typeof window === 'undefined') return 200;
   const saved = window.localStorage.getItem(SIDEBAR_KEY);
   const n = saved ? Number(saved) : NaN;
   return Number.isFinite(n) ? Math.max(160, Math.min(360, n)) : 200;
 }
 
 function initialSidebarCollapsed(): boolean {
-  if (typeof window === "undefined") return false;
-  return window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "true";
+  if (typeof window === 'undefined') return false;
+  return window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true';
 }
 
 function initialRuntimeKind(): AgentRuntimeKind {
-  if (typeof window === "undefined") return "opencode";
+  if (typeof window === 'undefined') return 'opencode';
   const saved = window.localStorage.getItem(RUNTIME_KIND_KEY);
-  return saved === "claude-code" ? "claude-code" : "opencode";
+  return saved === 'claude-code' ? 'claude-code' : 'opencode';
 }
 
 function initialExpandDetails(): boolean {
-  if (typeof window === "undefined") return false;
-  return window.localStorage.getItem(EXPAND_DETAILS_KEY) === "true";
+  if (typeof window === 'undefined') return false;
+  return window.localStorage.getItem(EXPAND_DETAILS_KEY) === 'true';
 }
 
 interface UiState {
@@ -99,7 +108,7 @@ export const useUiStore = create<UiState>((set, get) => ({
   paletteOpen: false,
   expandThreadDetails: initialExpandDetails(),
   setTheme: (theme) => {
-    if (typeof window !== "undefined") window.localStorage.setItem(THEME_KEY, theme);
+    if (typeof window !== 'undefined') window.localStorage.setItem(THEME_KEY, theme);
     set({ theme });
   },
   setLocale: (locale) => {
@@ -108,67 +117,73 @@ export const useUiStore = create<UiState>((set, get) => ({
   },
   toggleTheme: () => {
     const cur = get().theme;
-    const isDark = cur === "dark" || cur === "black";
-    get().setTheme(isDark ? "light" : "dark");
+    const isDark = cur === 'dark' || cur === 'black';
+    get().setTheme(isDark ? 'light' : 'dark');
   },
   setAgentRuntimeKind: (agentRuntimeKind) => {
-    if (typeof window !== "undefined") window.localStorage.setItem(RUNTIME_KIND_KEY, agentRuntimeKind);
+    if (typeof window !== 'undefined')
+      window.localStorage.setItem(RUNTIME_KIND_KEY, agentRuntimeKind);
     set({ agentRuntimeKind });
   },
   setInspectorOpen: (inspectorOpen) => set({ inspectorOpen }),
   setSidebarWidth: (sidebarWidth) => {
     const clamped = Math.max(160, Math.min(360, sidebarWidth));
-    if (typeof window !== "undefined") window.localStorage.setItem(SIDEBAR_KEY, String(clamped));
+    if (typeof window !== 'undefined') window.localStorage.setItem(SIDEBAR_KEY, String(clamped));
     set({ sidebarWidth: clamped });
   },
   toggleSidebar: () => {
     const next = !get().sidebarCollapsed;
-    if (typeof window !== "undefined") window.localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(next));
+    if (typeof window !== 'undefined')
+      window.localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(next));
     set({ sidebarCollapsed: next });
   },
   setPaletteOpen: (paletteOpen) => set({ paletteOpen }),
   composerDraft: null,
   setComposerDraft: (composerDraft) => set({ composerDraft }),
   setExpandThreadDetails: (expandThreadDetails) => {
-    if (typeof window !== "undefined") window.localStorage.setItem(EXPAND_DETAILS_KEY, String(expandThreadDetails));
+    if (typeof window !== 'undefined')
+      window.localStorage.setItem(EXPAND_DETAILS_KEY, String(expandThreadDetails));
     set({ expandThreadDetails });
   },
   tabs: [],
   activeTabId: null,
-  openSessionTab: (sessionId, title) => set((s) => {
-    // All sessions share a single "session" tab — switching sessions reuses it.
-    const existing = s.tabs.find((t) => t.kind === "session");
-    if (existing) {
-      return {
-        tabs: s.tabs.map((t) =>
-          t.id === existing.id ? { ...t, sessionId, title: title ?? t.title } : t,
-        ),
-        activeTabId: existing.id,
-      };
-    }
-    const id = `tab-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-    const tab: Tab = { id, kind: "session", sessionId, title: title ?? "新会话" };
-    // Session tab is always first; file tabs follow.
-    return { tabs: [tab, ...s.tabs], activeTabId: id };
-  }),
-  openFileTab: (artifact, root, activate = true) => set((s) => {
-    const existing = s.tabs.find((t) => t.kind === "file" && t.artifact.path === artifact.path);
-    if (existing) return activate ? { activeTabId: existing.id } : {};
-    const id = `tab-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-    const title = artifact.filename || artifact.path.split(/[\\/]/).pop() || "预览";
-    const tab: Tab = { id, kind: "file", artifact, title, root };
-    return { tabs: [...s.tabs, tab], ...(activate ? { activeTabId: id } : {}) };
-  }),
-  closeTab: (id) => set((s) => {
-    const idx = s.tabs.findIndex((t) => t.id === id);
-    if (idx === -1) return s;
-    const tabs = s.tabs.filter((t) => t.id !== id);
-    let activeTabId = s.activeTabId;
-    if (activeTabId === id) {
-      activeTabId = tabs.length ? tabs[Math.min(idx, tabs.length - 1)].id : null;
-    }
-    return { tabs, activeTabId };
-  }),
+  openSessionTab: (sessionId, title) =>
+    set((s) => {
+      // All sessions share a single "session" tab — switching sessions reuses it.
+      const existing = s.tabs.find((t) => t.kind === 'session');
+      if (existing) {
+        return {
+          tabs: s.tabs.map((t) =>
+            t.id === existing.id ? { ...t, sessionId, title: title ?? t.title } : t,
+          ),
+          activeTabId: existing.id,
+        };
+      }
+      const id = `tab-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+      const tab: Tab = { id, kind: 'session', sessionId, title: title ?? '新会话' };
+      // Session tab is always first; file tabs follow.
+      return { tabs: [tab, ...s.tabs], activeTabId: id };
+    }),
+  openFileTab: (artifact, root, activate = true) =>
+    set((s) => {
+      const existing = s.tabs.find((t) => t.kind === 'file' && t.artifact.path === artifact.path);
+      if (existing) return activate ? { activeTabId: existing.id } : {};
+      const id = `tab-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+      const title = artifact.filename || artifact.path.split(/[\\/]/).pop() || '预览';
+      const tab: Tab = { id, kind: 'file', artifact, title, root };
+      return { tabs: [...s.tabs, tab], ...(activate ? { activeTabId: id } : {}) };
+    }),
+  closeTab: (id) =>
+    set((s) => {
+      const idx = s.tabs.findIndex((t) => t.id === id);
+      if (idx === -1) return s;
+      const tabs = s.tabs.filter((t) => t.id !== id);
+      let activeTabId = s.activeTabId;
+      if (activeTabId === id) {
+        activeTabId = tabs.length ? tabs[Math.min(idx, tabs.length - 1)].id : null;
+      }
+      return { tabs, activeTabId };
+    }),
   activateTab: (id) => set({ activeTabId: id }),
 }));
 
@@ -193,30 +208,37 @@ export const useInteractionStore = create<InteractionState>((set) => ({
  *  deployed profile and apply it to the store. Returns after IPC; falls back
  *  to empty defaults when the desktop bridge is unavailable. */
 export async function initInteraction(): Promise<void> {
-  const { profileInteraction } = await import("./tauri");
+  const { profileInteraction } = await import('./tauri');
   const cfg = (await profileInteraction()) as { renderers?: RendererManifest[]; ui?: UiDefaults };
-  useInteractionStore.getState().load(
-    Array.isArray(cfg?.renderers) ? cfg.renderers : [],
-    cfg?.ui && typeof cfg.ui === "object" ? cfg.ui : {},
-  );
+  useInteractionStore
+    .getState()
+    .load(
+      Array.isArray(cfg?.renderers) ? cfg.renderers : [],
+      cfg?.ui && typeof cfg.ui === 'object' ? cfg.ui : {},
+    );
 
   // Apply UI defaults only where the user has not set an explicit value yet
   // (precedence: user runtime settings > profile ui.json > built-in default).
-  const ui = cfg?.ui && typeof cfg.ui === "object" ? cfg.ui : {};
+  const ui = cfg?.ui && typeof cfg.ui === 'object' ? cfg.ui : {};
   const uiStore = useUiStore.getState();
-  if (typeof window !== "undefined") {
+  if (typeof window !== 'undefined') {
     if (ui.theme && window.localStorage.getItem(THEME_KEY) === null && isTheme(ui.theme)) {
       uiStore.setTheme(ui.theme);
     }
-    if (ui.locale && window.localStorage.getItem("workbench.locale") === null) {
+    if (ui.locale && window.localStorage.getItem('workbench.locale') === null) {
       uiStore.setLocale(ui.locale as Locale);
     }
-    if (ui.expandThreadDetails !== undefined && window.localStorage.getItem(EXPAND_DETAILS_KEY) === null) {
+    if (
+      ui.expandThreadDetails !== undefined &&
+      window.localStorage.getItem(EXPAND_DETAILS_KEY) === null
+    ) {
       uiStore.setExpandThreadDetails(ui.expandThreadDetails);
     }
   }
 }
 
 function isTheme(v: string): v is Theme {
-  return v === "light" || v === "warm" || v === "cool" || v === "dark" || v === "black" || v === "system";
+  return (
+    v === 'light' || v === 'warm' || v === 'cool' || v === 'dark' || v === 'black' || v === 'system'
+  );
 }

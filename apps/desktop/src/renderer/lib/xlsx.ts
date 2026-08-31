@@ -4,7 +4,7 @@
 // the open-source SheetJS build's sheet_to_html emits values only — no styles —
 // which is why fills and font sizes were previously lost. Pure (no DOM) so it
 // can be unit-tested; caps keep a huge sheet from locking the UI.
-import ExcelJS from "exceljs";
+import ExcelJS from 'exceljs';
 
 export interface SheetHtml {
   name: string;
@@ -18,7 +18,7 @@ const MAX_COLS = 50;
 
 const escapeHtml = (s: string): string =>
   s.replace(/[&<>"']/g, (c) =>
-    c === "&" ? "&amp;" : c === "<" ? "&lt;" : c === ">" ? "&gt;" : c === '"' ? "&quot;" : "&#39;",
+    c === '&' ? '&amp;' : c === '<' ? '&lt;' : c === '>' ? '&gt;' : c === '"' ? '&quot;' : '&#39;',
   );
 
 /** ExcelJS colors are 8-hex ARGB. Take the RGB and treat it as opaque — these
@@ -27,17 +27,17 @@ const escapeHtml = (s: string): string =>
  *  (no `argb`) are skipped rather than guessed. */
 function argbToCss(color: unknown): string | undefined {
   const argb = (color as { argb?: string } | undefined)?.argb;
-  if (typeof argb !== "string" || argb.length < 6) return undefined;
+  if (typeof argb !== 'string' || argb.length < 6) return undefined;
   return `#${argb.slice(-6)}`;
 }
 
-const V_ALIGN: Record<string, string> = { top: "top", middle: "middle", bottom: "bottom" };
+const V_ALIGN: Record<string, string> = { top: 'top', middle: 'middle', bottom: 'bottom' };
 
 /** Inline CSS for one cell from its ExcelJS style. */
 function cellStyle(cell: ExcelJS.Cell): string {
   const s: string[] = [];
   const fill = cell.fill as { type?: string; pattern?: string; fgColor?: unknown } | undefined;
-  if (fill?.type === "pattern" && fill.pattern === "solid") {
+  if (fill?.type === 'pattern' && fill.pattern === 'solid') {
     const bg = argbToCss(fill.fgColor);
     if (bg) s.push(`background:${bg}`);
   }
@@ -45,26 +45,29 @@ function cellStyle(cell: ExcelJS.Cell): string {
   const color = argbToCss(font.color);
   if (color) s.push(`color:${color}`);
   if (font.size) s.push(`font-size:${(font.size * 4) / 3}px`); // pt → px
-  if (font.name) s.push(`font-family:'${font.name.replace(/'/g, "")}',sans-serif`);
-  if (font.bold) s.push("font-weight:600");
-  if (font.italic) s.push("font-style:italic");
-  if (font.underline) s.push("text-decoration:underline");
+  if (font.name) s.push(`font-family:'${font.name.replace(/'/g, '')}',sans-serif`);
+  if (font.bold) s.push('font-weight:600');
+  if (font.italic) s.push('font-style:italic');
+  if (font.underline) s.push('text-decoration:underline');
 
   const align = cell.alignment ?? {};
   // Default alignment mirrors Excel: numbers right, everything else left.
-  const horiz = align.horizontal ?? (cell.type === ExcelJS.ValueType.Number ? "right" : "left");
-  if (horiz === "center" || horiz === "right") s.push(`text-align:${horiz}`);
-  if (align.vertical && V_ALIGN[align.vertical]) s.push(`vertical-align:${V_ALIGN[align.vertical]}`);
-  if (align.wrapText) s.push("white-space:normal");
+  const horiz = align.horizontal ?? (cell.type === ExcelJS.ValueType.Number ? 'right' : 'left');
+  if (horiz === 'center' || horiz === 'right') s.push(`text-align:${horiz}`);
+  if (align.vertical && V_ALIGN[align.vertical])
+    s.push(`vertical-align:${V_ALIGN[align.vertical]}`);
+  if (align.wrapText) s.push('white-space:normal');
 
-  for (const side of ["top", "right", "bottom", "left"] as const) {
-    const b = (cell.border as Record<string, { style?: string; color?: unknown }> | undefined)?.[side];
+  for (const side of ['top', 'right', 'bottom', 'left'] as const) {
+    const b = (cell.border as Record<string, { style?: string; color?: unknown }> | undefined)?.[
+      side
+    ];
     if (b?.style) {
-      const w = b.style.includes("thick") || b.style === "medium" ? 2 : 1;
-      s.push(`border-${side}:${w}px solid ${argbToCss(b.color) ?? "#c9c2b6"}`);
+      const w = b.style.includes('thick') || b.style === 'medium' ? 2 : 1;
+      s.push(`border-${side}:${w}px solid ${argbToCss(b.color) ?? '#c9c2b6'}`);
     }
   }
-  return s.join(";");
+  return s.join(';');
 }
 
 export async function workbookSheets(bytes: ArrayBuffer): Promise<SheetHtml[]> {
@@ -72,7 +75,8 @@ export async function workbookSheets(bytes: ArrayBuffer): Promise<SheetHtml[]> {
   await wb.xlsx.load(bytes);
 
   return wb.worksheets.map((ws) => {
-    const dim = ws.dimensions as { top?: number; left?: number; bottom?: number; right?: number } | undefined;
+    const dim = ws.dimensions as
+      { top?: number; left?: number; bottom?: number; right?: number } | undefined;
     const top = dim?.top || 1;
     const left = dim?.left || 1;
     const bottom = dim?.bottom || 1;
@@ -85,7 +89,7 @@ export async function workbookSheets(bytes: ArrayBuffer): Promise<SheetHtml[]> {
     const spans = new Map<string, { rs: number; cs: number }>();
     const covered = new Set<string>();
     for (const range of ws.model.merges ?? []) {
-      const [a, b] = range.split(":");
+      const [a, b] = range.split(':');
       const s = cellRef(a);
       const e = cellRef(b);
       if (!s || !e) continue;
@@ -95,24 +99,24 @@ export async function workbookSheets(bytes: ArrayBuffer): Promise<SheetHtml[]> {
     }
 
     // Column widths (Excel char units → px), so the layout matches the sheet.
-    let cols = "";
+    let cols = '';
     for (let c = left; c <= lastCol; c++) {
       const w = ws.getColumn(c).width;
       cols += `<col style="width:${w ? Math.round(w * 7 + 5) : 64}px">`;
     }
 
-    let body = "";
+    let body = '';
     for (let r = top; r <= lastRow; r++) {
-      body += "<tr>";
+      body += '<tr>';
       for (let c = left; c <= lastCol; c++) {
         if (covered.has(`${r},${c}`)) continue;
         const cell = ws.getCell(r, c);
         const span = spans.get(`${r},${c}`);
-        const attrs = span ? ` rowspan="${span.rs}" colspan="${span.cs}"` : "";
+        const attrs = span ? ` rowspan="${span.rs}" colspan="${span.cs}"` : '';
         const style = cellStyle(cell);
-        body += `<td${attrs}${style ? ` style="${style}"` : ""}>${escapeHtml(cell.text ?? "")}</td>`;
+        body += `<td${attrs}${style ? ` style="${style}"` : ''}>${escapeHtml(cell.text ?? '')}</td>`;
       }
-      body += "</tr>";
+      body += '</tr>';
     }
 
     return {

@@ -14,7 +14,7 @@
  * Env: RELAY_DATA_DIR (required for persistence; without it the CLI operates
  *      on an in-memory registry, which is only useful for a same-process relay).
  */
-import { AccountRegistry } from "./registry";
+import { AccountRegistry } from './registry';
 
 const USAGE = `用法:
   admin add --token <令牌> [--note <备注>]
@@ -24,9 +24,7 @@ const USAGE = `用法:
 环境变量: RELAY_DATA_DIR 指向中继的账号数据目录（与运行中的中继相同）`;
 
 type Command =
-  | { cmd: "add"; token: string; note?: string }
-  | { cmd: "list" }
-  | { cmd: "remove"; token: string };
+  { cmd: 'add'; token: string; note?: string } | { cmd: 'list' } | { cmd: 'remove'; token: string };
 
 function parseArgs(argv: string[]): Command | null {
   if (argv.length === 0) return null;
@@ -35,24 +33,24 @@ function parseArgs(argv: string[]): Command | null {
     const i = rest.indexOf(flag);
     return i >= 0 && rest[i + 1] ? rest[i + 1] : undefined;
   };
-  if (cmd === "add") {
-    const token = get("--token");
+  if (cmd === 'add') {
+    const token = get('--token');
     if (!token) return null;
-    return { cmd, token, note: get("--note") };
+    return { cmd, token, note: get('--note') };
   }
-  if (cmd === "remove") {
-    const token = get("--token");
+  if (cmd === 'remove') {
+    const token = get('--token');
     if (!token) return null;
     return { cmd, token };
   }
-  if (cmd === "list") return { cmd };
+  if (cmd === 'list') return { cmd };
   return null;
 }
 
 function main(): void {
   const dataDir = process.env.RELAY_DATA_DIR;
   if (!dataDir) {
-    console.error("RELAY_DATA_DIR 未设置——管理 CLI 只在持久化模式下有意义。");
+    console.error('RELAY_DATA_DIR 未设置——管理 CLI 只在持久化模式下有意义。');
     console.error(USAGE);
     process.exit(1);
   }
@@ -63,24 +61,24 @@ function main(): void {
   }
   const reg = new AccountRegistry(dataDir, { watch: false });
   switch (cmd.cmd) {
-    case "add": {
+    case 'add': {
       reg.upsertAccount(cmd.token, cmd.note);
-      console.log(`账号已添加: ${cmd.token}${cmd.note ? ` (${cmd.note})` : ""}`);
+      console.log(`账号已添加: ${cmd.token}${cmd.note ? ` (${cmd.note})` : ''}`);
       break;
     }
-    case "remove": {
+    case 'remove': {
       if (reg.removeAccount(cmd.token)) console.log(`账号已删除: ${cmd.token}`);
       else console.log(`账号不存在: ${cmd.token}`);
       break;
     }
-    case "list": {
+    case 'list': {
       const accounts = reg.listAccounts();
       if (accounts.length === 0) {
-        console.log("(无账号)");
+        console.log('(无账号)');
         break;
       }
       for (const a of accounts) {
-        console.log(`${a.token}${a.note ? `\t(${a.note})` : ""}\t${a.deviceCount} 台设备`);
+        console.log(`${a.token}${a.note ? `\t(${a.note})` : ''}\t${a.deviceCount} 台设备`);
       }
       break;
     }

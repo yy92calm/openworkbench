@@ -1,6 +1,4 @@
-import { useEffect } from "react";
-import { Command } from "cmdk";
-import { useNavigate } from "react-router-dom";
+import { Command } from 'cmdk';
 import {
   FileSearch,
   Moon,
@@ -9,10 +7,13 @@ import {
   Plus,
   Settings,
   ShieldCheck,
-} from "lucide-react";
-import { useUiStore } from "@/lib/store";
-import { useRuntimeStore } from "@/lib/runtime";
-import { WORKFLOW_STARTERS } from "@/components/thread/WorkflowStarters";
+} from 'lucide-react';
+import { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+
+import { WORKFLOW_STARTERS } from '@/components/thread/WorkflowStarters';
+import { useRuntimeStore } from '@/lib/runtime';
+import { useUiStore } from '@/lib/store';
 
 interface Action {
   id: string;
@@ -22,7 +23,7 @@ interface Action {
 }
 
 /** Prompt for a starter workflow by id, so ⌘K and the empty-session cards stay in sync. */
-const starterPrompt = (id: string) => WORKFLOW_STARTERS.find((s) => s.id === id)?.prompt ?? "";
+const starterPrompt = (id: string) => WORKFLOW_STARTERS.find((s) => s.id === id)?.prompt ?? '';
 
 export function CommandPalette() {
   const open = useUiStore((s) => s.paletteOpen);
@@ -32,24 +33,27 @@ export function CommandPalette() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key.toLowerCase() === "k" && (e.metaKey || e.ctrlKey)) {
+      if (e.key.toLowerCase() === 'k' && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
         setOpen(!useUiStore.getState().paletteOpen);
       }
       // "/" opens the palette when not typing in an input/textarea
-      if (e.key === "/" && !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)) {
+      if (
+        e.key === '/' &&
+        !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement)
+      ) {
         e.preventDefault();
         setOpen(true);
       }
       // Consume Esc only when the palette is open — a marked-handled Esc must
       // not also interrupt a running agent turn (LiveSessionPage listens too).
-      if (e.key === "Escape" && useUiStore.getState().paletteOpen) {
+      if (e.key === 'Escape' && useUiStore.getState().paletteOpen) {
         e.preventDefault();
         setOpen(false);
       }
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
   }, [setOpen]);
 
   const close = () => setOpen(false);
@@ -63,13 +67,64 @@ export function CommandPalette() {
   };
 
   const actions: Action[] = [
-    { id: "new", label: "新建会话", icon: <Plus size={16} />, run: () => { useRuntimeStore.getState().startDraft(); navigate("/live"); close(); } },
-    { id: "analyze", label: "数据分析（新工作流）", icon: <FileSearch size={16} />, run: () => void runWorkflow("analyze") },
-    { id: "review", label: "报告审核（可追溯审查）", icon: <ShieldCheck size={16} />, run: () => void runWorkflow("audit") },
-    { id: "notebooks", label: "打开笔记本", icon: <NotebookPen size={16} />, run: () => { navigate("/notebooks"); close(); } },
-    { id: "skills", label: "管理技能", icon: <PackagePlus size={16} />, run: () => { navigate("/skills"); close(); } },
-    { id: "settings", label: "打开设置", icon: <Settings size={16} />, run: () => { navigate("/settings"); close(); } },
-    { id: "theme", label: "切换浅色/深色主题", icon: <Moon size={16} />, run: () => { toggleTheme(); close(); } },
+    {
+      id: 'new',
+      label: '新建会话',
+      icon: <Plus size={16} />,
+      run: () => {
+        useRuntimeStore.getState().startDraft();
+        navigate('/live');
+        close();
+      },
+    },
+    {
+      id: 'analyze',
+      label: '数据分析（新工作流）',
+      icon: <FileSearch size={16} />,
+      run: () => void runWorkflow('analyze'),
+    },
+    {
+      id: 'review',
+      label: '报告审核（可追溯审查）',
+      icon: <ShieldCheck size={16} />,
+      run: () => void runWorkflow('audit'),
+    },
+    {
+      id: 'notebooks',
+      label: '打开笔记本',
+      icon: <NotebookPen size={16} />,
+      run: () => {
+        navigate('/notebooks');
+        close();
+      },
+    },
+    {
+      id: 'skills',
+      label: '管理技能',
+      icon: <PackagePlus size={16} />,
+      run: () => {
+        navigate('/skills');
+        close();
+      },
+    },
+    {
+      id: 'settings',
+      label: '打开设置',
+      icon: <Settings size={16} />,
+      run: () => {
+        navigate('/settings');
+        close();
+      },
+    },
+    {
+      id: 'theme',
+      label: '切换浅色/深色主题',
+      icon: <Moon size={16} />,
+      run: () => {
+        toggleTheme();
+        close();
+      },
+    },
   ];
 
   if (!open) return null;

@@ -13,24 +13,24 @@
 export const browserMcpPreload = {
   // Browser command response (renderer → main)
   browserCommandResponse: (requestId: string, result: unknown) =>
-    (globalThis as any).ipcRenderer?.invoke("browser:command-response", requestId, result),
+    (globalThis as any).ipcRenderer?.invoke('browser:command-response', requestId, result),
 
   // Recording control (UI buttons)
-  browserRecordStart: () => (globalThis as any).ipcRenderer?.invoke("browser:record-start"),
-  browserRecordStop: () => (globalThis as any).ipcRenderer?.invoke("browser:record-stop"),
-  browserRecordState: () => (globalThis as any).ipcRenderer?.invoke("browser:record-state"),
+  browserRecordStart: () => (globalThis as any).ipcRenderer?.invoke('browser:record-start'),
+  browserRecordStop: () => (globalThis as any).ipcRenderer?.invoke('browser:record-stop'),
+  browserRecordState: () => (globalThis as any).ipcRenderer?.invoke('browser:record-state'),
   browserRecordSave: (name: string, description?: string) =>
-    (globalThis as any).ipcRenderer?.invoke("browser:record-save", name, description),
-  browserRecordList: () => (globalThis as any).ipcRenderer?.invoke("browser:record-list"),
+    (globalThis as any).ipcRenderer?.invoke('browser:record-save', name, description),
+  browserRecordList: () => (globalThis as any).ipcRenderer?.invoke('browser:record-list'),
   browserRecordReplay: (name: string, delay?: number) =>
-    (globalThis as any).ipcRenderer?.invoke("browser:record-replay", name, delay),
+    (globalThis as any).ipcRenderer?.invoke('browser:record-replay', name, delay),
 
   // Webview setup
   browserSetupWebview: (wcId: number) =>
-    (globalThis as any).ipcRenderer?.invoke("browser:setup-webview", wcId),
+    (globalThis as any).ipcRenderer?.invoke('browser:setup-webview', wcId),
 
   // Panel control
-  browserFetch: (url: string) => (globalThis as any).ipcRenderer?.invoke("browser:fetch", url),
+  browserFetch: (url: string) => (globalThis as any).ipcRenderer?.invoke('browser:fetch', url),
 };
 
 /** IPC event listener helper (for browser:panel / browser:command channels). */

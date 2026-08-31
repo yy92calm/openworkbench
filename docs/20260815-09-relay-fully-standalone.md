@@ -24,7 +24,7 @@
 
 ### 目标结构
 
-```
+```text
 relay/                          ← 彻底独立（自建 workspace）
 ├── pnpm-workspace.yaml         ← packages: ["."]
 ├── pnpm-lock.yaml              ← 独立 lockfile（新增，提交入库）
@@ -60,6 +60,7 @@ relay/                          ← 彻底独立（自建 workspace）
 ```bash
 grep -rn "from \"@workbench\|from '@workbench" relay/client/src/ relay/client/sdk/src/ relay/client/shared/src/
 ```
+
 按结果调整，全部指向 `@workbench/sdk` / `@workbench/shared`（workspace 内）。
 
 ### deploy 脚本

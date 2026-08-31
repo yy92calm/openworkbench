@@ -1,5 +1,17 @@
-import { useState, useRef, useCallback, useEffect } from "react";
-import { ArrowLeft, ArrowRight, Globe, RefreshCw, Terminal, X, Circle, Square, Save, Play, ChevronRight } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  ChevronRight,
+  Circle,
+  Globe,
+  Play,
+  RefreshCw,
+  Save,
+  Square,
+  Terminal,
+  X,
+} from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 /**
  * Browser panel using Electron's <webview> for full browser automation.
@@ -34,17 +46,19 @@ export function BrowserPanel({
   onClose: () => void;
 }) {
   const [input, setInput] = useState(url);
-  const [history, setHistory] = useState<string[]>([url || "https://www.google.com"]);
+  const [history, setHistory] = useState<string[]>([url || 'https://www.google.com']);
   const [historyIndex, setHistoryIndex] = useState(0);
   const [showJsConsole, setShowJsConsole] = useState(false);
-  const [jsInput, setJsInput] = useState("");
-  const [jsResult, setJsResult] = useState("");
+  const [jsInput, setJsInput] = useState('');
+  const [jsResult, setJsResult] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const [recordCount, setRecordCount] = useState(0);
   const [showSaveInput, setShowSaveInput] = useState(false);
-  const [saveName, setSaveName] = useState("");
+  const [saveName, setSaveName] = useState('');
   const [showReplayList, setShowReplayList] = useState(false);
-  const [replayList, setReplayList] = useState<{ name: string; steps: number; created: string }[]>([]);
+  const [replayList, setReplayList] = useState<{ name: string; steps: number; created: string }[]>(
+    [],
+  );
   const [isReplaying, setIsReplaying] = useState(false);
   const webviewRef = useRef<WebviewElement | null>(null);
 
@@ -64,7 +78,7 @@ export function BrowserPanel({
   };
 
   const toggleRecordStop = async () => {
-    const result = await window.electronAPI.browserRecordStop() as { count: number };
+    const result = (await window.electronAPI.browserRecordStop()) as { count: number };
     setIsRecording(false);
     setRecordCount(result.count);
     setJsResult(`录制结束，共 ${result.count} 步`);
@@ -73,7 +87,11 @@ export function BrowserPanel({
 
   const handleSave = async () => {
     if (!saveName.trim()) return;
-    const result = await window.electronAPI.browserRecordSave(saveName.trim()) as { ok: boolean; count: number; error?: string };
+    const result = (await window.electronAPI.browserRecordSave(saveName.trim())) as {
+      ok: boolean;
+      count: number;
+      error?: string;
+    };
     if (result.ok) {
       setJsResult(`已保存录制 "${saveName.trim()}"（${result.count} 步）`);
     } else {
@@ -81,11 +99,15 @@ export function BrowserPanel({
     }
     setShowJsConsole(true);
     setShowSaveInput(false);
-    setSaveName("");
+    setSaveName('');
   };
 
   const handleShowReplayList = async () => {
-    const list = await window.electronAPI.browserRecordList() as { name: string; steps: number; created: string }[];
+    const list = (await window.electronAPI.browserRecordList()) as {
+      name: string;
+      steps: number;
+      created: string;
+    }[];
     setReplayList(list);
     setShowReplayList(!showReplayList);
   };
@@ -95,16 +117,21 @@ export function BrowserPanel({
     setIsReplaying(true);
     setJsResult(`正在回放 "${name}"…`);
     setShowJsConsole(true);
-    const result = await window.electronAPI.browserRecordReplay(name) as { ok: boolean; count: number; results: string[]; error?: string };
+    const result = (await window.electronAPI.browserRecordReplay(name)) as {
+      ok: boolean;
+      count: number;
+      results: string[];
+      error?: string;
+    };
     setIsReplaying(false);
     if (result.ok) {
-      setJsResult(`回放完成（${result.count} 步）:\n${result.results.join("\n")}`);
+      setJsResult(`回放完成（${result.count} 步）:\n${result.results.join('\n')}`);
     } else {
       setJsResult(`回放失败: ${result.error}`);
     }
   };
 
-  const currentUrl = history[historyIndex] || "about:blank";
+  const currentUrl = history[historyIndex] || 'about:blank';
 
   // Sync external URL changes
   useEffect(() => {
@@ -116,7 +143,7 @@ export function BrowserPanel({
       setHistoryIndex(newHistory.length - 1);
       webviewRef.current?.loadURL(url);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [url]);
 
   // Listen for webview navigation events
@@ -133,42 +160,47 @@ export function BrowserPanel({
         onUrlChange(e.url);
       }
     };
-    wv.addEventListener("did-navigate", onNavigate);
-    wv.addEventListener("did-navigate-in-page", onNavigate);
+    wv.addEventListener('did-navigate', onNavigate);
+    wv.addEventListener('did-navigate-in-page', onNavigate);
 
     // Prevent links from opening in external browser — redirect into the webview
     const onDidAttach = () => {
       try {
         const wcId = wv.getWebContentsId();
-        void window.electronAPI.invoke("browser:setup-webview", wcId);
-      } catch { /* webview not ready yet */ }
+        void window.electronAPI.invoke('browser:setup-webview', wcId);
+      } catch {
+        /* webview not ready yet */
+      }
     };
-    wv.addEventListener("did-attach", onDidAttach);
+    wv.addEventListener('did-attach', onDidAttach);
     // Also try immediately in case did-attach already fired
     onDidAttach();
 
     return () => {
-      wv.removeEventListener("did-navigate", onNavigate);
-      wv.removeEventListener("did-navigate-in-page", onNavigate);
-      wv.removeEventListener("did-attach", onDidAttach);
+      wv.removeEventListener('did-navigate', onNavigate);
+      wv.removeEventListener('did-navigate-in-page', onNavigate);
+      wv.removeEventListener('did-attach', onDidAttach);
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [history, historyIndex, onUrlChange]);
 
-  const navigate = useCallback((target: string) => {
-    let href = target.trim();
-    if (!href) return;
-    if (!/^https?:\/\//i.test(href)) {
-      href = `https://${href}`;
-    }
-    setInput(href);
-    const newHistory = history.slice(0, historyIndex + 1);
-    newHistory.push(href);
-    setHistory(newHistory);
-    setHistoryIndex(newHistory.length - 1);
-    onUrlChange(href);
-    webviewRef.current?.loadURL(href);
-  }, [history, historyIndex, onUrlChange]);
+  const navigate = useCallback(
+    (target: string) => {
+      let href = target.trim();
+      if (!href) return;
+      if (!/^https?:\/\//i.test(href)) {
+        href = `https://${href}`;
+      }
+      setInput(href);
+      const newHistory = history.slice(0, historyIndex + 1);
+      newHistory.push(href);
+      setHistory(newHistory);
+      setHistoryIndex(newHistory.length - 1);
+      onUrlChange(href);
+      webviewRef.current?.loadURL(href);
+    },
+    [history, historyIndex, onUrlChange],
+  );
 
   const navigateRef = useRef(navigate);
   navigateRef.current = navigate;
@@ -182,7 +214,20 @@ export function BrowserPanel({
 
   // Listen for commands from the MCP server (via main process IPC)
   useEffect(() => {
-    const handler = async (_event: unknown, msg: { requestId?: string; cmd: string; url?: string; code?: string; selector?: string; text?: string; value?: string; x?: number; y?: number }) => {
+    const handler = async (
+      _event: unknown,
+      msg: {
+        requestId?: string;
+        cmd: string;
+        url?: string;
+        code?: string;
+        selector?: string;
+        text?: string;
+        value?: string;
+        x?: number;
+        y?: number;
+      },
+    ) => {
       const wv = webviewRef.current;
       const sendResponse = (result: unknown) => {
         if (msg.requestId) {
@@ -192,64 +237,64 @@ export function BrowserPanel({
 
       try {
         switch (msg.cmd) {
-          case "navigate":
+          case 'navigate':
             if (msg.url) navigateRef.current(msg.url);
             sendResponse({ ok: true });
             break;
 
-          case "back":
+          case 'back':
             wv?.goBack();
             sendResponse({ ok: true });
             break;
 
-          case "forward":
+          case 'forward':
             wv?.goForward();
             sendResponse({ ok: true });
             break;
 
-          case "refresh":
+          case 'refresh':
             wv?.reload();
             sendResponse({ ok: true });
             break;
 
-          case "execute-js":
+          case 'execute-js':
             if (msg.code && wv) {
               const result = await wv.executeJavaScript(msg.code);
               sendResponse(result);
             } else {
-              sendResponse({ error: "No code or webview not ready" });
+              sendResponse({ error: 'No code or webview not ready' });
             }
             break;
 
-          case "get-content":
+          case 'get-content':
             if (wv) {
               const text = await wv.executeJavaScript("document.body?.innerText ?? ''");
               const title = await wv.executeJavaScript("document.title ?? ''");
               const content = title ? `标题: ${title}\n\n${text}` : (text as string);
               sendResponse(content);
             } else {
-              sendResponse("Webview 还未准备好");
+              sendResponse('Webview 还未准备好');
             }
             break;
 
-          case "get-html":
+          case 'get-html':
             if (wv) {
               const html = await wv.executeJavaScript("document.documentElement?.outerHTML ?? ''");
               sendResponse(html);
             } else {
-              sendResponse("Webview 还未准备好");
+              sendResponse('Webview 还未准备好');
             }
             break;
 
-          case "get-url":
-            sendResponse(wv?.getURL() ?? "");
+          case 'get-url':
+            sendResponse(wv?.getURL() ?? '');
             break;
 
-          case "get-title":
-            sendResponse(wv?.getTitle() ?? "");
+          case 'get-title':
+            sendResponse(wv?.getTitle() ?? '');
             break;
 
-          case "click":
+          case 'click':
             if (msg.selector && wv) {
               const result = await wv.executeJavaScript(`
                 (() => {
@@ -262,11 +307,11 @@ export function BrowserPanel({
               `);
               sendResponse(result);
             } else {
-              sendResponse({ error: "No selector or webview not ready" });
+              sendResponse({ error: 'No selector or webview not ready' });
             }
             break;
 
-          case "click-at":
+          case 'click-at':
             if (msg.x !== undefined && msg.y !== undefined && wv) {
               const result = await wv.executeJavaScript(`
                 (() => {
@@ -280,11 +325,11 @@ export function BrowserPanel({
               `);
               sendResponse(result);
             } else {
-              sendResponse({ error: "Missing coordinates or webview not ready" });
+              sendResponse({ error: 'Missing coordinates or webview not ready' });
             }
             break;
 
-          case "type-selector":
+          case 'type-selector':
             if (msg.selector && msg.text !== undefined && wv) {
               const result = await wv.executeJavaScript(`
                 (() => {
@@ -301,11 +346,11 @@ export function BrowserPanel({
               `);
               sendResponse(result);
             } else {
-              sendResponse({ error: "Missing selector/text or webview not ready" });
+              sendResponse({ error: 'Missing selector/text or webview not ready' });
             }
             break;
 
-          case "select":
+          case 'select':
             if (msg.selector && msg.value !== undefined && wv) {
               const result = await wv.executeJavaScript(`
                 (() => {
@@ -321,11 +366,11 @@ export function BrowserPanel({
               `);
               sendResponse(result);
             } else {
-              sendResponse({ error: "Missing selector/value or webview not ready" });
+              sendResponse({ error: 'Missing selector/value or webview not ready' });
             }
             break;
 
-          case "hover":
+          case 'hover':
             if (msg.selector && wv) {
               const result = await wv.executeJavaScript(`
                 (() => {
@@ -340,11 +385,11 @@ export function BrowserPanel({
               `);
               sendResponse(result);
             } else {
-              sendResponse({ error: "No selector or webview not ready" });
+              sendResponse({ error: 'No selector or webview not ready' });
             }
             break;
 
-          case "scroll":
+          case 'scroll':
             if (wv) {
               await wv.executeJavaScript(`
                 window.scrollBy({
@@ -355,17 +400,17 @@ export function BrowserPanel({
               `);
               sendResponse({ ok: true });
             } else {
-              sendResponse({ error: "Webview not ready" });
+              sendResponse({ error: 'Webview not ready' });
             }
             break;
 
-          case "screenshot":
+          case 'screenshot':
             if (wv) {
               const page = await wv.capturePage();
               const dataUrl = page.toDataURL();
               sendResponse(dataUrl);
             } else {
-              sendResponse({ error: "Webview not ready" });
+              sendResponse({ error: 'Webview not ready' });
             }
             break;
 
@@ -376,7 +421,7 @@ export function BrowserPanel({
         sendResponse({ error: err instanceof Error ? err.message : String(err) });
       }
     };
-    return window.electronAPI.on("browser:command", handler);
+    return window.electronAPI.on('browser:command', handler);
   }, []);
 
   const goBack = () => {
@@ -420,21 +465,43 @@ export function BrowserPanel({
     <div className="flex h-full flex-col overflow-hidden bg-surface">
       {/* URL bar */}
       <div className="flex items-center gap-1 border-b border-border px-2 py-1.5">
-        <button onClick={goBack} disabled={!canGoBack} className="rounded p-1 text-muted hover:bg-surface-2 hover:text-text disabled:opacity-30" title="后退">
+        <button
+          onClick={goBack}
+          disabled={!canGoBack}
+          className="rounded p-1 text-muted hover:bg-surface-2 hover:text-text disabled:opacity-30"
+          title="后退"
+        >
           <ArrowLeft size={13} />
         </button>
-        <button onClick={goForward} disabled={!canGoForward} className="rounded p-1 text-muted hover:bg-surface-2 hover:text-text disabled:opacity-30" title="前进">
+        <button
+          onClick={goForward}
+          disabled={!canGoForward}
+          className="rounded p-1 text-muted hover:bg-surface-2 hover:text-text disabled:opacity-30"
+          title="前进"
+        >
           <ArrowRight size={13} />
         </button>
-        <button onClick={refresh} className="rounded p-1 text-muted hover:bg-surface-2 hover:text-text" title="刷新">
+        <button
+          onClick={refresh}
+          className="rounded p-1 text-muted hover:bg-surface-2 hover:text-text"
+          title="刷新"
+        >
           <RefreshCw size={13} />
         </button>
         <div className="relative flex-1">
-          <Globe size={12} className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-muted" />
+          <Globe
+            size={12}
+            className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-muted"
+          />
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); navigate(input); } }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                navigate(input);
+              }
+            }}
             placeholder="输入网址…"
             className="w-full rounded-input border border-border bg-bg py-1 pl-7 pr-2 text-[11px] text-text outline-none placeholder:text-muted focus:border-accent/40"
           />
@@ -446,7 +513,8 @@ export function BrowserPanel({
             className="flex items-center gap-1 rounded-input bg-error px-2 py-1 text-[11px] font-medium text-white animate-pulse hover:opacity-90"
             title="停止录制"
           >
-            <Square size={12} className="fill-current" /> 停止{recordCount > 0 ? ` ${recordCount}` : ""}
+            <Square size={12} className="fill-current" /> 停止
+            {recordCount > 0 ? ` ${recordCount}` : ''}
           </button>
         ) : (
           <button
@@ -458,7 +526,10 @@ export function BrowserPanel({
           </button>
         )}
         <button
-          onClick={() => { setShowSaveInput(!showSaveInput); setShowReplayList(false); }}
+          onClick={() => {
+            setShowSaveInput(!showSaveInput);
+            setShowReplayList(false);
+          }}
           disabled={isRecording || recordCount === 0}
           className="flex items-center gap-1 rounded-input border border-border px-2 py-1 text-[11px] text-text hover:bg-surface-2 disabled:opacity-30 disabled:hover:bg-transparent"
           title="保存录制"
@@ -471,14 +542,15 @@ export function BrowserPanel({
             disabled={isReplaying}
             className={
               isReplaying
-                ? "flex items-center gap-1 rounded-input border border-accent/40 px-2 py-1 text-[11px] text-accent"
+                ? 'flex items-center gap-1 rounded-input border border-accent/40 px-2 py-1 text-[11px] text-accent'
                 : showReplayList
-                  ? "flex items-center gap-1 rounded-input border border-accent/40 px-2 py-1 text-[11px] text-accent"
-                  : "flex items-center gap-1 rounded-input border border-border px-2 py-1 text-[11px] text-text hover:bg-surface-2 disabled:opacity-30"
+                  ? 'flex items-center gap-1 rounded-input border border-accent/40 px-2 py-1 text-[11px] text-accent'
+                  : 'flex items-center gap-1 rounded-input border border-border px-2 py-1 text-[11px] text-text hover:bg-surface-2 disabled:opacity-30'
             }
             title="回放录制"
           >
-            {isReplaying ? <RefreshCw size={12} className="animate-spin" /> : <Play size={12} />} 回放
+            {isReplaying ? <RefreshCw size={12} className="animate-spin" /> : <Play size={12} />}{' '}
+            回放
           </button>
           {showReplayList && !isReplaying && (
             <div className="absolute right-0 top-full z-dropdown mt-1 w-52 rounded-card border border-border bg-surface shadow-pop">
@@ -501,13 +573,25 @@ export function BrowserPanel({
           )}
         </div>
         <button
-          onClick={() => { setShowJsConsole(!showJsConsole); setShowSaveInput(false); setShowReplayList(false); }}
-          className={showJsConsole ? "rounded-input bg-accent/10 p-1 text-accent" : "rounded-input p-1 text-muted hover:bg-surface-2 hover:text-text"}
+          onClick={() => {
+            setShowJsConsole(!showJsConsole);
+            setShowSaveInput(false);
+            setShowReplayList(false);
+          }}
+          className={
+            showJsConsole
+              ? 'rounded-input bg-accent/10 p-1 text-accent'
+              : 'rounded-input p-1 text-muted hover:bg-surface-2 hover:text-text'
+          }
           title="JavaScript 控制台"
         >
           <Terminal size={13} />
         </button>
-        <button onClick={onClose} className="rounded-input p-1 text-muted hover:bg-surface-2 hover:text-text" title="关闭浏览器">
+        <button
+          onClick={onClose}
+          className="rounded-input p-1 text-muted hover:bg-surface-2 hover:text-text"
+          title="关闭浏览器"
+        >
           <X size={13} />
         </button>
       </div>
@@ -519,12 +603,20 @@ export function BrowserPanel({
             <input
               value={saveName}
               onChange={(e) => setSaveName(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleSave(); } }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  handleSave();
+                }
+              }}
               placeholder="输入录制名称…"
               autoFocus
               className="flex-1 rounded-input border border-border bg-bg px-2 py-1 text-[11px] text-text outline-none placeholder:text-muted focus:border-accent/40"
             />
-            <button onClick={handleSave} className="rounded-input bg-accent px-2 py-1 text-[11px] text-accent-fg hover:opacity-90">
+            <button
+              onClick={handleSave}
+              className="rounded-input bg-accent px-2 py-1 text-[11px] text-accent-fg hover:opacity-90"
+            >
               保存
             </button>
           </div>
@@ -538,11 +630,19 @@ export function BrowserPanel({
             <input
               value={jsInput}
               onChange={(e) => setJsInput(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); runJs(); } }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  runJs();
+                }
+              }}
               placeholder="输入 JavaScript 代码…"
               className="flex-1 rounded-input border border-border bg-bg px-2 py-1 font-mono text-[11px] text-text outline-none placeholder:text-muted focus:border-accent/40"
             />
-            <button onClick={runJs} className="rounded-input bg-accent px-2 py-1 text-[11px] text-accent-fg hover:opacity-90">
+            <button
+              onClick={runJs}
+              className="rounded-input bg-accent px-2 py-1 text-[11px] text-accent-fg hover:opacity-90"
+            >
               执行
             </button>
           </div>
@@ -559,7 +659,7 @@ export function BrowserPanel({
         <webview
           ref={webviewRef as React.RefObject<HTMLElement>}
           src={currentUrl}
-          style={{ height: "100%", width: "100%" }}
+          style={{ height: '100%', width: '100%' }}
           allowpopups="true"
         />
       </div>

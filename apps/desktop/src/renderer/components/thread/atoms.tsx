@@ -1,17 +1,18 @@
-import { memo, useEffect, useRef, useState } from "react";
-import { Check, Copy, Loader2, Paperclip, Pencil, Volume2, Square } from "lucide-react";
 import type {
   ArtifactBlock,
   DataTableBlock,
   RunningJobsBlock,
   StatusLineBlock,
   UserMessageBlock,
-} from "@workbench/shared";
-import { cn } from "@/lib/cn";
-import { speak, cancelSpeak, loadVoiceConfig, type VoiceConfig } from "@/lib/tts";
-import { MarkdownViewer } from "@/components/markdown-viewer/MarkdownViewer";
-import { extractArtifactRefs, refToArtifactBlock } from "@/lib/artifacts";
-import { resolveArtifactPath } from "@/lib/artifactFile";
+} from '@workbench/shared';
+import { Check, Copy, Loader2, Paperclip, Pencil, Volume2 } from 'lucide-react';
+import { memo, useEffect, useRef, useState } from 'react';
+
+import { MarkdownViewer } from '@/components/markdown-viewer/MarkdownViewer';
+import { resolveArtifactPath } from '@/lib/artifactFile';
+import { extractArtifactRefs, refToArtifactBlock } from '@/lib/artifacts';
+import { cn } from '@/lib/cn';
+import { cancelSpeak, loadVoiceConfig, speak, type VoiceConfig } from '@/lib/tts';
 
 function useCopy(text: string) {
   const [copied, setCopied] = useState(false);
@@ -29,10 +30,16 @@ function useCopy(text: string) {
 
 function formatTime(ts: number): string {
   const d = new Date(ts);
-  return d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+  return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
 }
 
-export function UserMessage({ block, onEdit }: { block: UserMessageBlock; onEdit?: (text: string) => void }) {
+export function UserMessage({
+  block,
+  onEdit,
+}: {
+  block: UserMessageBlock;
+  onEdit?: (text: string) => void;
+}) {
   const { copied, onCopy } = useCopy(block.text);
   return (
     <div className="flex justify-end">
@@ -41,7 +48,11 @@ export function UserMessage({ block, onEdit }: { block: UserMessageBlock; onEdit
           <div className="mb-1 flex items-center justify-end gap-1">
             <span
               className="rounded-full px-2 py-0.5 text-[10.5px] font-medium"
-              style={{ color: "var(--accent)", background: "color-mix(in srgb, var(--accent) 10%, transparent)", border: "1px solid color-mix(in srgb, var(--accent) 30%, transparent)" }}
+              style={{
+                color: 'var(--accent)',
+                background: 'color-mix(in srgb, var(--accent) 10%, transparent)',
+                border: '1px solid color-mix(in srgb, var(--accent) 30%, transparent)',
+              }}
             >
               远端客户端
             </span>
@@ -50,9 +61,9 @@ export function UserMessage({ block, onEdit }: { block: UserMessageBlock; onEdit
         <div
           className="rounded-2xl px-4 py-2.5 text-[14px] leading-relaxed"
           style={{
-            background: "var(--chat-user-bg)",
-            border: "1px solid var(--chat-user-border)",
-            color: "var(--chat-user-fg)",
+            background: 'var(--chat-user-bg)',
+            border: '1px solid var(--chat-user-border)',
+            color: 'var(--chat-user-fg)',
           }}
         >
           <div className="whitespace-pre-wrap break-words">{block.text}</div>
@@ -100,11 +111,14 @@ export const AgentMessage = memo(function AgentMessage({
   streaming?: boolean;
   onOpenArtifact?: (a: ArtifactBlock) => void;
 }) {
-  const { copied, onCopy } = useCopy(markdown);  const [speaking, setSpeaking] = useState(false);
+  const { copied, onCopy } = useCopy(markdown);
+  const [speaking, setSpeaking] = useState(false);
   const voiceCfgRef = useRef<VoiceConfig | null>(null);
 
   useEffect(() => {
-    void loadVoiceConfig().then((c) => { voiceCfgRef.current = c; });
+    void loadVoiceConfig().then((c) => {
+      voiceCfgRef.current = c;
+    });
   }, []);
 
   const onSpeak = () => {
@@ -131,19 +145,19 @@ export const AgentMessage = memo(function AgentMessage({
   // files that don't exist get no chip.
   const mentioned = onOpenArtifact ? extractArtifactRefs(markdown) : [];
   const [refs, setRefs] = useState<string[]>([]);
-  const mentionedKey = mentioned.join("\n");
+  const mentionedKey = mentioned.join('\n');
   useEffect(() => {
     let cancelled = false;
     if (!mentionedKey) {
       setRefs([]);
       return;
     }
-    void Promise.all(mentionedKey.split("\n").map((p) => resolveArtifactPath(p).catch(() => null))).then(
-      (resolved) => {
-        if (cancelled) return;
-        setRefs([...new Set(resolved.filter((p): p is string => p !== null))]);
-      },
-    );
+    void Promise.all(
+      mentionedKey.split('\n').map((p) => resolveArtifactPath(p).catch(() => null)),
+    ).then((resolved) => {
+      if (cancelled) return;
+      setRefs([...new Set(resolved.filter((p): p is string => p !== null))]);
+    });
     return () => {
       cancelled = true;
     };
@@ -175,16 +189,11 @@ export const AgentMessage = memo(function AgentMessage({
           </div>
         )}
         <div className="flex items-center gap-1.5 opacity-0 transition-opacity group-hover:opacity-100">
-          {timestamp && (
-            <span className="text-[10px] text-muted">{formatTime(timestamp)}</span>
-          )}
+          {timestamp && <span className="text-[10px] text-muted">{formatTime(timestamp)}</span>}
           {voiceCfgRef.current?.ttsEnabled && !streaming && (
             <button
-              className={cn(
-                "rounded p-0.5 text-muted hover:text-text",
-                speaking && "text-accent",
-              )}
-              title={speaking ? "停止朗读" : "朗读"}
+              className={cn('rounded p-0.5 text-muted hover:text-text', speaking && 'text-accent')}
+              title={speaking ? '停止朗读' : '朗读'}
               onClick={onSpeak}
             >
               {speaking ? (
@@ -232,8 +241,8 @@ export function DataTable({ block }: { block: DataTableBlock }) {
                 <td
                   key={j}
                   className={cn(
-                    "px-4 py-2 text-text",
-                    j === row.length - 1 && "font-mono text-[13px] text-link",
+                    'px-4 py-2 text-text',
+                    j === row.length - 1 && 'font-mono text-[13px] text-link',
                   )}
                 >
                   {cell}
@@ -266,18 +275,21 @@ export function RunningJobsOverlay({ block }: { block: RunningJobsBlock }) {
   );
 }
 
-const TONE: Record<NonNullable<StatusLineBlock["tone"]>, string> = {
-  running: "text-accent",
-  done: "text-ok",
-  error: "text-error",
+const TONE: Record<NonNullable<StatusLineBlock['tone']>, string> = {
+  running: 'text-accent',
+  done: 'text-ok',
+  error: 'text-error',
 };
 
 export function StatusLine({ block }: { block: StatusLineBlock }) {
   return (
-    <div className={cn("flex items-center gap-2 text-sm", TONE[block.tone ?? "done"])}>
+    <div className={cn('flex items-center gap-2 text-sm', TONE[block.tone ?? 'done'])}>
       <Loader2
         size={14}
-        className={cn(block.tone === "running" && "animate-spin", block.tone !== "running" && "hidden")}
+        className={cn(
+          block.tone === 'running' && 'animate-spin',
+          block.tone !== 'running' && 'hidden',
+        )}
       />
       <span>{block.text}</span>
     </div>

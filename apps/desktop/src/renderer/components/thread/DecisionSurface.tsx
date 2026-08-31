@@ -1,9 +1,16 @@
-import type { PermissionAskedEvent, PermissionReply, PermissionMode, QuestionAskedEvent } from "@workbench/sdk";
-import type { ComposerCommand } from "./Composer";
-import { InteractionPrompt } from "./InteractionPrompt";
-import { ModeSwitch } from "./ModeSwitch";
-import { Composer } from "./Composer";
-import { cn } from "@/lib/cn";
+import type {
+  PermissionAskedEvent,
+  PermissionMode,
+  PermissionReply,
+  QuestionAskedEvent,
+} from '@workbench/sdk';
+
+import { cn } from '@/lib/cn';
+
+import type { ComposerCommand } from './Composer';
+import { Composer } from './Composer';
+import { InteractionPrompt } from './InteractionPrompt';
+import { ModeSwitch } from './ModeSwitch';
 
 /**
  * Single-slot decision surface, inspired by Reasonix's footer model.
@@ -61,12 +68,12 @@ export function DecisionSurface({
       )}
 
       {/* Mode switch – hidden during decision surface */}
-      <div className={cn(hasDecision && "hidden")}>
+      <div className={cn(hasDecision && 'hidden')}>
         <ModeSwitch mode={permissionMode} onChange={onPermissionModeChange} />
       </div>
 
       {/* Composer – always mounted, visually hidden during decision surface */}
-      <div className={cn(hasDecision && "composer-decision-hidden")}>
+      <div className={cn(hasDecision && 'composer-decision-hidden')}>
         <Composer
           onSend={composer.onSend}
           onRunShell={composer.onRunShell}

@@ -1,18 +1,29 @@
-import { useCallback, useEffect, useState } from "react";
-import { ChevronRight, FileText, Folder, Image as ImageIcon, Loader2, NotebookPen, Sheet, X } from "lucide-react";
-import { listDir, type DirEntry } from "@/lib/artifactFile";
-import { isTauri } from "@/lib/tauri";
-import { useRuntimeStore } from "@/lib/runtime";
-import { baseName } from "@/components/thread/WorkspaceChip";
-import { refToArtifactBlock } from "@/lib/artifacts";
-import { useUiStore } from "@/lib/store";
-import { cn } from "@/lib/cn";
+import {
+  ChevronRight,
+  FileText,
+  Folder,
+  Image as ImageIcon,
+  Loader2,
+  NotebookPen,
+  Sheet,
+  X,
+} from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+
+import { baseName } from '@/components/thread/WorkspaceChip';
+import { type DirEntry, listDir } from '@/lib/artifactFile';
+import { refToArtifactBlock } from '@/lib/artifacts';
+import { cn } from '@/lib/cn';
+import { useRuntimeStore } from '@/lib/runtime';
+import { useUiStore } from '@/lib/store';
+import { isTauri } from '@/lib/tauri';
 
 function iconFor(entry: DirEntry) {
   if (entry.isDir) return <Folder size={14} className="text-accent" />;
-  const cls = "text-muted";
-  if (entry.name.endsWith(".ipynb")) return <NotebookPen size={14} className={cls} />;
-  if (entry.name.match(/\.(png|jpg|jpeg|gif|svg|webp)$/i)) return <ImageIcon size={14} className={cls} />;
+  const cls = 'text-muted';
+  if (entry.name.endsWith('.ipynb')) return <NotebookPen size={14} className={cls} />;
+  if (entry.name.match(/\.(png|jpg|jpeg|gif|svg|webp)$/i))
+    return <ImageIcon size={14} className={cls} />;
   if (entry.name.match(/\.(csv|xlsx?)$/i)) return <Sheet size={14} className={cls} />;
   return <FileText size={14} className={cls} />;
 }
@@ -32,7 +43,7 @@ function humanSize(n: number): string {
  * conversation.
  */
 export function FileBrowserPanel({ onClose }: { onClose: () => void }) {
-  const [dir, setDir] = useState("");
+  const [dir, setDir] = useState('');
   const [entries, setEntries] = useState<DirEntry[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [basePath, setBasePath] = useState<string | null>(null);
@@ -61,40 +72,49 @@ export function FileBrowserPanel({ onClose }: { onClose: () => void }) {
   // When the active workspace changes, drop any subdirectory we were browsing
   // (it belongs to the old folder) and show the new folder's root.
   useEffect(() => {
-    setDir("");
+    setDir('');
   }, [workspace]);
 
-  const crumbs = dir ? dir.split("/") : [];
+  const crumbs = dir ? dir.split('/') : [];
 
   const openEntry = (entry: DirEntry) => {
     if (entry.isDir) setDir(entry.path);
-    else openFileTab(refToArtifactBlock(entry.path), "workspace");
+    else openFileTab(refToArtifactBlock(entry.path), 'workspace');
   };
 
   return (
     <div className="flex h-full flex-col bg-surface">
       <div className="flex items-center justify-between border-b border-border px-3 py-1.5">
         <span className="text-[11px] font-medium text-muted">文件</span>
-        <button onClick={onClose} className="rounded p-1 text-muted hover:bg-surface-2 hover:text-text">
+        <button
+          onClick={onClose}
+          className="rounded p-1 text-muted hover:bg-surface-2 hover:text-text"
+        >
           <X size={13} />
         </button>
       </div>
 
       <div className="flex flex-wrap items-center gap-0.5 border-b border-border px-2 py-1.5 text-[11px]">
         <button
-          className={cn("rounded px-1 hover:bg-surface-2", dir ? "text-link" : "font-medium text-text")}
-          onClick={() => setDir("")}
+          className={cn(
+            'rounded px-1 hover:bg-surface-2',
+            dir ? 'text-link' : 'font-medium text-text',
+          )}
+          onClick={() => setDir('')}
           title={basePath ?? undefined}
         >
           {baseName(basePath)}
         </button>
         {crumbs.map((part, i) => {
-          const to = crumbs.slice(0, i + 1).join("/");
+          const to = crumbs.slice(0, i + 1).join('/');
           return (
             <span key={to} className="flex items-center gap-0.5">
               <ChevronRight size={10} className="text-muted" />
               <button
-                className={cn("rounded px-1 hover:bg-surface-2", i === crumbs.length - 1 ? "font-medium text-text" : "text-link")}
+                className={cn(
+                  'rounded px-1 hover:bg-surface-2',
+                  i === crumbs.length - 1 ? 'font-medium text-text' : 'text-link',
+                )}
                 onClick={() => setDir(to)}
               >
                 {part}
@@ -113,7 +133,7 @@ export function FileBrowserPanel({ onClose }: { onClose: () => void }) {
         {error && <div className="p-2 text-xs text-error">{error}</div>}
         {entries && entries.length === 0 && !error && (
           <div className="p-2 text-xs text-muted">
-            {isTauri ? "此文件夹为空。" : "文件浏览器仅在桌面端可用。"}
+            {isTauri ? '此文件夹为空。' : '文件浏览器仅在桌面端可用。'}
           </div>
         )}
         {entries?.map((entry) => (
@@ -124,7 +144,9 @@ export function FileBrowserPanel({ onClose }: { onClose: () => void }) {
           >
             {iconFor(entry)}
             <span className="flex-1 truncate text-text">{entry.name}</span>
-            {!entry.isDir && <span className="shrink-0 text-[10px] text-muted">{humanSize(entry.size)}</span>}
+            {!entry.isDir && (
+              <span className="shrink-0 text-[10px] text-muted">{humanSize(entry.size)}</span>
+            )}
             {entry.isDir && <ChevronRight size={12} className="shrink-0 text-muted" />}
           </button>
         ))}

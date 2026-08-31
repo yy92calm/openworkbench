@@ -1,3 +1,4 @@
+import type { ArtifactBlock, ArtifactKind } from '@workbench/shared';
 import {
   Box,
   FileBarChart,
@@ -7,9 +8,9 @@ import {
   NotebookPen,
   Paperclip,
   SquareArrowOutUpRight,
-} from "lucide-react";
-import type { ArtifactBlock, ArtifactKind } from "@workbench/shared";
-import { cn } from "@/lib/cn";
+} from 'lucide-react';
+
+import { cn } from '@/lib/cn';
 
 const ICON: Record<ArtifactKind, React.ReactNode> = {
   figure: <ImageIcon size={15} />,
@@ -22,8 +23,12 @@ const ICON: Record<ArtifactKind, React.ReactNode> = {
 };
 
 function contentPreview(content: string): string | null {
-  const lines = content.split("\n");
-  const preview = lines.slice(0, 2).map((l) => l.trim()).filter(Boolean).join("\n");
+  const lines = content.split('\n');
+  const preview = lines
+    .slice(0, 2)
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .join('\n');
   return preview || null;
 }
 
@@ -46,11 +51,11 @@ export function ArtifactCard({
   return (
     <div
       className={cn(
-        "flex flex-col rounded-input border border-border bg-surface px-3 py-2.5 text-sm",
-        onOpen && "cursor-pointer hover:bg-surface-2",
+        'flex flex-col rounded-input border border-border bg-surface px-3 py-2.5 text-sm',
+        onOpen && 'cursor-pointer hover:bg-surface-2',
       )}
       onClick={onOpen ? () => onOpen(block) : undefined}
-      role={onOpen ? "button" : undefined}
+      role={onOpen ? 'button' : undefined}
     >
       <div className="flex items-center gap-2.5">
         <span className="shrink-0 text-accent">{ICON[block.artifact]}</span>

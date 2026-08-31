@@ -6,6 +6,7 @@
 dock 的 `InspectorShell`（一次只开一个 artifact，`PaneState.artifact` 单值）。
 
 用户要求改为统一多 Tab：
+
 1. 文件预览移到主区，顶部 tab，开几个文件几个 tab。
 2. 会话也在主区，顶部 tab；多会话同时活跃（agent 并行）。
 3. 右侧 dock 保留（终端/浏览器/上下文/文件浏览器）。
@@ -109,6 +110,7 @@ type Tab =
 - [x] `pnpm build` 通过。
 
 ### 已知限制（本次未做）
+
 - **composer 文本切走切回不保留**：当前 composer 文本是单一 draft，会话 tab 切换不
   保留各会话未发送文本。要支持需把 draft 纳入 per-session（`drafts: Record<sessionId,
   string>`）并改 `Composer`。留作后续增量。

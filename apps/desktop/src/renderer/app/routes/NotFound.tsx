@@ -1,5 +1,6 @@
-import { Link } from "react-router-dom";
-import { EmptyState } from "@/components/cards/EmptyState";
+import { Link } from 'react-router-dom';
+
+import { EmptyState } from '@/components/cards/EmptyState';
 
 export function NotFound() {
   return (

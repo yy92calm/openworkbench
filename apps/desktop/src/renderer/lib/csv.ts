@@ -16,12 +16,12 @@ export interface ParsedTable {
   truncated: boolean;
 }
 
-const OPENERS: Record<string, string> = { "(": ")", "[": "]", "{": "}" };
-const CLOSERS = new Set([")", "]", "}"]);
+const OPENERS: Record<string, string> = { '(': ')', '[': ']', '{': '}' };
+const CLOSERS = new Set([')', ']', '}']);
 
-export function parseDelimited(text: string, delimiter: "," | "\t", maxRows = 500): ParsedTable {
+export function parseDelimited(text: string, delimiter: ',' | '\t', maxRows = 500): ParsedTable {
   const rows: string[][] = [];
-  let field = "";
+  let field = '';
   let row: string[] = [];
   let inQuotes = false;
   let depth = 0; // bracket nesting depth, tracked only outside quotes
@@ -29,12 +29,12 @@ export function parseDelimited(text: string, delimiter: "," | "\t", maxRows = 50
 
   const pushField = () => {
     row.push(field);
-    field = "";
+    field = '';
   };
   const pushRow = () => {
     pushField();
     // Skip fully-empty trailing lines.
-    if (row.length > 1 || row[0] !== "") rows.push(row);
+    if (row.length > 1 || row[0] !== '') rows.push(row);
     row = [];
     depth = 0; // brackets never span lines (unlike quotes)
   };
@@ -48,29 +48,27 @@ export function parseDelimited(text: string, delimiter: "," | "\t", maxRows = 50
           i++;
         } else inQuotes = false;
       } else field += c;
-    } else if (c === '"' && field === "") {
+    } else if (c === '"' && field === '') {
       inQuotes = true;
     } else if (c === delimiter && depth === 0) {
       pushField();
-    } else if (c === "\n") {
+    } else if (c === '\n') {
       pushRow();
       if (rows.length > maxRows) {
         truncated = true;
         break;
       }
-    } else if (c !== "\r") {
+    } else if (c !== '\r') {
       if (OPENERS[c]) depth++;
       else if (CLOSERS.has(c) && depth > 0) depth--;
       field += c;
     }
   }
-  if (!truncated && (field !== "" || row.length > 0)) pushRow();
+  if (!truncated && (field !== '' || row.length > 0)) pushRow();
 
   const columns = rows.shift() ?? [];
   const width = columns.length;
-  const normalized = rows
-    .slice(0, maxRows)
-    .map((r) => normalizeWidth(r, width, delimiter));
+  const normalized = rows.slice(0, maxRows).map((r) => normalizeWidth(r, width, delimiter));
   return { columns, rows: normalized, truncated };
 }
 
@@ -79,12 +77,12 @@ export function parseDelimited(text: string, delimiter: "," | "\t", maxRows = 50
  *  rectangular instead of spilling extra columns. */
 function normalizeWidth(row: string[], width: number, delimiter: string): string[] {
   if (width <= 0 || row.length === width) return row;
-  if (row.length < width) return [...row, ...Array(width - row.length).fill("")];
+  if (row.length < width) return [...row, ...Array(width - row.length).fill('')];
   return [...row.slice(0, width - 1), row.slice(width - 1).join(delimiter)];
 }
 
 /** Parse CSV or TSV by filename extension. */
 export function parseTableFile(filename: string, text: string): ParsedTable {
-  const delim = filename.toLowerCase().endsWith(".tsv") ? "\t" : ",";
-  return parseDelimited(text, delim as "," | "\t");
+  const delim = filename.toLowerCase().endsWith('.tsv') ? '\t' : ',';
+  return parseDelimited(text, delim as ',' | '\t');
 }

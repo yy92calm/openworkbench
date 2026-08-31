@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from "react";
-import { ArrowLeft, Check, Folder, FolderPlus, FolderCog } from "lucide-react";
-import type { DirEntry, WorkspaceInfo } from "@workbench/sdk";
-import { getHostClient } from "@/lib/connection";
+import type { DirEntry, WorkspaceInfo } from '@workbench/sdk';
+import { ArrowLeft, Check, Folder, FolderCog, FolderPlus } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+
+import { getHostClient } from '@/lib/connection';
 
 interface Props {
   onBack: () => void;
@@ -18,9 +19,9 @@ export function WorkspaceSwitchPage({ onBack, onSwitched }: Props) {
   const [workspace, setWorkspace] = useState<WorkspaceInfo | null>(null);
   const [entries, setEntries] = useState<DirEntry[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
-  const [newName, setNewName] = useState("");
+  const [newName, setNewName] = useState('');
   const [showNew, setShowNew] = useState(false);
 
   const refresh = useCallback(async () => {
@@ -29,8 +30,8 @@ export function WorkspaceSwitchPage({ onBack, onSwitched }: Props) {
       const ws = await host.getWorkspace();
       setWorkspace(ws);
       // List base workspace root (rel="") to show sibling folders.
-      setEntries(await host.listDir("", "base"));
-      setError("");
+      setEntries(await host.listDir('', 'base'));
+      setError('');
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -38,11 +39,13 @@ export function WorkspaceSwitchPage({ onBack, onSwitched }: Props) {
     }
   }, []);
 
-  useEffect(() => { void refresh(); }, [refresh]);
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
 
   const pick = async (path: string) => {
     setBusy(true);
-    setError("");
+    setError('');
     try {
       await getHostClient().setWorkspace(path);
       onSwitched?.();
@@ -58,9 +61,9 @@ export function WorkspaceSwitchPage({ onBack, onSwitched }: Props) {
     const name = newName.trim();
     if (!name) return;
     setBusy(true);
-    setError("");
+    setError('');
     try {
-      const res = await getHostClient().newDatedWorkspace(name);
+      await getHostClient().newDatedWorkspace(name);
       onSwitched?.();
       onBack();
     } catch (err) {
@@ -92,7 +95,7 @@ export function WorkspaceSwitchPage({ onBack, onSwitched }: Props) {
       {workspace && (
         <div className="workspace-info static">
           <div className="workspace-info-row">
-            <FolderCog size={16} style={{ color: "var(--accent)" }} />
+            <FolderCog size={16} style={{ color: 'var(--accent)' }} />
             <div className="workspace-info-text">
               <div className="workspace-label">当前</div>
               <div className="workspace-path mono">{workspace.current}</div>
@@ -131,21 +134,24 @@ export function WorkspaceSwitchPage({ onBack, onSwitched }: Props) {
           {dirs.map((d) => {
             // Resolve absolute path: base + "/" + name. The host stores
             // absolute paths so this matches how setWorkspace expects input.
-            const abs = workspace ? `${workspace.base.replace(/\/$/, "")}/${d.name}` : d.name;
+            const abs = workspace ? `${workspace.base.replace(/\/$/, '')}/${d.name}` : d.name;
             const active = workspace?.current === abs;
             return (
               <button
                 key={d.name}
-                className={`file-item ${active ? "active" : ""}`}
+                className={`file-item ${active ? 'active' : ''}`}
                 disabled={busy || active}
                 onClick={() => void pick(abs)}
               >
-                <Folder size={18} style={{ color: active ? "var(--accent)" : "var(--accent)" }} />
+                <Folder size={18} style={{ color: active ? 'var(--accent)' : 'var(--accent)' }} />
                 <span className="file-name">{d.name}</span>
                 {active ? (
-                  <Check size={16} style={{ color: "var(--ok)" }} />
+                  <Check size={16} style={{ color: 'var(--ok)' }} />
                 ) : (
-                  <ArrowLeft size={14} style={{ color: "var(--muted)", transform: "rotate(180deg)" }} />
+                  <ArrowLeft
+                    size={14}
+                    style={{ color: 'var(--muted)', transform: 'rotate(180deg)' }}
+                  />
                 )}
               </button>
             );
@@ -153,9 +159,7 @@ export function WorkspaceSwitchPage({ onBack, onSwitched }: Props) {
         </div>
       )}
 
-      <div className="page-hint">
-        切换后新建会话将使用新工作目录；已打开的会话不受影响。
-      </div>
+      <div className="page-hint">切换后新建会话将使用新工作目录；已打开的会话不受影响。</div>
     </div>
   );
 }

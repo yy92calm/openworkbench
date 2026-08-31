@@ -1,8 +1,18 @@
-import { useCallback, useEffect, useState } from "react";
-import { ArrowLeft, File as FileIcon, FileText, Folder, ImageIcon, NotebookPen, Sheet, FolderCog } from "lucide-react";
-import type { DirEntry, WorkspaceInfo } from "@workbench/sdk";
-import { getHostClient, isConnected } from "@/lib/connection";
-import { DeviceRequiredCard } from "@/components/DeviceRequiredCard";
+import type { DirEntry, WorkspaceInfo } from '@workbench/sdk';
+import {
+  ArrowLeft,
+  File as FileIcon,
+  FileText,
+  Folder,
+  FolderCog,
+  ImageIcon,
+  NotebookPen,
+  Sheet,
+} from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+
+import { DeviceRequiredCard } from '@/components/DeviceRequiredCard';
+import { getHostClient, isConnected } from '@/lib/connection';
 
 interface Props {
   onOpenFile: (path: string, root?: string) => void;
@@ -15,13 +25,16 @@ interface StackFrame {
 }
 
 function iconFor(entry: DirEntry) {
-  if (entry.is_dir) return <Folder size={18} style={{ color: "var(--accent)" }} />;
-  const ext = entry.name.split(".").pop()?.toLowerCase();
-  if (ext === "ipynb") return <NotebookPen size={18} style={{ color: "var(--muted)" }} />;
-  if (["png", "jpg", "jpeg", "gif", "webp", "svg"].includes(ext ?? "")) return <ImageIcon size={18} style={{ color: "var(--muted)" }} />;
-  if (["csv", "tsv", "xlsx", "xls"].includes(ext ?? "")) return <Sheet size={18} style={{ color: "var(--muted)" }} />;
-  if (["md", "txt", "json", "ts", "js", "tsx", "jsx", "py", "go", "rs", "sh"].includes(ext ?? "")) return <FileText size={18} style={{ color: "var(--muted)" }} />;
-  return <FileIcon size={18} style={{ color: "var(--muted)" }} />;
+  if (entry.is_dir) return <Folder size={18} style={{ color: 'var(--accent)' }} />;
+  const ext = entry.name.split('.').pop()?.toLowerCase();
+  if (ext === 'ipynb') return <NotebookPen size={18} style={{ color: 'var(--muted)' }} />;
+  if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'].includes(ext ?? ''))
+    return <ImageIcon size={18} style={{ color: 'var(--muted)' }} />;
+  if (['csv', 'tsv', 'xlsx', 'xls'].includes(ext ?? ''))
+    return <Sheet size={18} style={{ color: 'var(--muted)' }} />;
+  if (['md', 'txt', 'json', 'ts', 'js', 'tsx', 'jsx', 'py', 'go', 'rs', 'sh'].includes(ext ?? ''))
+    return <FileText size={18} style={{ color: 'var(--muted)' }} />;
+  return <FileIcon size={18} style={{ color: 'var(--muted)' }} />;
 }
 
 function formatSize(bytes: number): string {
@@ -35,9 +48,9 @@ export function FilesPage({ onOpenFile, onSwitchWorkspace }: Props) {
   const [stack, setStack] = useState<StackFrame[]>([]);
   const [entries, setEntries] = useState<DirEntry[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [error, setError] = useState('');
 
-  const currentRel = stack.map((f) => f.name).join("/");
+  const currentRel = stack.map((f) => f.name).join('/');
 
   const refresh = useCallback(async () => {
     try {
@@ -47,7 +60,7 @@ export function FilesPage({ onOpenFile, onSwitchWorkspace }: Props) {
         setWorkspace(ws);
       }
       setEntries(await host.listDir(currentRel));
-      setError("");
+      setError('');
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -65,7 +78,7 @@ export function FilesPage({ onOpenFile, onSwitchWorkspace }: Props) {
   }
 
   const enterDir = (name: string) => {
-    setStack((s) => [...s, { rel: s.map((f) => f.name).join("/") + "/" + name, name }]);
+    setStack((s) => [...s, { rel: s.map((f) => f.name).join('/') + '/' + name, name }]);
   };
 
   const goBack = () => {
@@ -86,16 +99,20 @@ export function FilesPage({ onOpenFile, onSwitchWorkspace }: Props) {
         ) : (
           <span style={{ width: 18 }} />
         )}
-        <h1 className="page-title">{stack.length > 0 ? stack[stack.length - 1].name : "文件"}</h1>
+        <h1 className="page-title">{stack.length > 0 ? stack[stack.length - 1].name : '文件'}</h1>
       </header>
 
       {stack.length > 0 && (
         <div className="breadcrumbs">
-          <button className="crumb" onClick={() => setStack([])}>根</button>
+          <button className="crumb" onClick={() => setStack([])}>
+            根
+          </button>
           {stack.map((f, i) => (
             <span key={i} className="crumb-item">
               <span className="crumb-sep">/</span>
-              <button className="crumb" onClick={() => jumpTo(i)}>{f.name}</button>
+              <button className="crumb" onClick={() => jumpTo(i)}>
+                {f.name}
+              </button>
             </span>
           ))}
         </div>
@@ -104,12 +121,12 @@ export function FilesPage({ onOpenFile, onSwitchWorkspace }: Props) {
       {workspace && stack.length === 0 && (
         <button className="workspace-info" onClick={onSwitchWorkspace}>
           <div className="workspace-info-row">
-            <FolderCog size={16} style={{ color: "var(--accent)" }} />
+            <FolderCog size={16} style={{ color: 'var(--accent)' }} />
             <div className="workspace-info-text">
               <div className="workspace-label">当前工作区</div>
               <div className="workspace-path mono">{workspace.current}</div>
             </div>
-            <ArrowLeft size={14} style={{ color: "var(--muted)", transform: "rotate(180deg)" }} />
+            <ArrowLeft size={14} style={{ color: 'var(--muted)', transform: 'rotate(180deg)' }} />
           </div>
         </button>
       )}
@@ -123,23 +140,34 @@ export function FilesPage({ onOpenFile, onSwitchWorkspace }: Props) {
       ) : (
         <div className="file-list">
           {/* Directories first, then files, both alphabetical */}
-          {[...entries].sort((a, b) => {
-            if (a.is_dir !== b.is_dir) return a.is_dir ? -1 : 1;
-            return a.name.localeCompare(b.name);
-          }).map((entry) => (
-            <button
-              key={entry.name}
-              className="file-item"
-              onClick={() => entry.is_dir ? enterDir(entry.name) : onOpenFile(currentRel ? `${currentRel}/${entry.name}` : entry.name)}
-            >
-              {iconFor(entry)}
-              <span className="file-name">{entry.name}</span>
-              {entry.is_file && entry.size > 0 && (
-                <span className="file-size">{formatSize(entry.size)}</span>
-              )}
-              {entry.is_dir && <ArrowLeft size={14} style={{ color: "var(--muted)", transform: "rotate(180deg)" }} />}
-            </button>
-          ))}
+          {[...entries]
+            .sort((a, b) => {
+              if (a.is_dir !== b.is_dir) return a.is_dir ? -1 : 1;
+              return a.name.localeCompare(b.name);
+            })
+            .map((entry) => (
+              <button
+                key={entry.name}
+                className="file-item"
+                onClick={() =>
+                  entry.is_dir
+                    ? enterDir(entry.name)
+                    : onOpenFile(currentRel ? `${currentRel}/${entry.name}` : entry.name)
+                }
+              >
+                {iconFor(entry)}
+                <span className="file-name">{entry.name}</span>
+                {entry.is_file && entry.size > 0 && (
+                  <span className="file-size">{formatSize(entry.size)}</span>
+                )}
+                {entry.is_dir && (
+                  <ArrowLeft
+                    size={14}
+                    style={{ color: 'var(--muted)', transform: 'rotate(180deg)' }}
+                  />
+                )}
+              </button>
+            ))}
         </div>
       )}
     </div>

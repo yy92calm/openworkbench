@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
-import { ArrowLeft } from "lucide-react";
-import type { ArtifactContent } from "@workbench/sdk";
-import { getHostClient } from "@/lib/connection";
+import type { ArtifactContent } from '@workbench/sdk';
+import { ArrowLeft } from 'lucide-react';
+import { useEffect, useState } from 'react';
+
+import { getHostClient } from '@/lib/connection';
 
 interface Props {
   path: string;
@@ -9,17 +10,38 @@ interface Props {
   onBack: () => void;
 }
 
-const TEXT_EXT = new Set(["md", "txt", "json", "ts", "js", "tsx", "jsx", "py", "go", "rs", "sh", "yml", "yaml", "toml", "csv", "tsv", "html", "css", "xml", "log"]);
-const IMAGE_EXT = new Set(["png", "jpg", "jpeg", "gif", "webp", "svg"]);
+const TEXT_EXT = new Set([
+  'md',
+  'txt',
+  'json',
+  'ts',
+  'js',
+  'tsx',
+  'jsx',
+  'py',
+  'go',
+  'rs',
+  'sh',
+  'yml',
+  'yaml',
+  'toml',
+  'csv',
+  'tsv',
+  'html',
+  'css',
+  'xml',
+  'log',
+]);
+const IMAGE_EXT = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg']);
 
 function extOf(path: string): string {
-  return path.split(".").pop()?.toLowerCase() ?? "";
+  return path.split('.').pop()?.toLowerCase() ?? '';
 }
 
 export function FilePreviewPage({ path, root, onBack }: Props) {
   const [artifact, setArtifact] = useState<ArtifactContent | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [error, setError] = useState('');
 
   useEffect(() => {
     void (async () => {
@@ -34,7 +56,7 @@ export function FilePreviewPage({ path, root, onBack }: Props) {
     })();
   }, [path, root]);
 
-  const name = path.split("/").pop() ?? path;
+  const name = path.split('/').pop() ?? path;
   const ext = extOf(path);
 
   return (

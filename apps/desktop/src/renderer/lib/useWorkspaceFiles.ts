@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
-import { listDir } from "./artifactFile";
+import { useEffect, useState } from 'react';
+
+import { listDir } from './artifactFile';
 
 /**
  * Files at the workspace root, lazily loaded once for `@` mention candidates.
@@ -13,7 +14,7 @@ export function useWorkspaceFiles(): { files: string[]; loading: boolean } {
 
   useEffect(() => {
     let cancelled = false;
-    listDir("", "base")
+    listDir('', 'base')
       .then((entries) => {
         if (cancelled) return;
         setFiles(entries.filter((e) => !e.isDir).map((e) => e.name));

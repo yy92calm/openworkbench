@@ -1,7 +1,8 @@
-import { useState } from "react";
-import { ChevronRight } from "lucide-react";
-import type { StepSummaryBlock } from "@workbench/shared";
-import { cn } from "@/lib/cn";
+import type { StepSummaryBlock } from '@workbench/shared';
+import { ChevronRight } from 'lucide-react';
+import { useState } from 'react';
+
+import { cn } from '@/lib/cn';
 
 export function StepSummaryRow({ block }: { block: StepSummaryBlock }) {
   const [open, setOpen] = useState(false);
@@ -15,7 +16,7 @@ export function StepSummaryRow({ block }: { block: StepSummaryBlock }) {
       >
         <ChevronRight
           size={15}
-          className={cn("shrink-0 transition-transform", open && "rotate-90")}
+          className={cn('shrink-0 transition-transform', open && 'rotate-90')}
         />
         <span className="flex-1 truncate">{block.summary}</span>
         <span className="shrink-0 text-xs">{block.steps} steps</span>

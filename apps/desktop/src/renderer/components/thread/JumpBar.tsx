@@ -1,6 +1,7 @@
-import { useState } from "react";
-import type { ThreadBlock } from "@workbench/shared";
-import { cn } from "@/lib/cn";
+import type { ThreadBlock } from '@workbench/shared';
+import { useState } from 'react';
+
+import { cn } from '@/lib/cn';
 
 interface JumpPoint {
   index: number;
@@ -17,13 +18,13 @@ export function JumpBar({ blocks }: { blocks: ThreadBlock[] }) {
 
   const points: JumpPoint[] = blocks
     .map((b, i) => ({ block: b, index: i }))
-    .filter(({ block }) => block.kind === "user")
+    .filter(({ block }) => block.kind === 'user')
     .map(({ index }) => {
       const block = blocks[index];
-      const text = block.kind === "user" ? block.text : "";
+      const text = block.kind === 'user' ? block.text : '';
       return {
         index,
-        preview: text.length > 40 ? text.slice(0, 40) + "..." : text,
+        preview: text.length > 40 ? text.slice(0, 40) + '...' : text,
       };
     });
 
@@ -32,7 +33,7 @@ export function JumpBar({ blocks }: { blocks: ThreadBlock[] }) {
   const scrollToBlock = (blockIndex: number) => {
     const el = document.getElementById(`block-${blockIndex}`);
     if (el) {
-      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
   };
 
@@ -54,10 +55,10 @@ export function JumpBar({ blocks }: { blocks: ThreadBlock[] }) {
           <button
             onClick={() => scrollToBlock(point.index)}
             className={cn(
-              "h-2 w-2 rounded-full border transition-all",
+              'h-2 w-2 rounded-full border transition-all',
               hoveredIdx === i
-                ? "scale-125 border-accent bg-accent"
-                : "border-muted/40 bg-muted/20 hover:border-accent/60 hover:bg-accent/30",
+                ? 'scale-125 border-accent bg-accent'
+                : 'border-muted/40 bg-muted/20 hover:border-accent/60 hover:bg-accent/30',
             )}
             title={point.preview}
           />

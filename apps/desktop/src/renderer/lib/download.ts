@@ -1,11 +1,11 @@
-import { saveTextFile } from "./tauri";
-import { toast } from "./toast";
+import { saveTextFile } from './tauri';
+import { toast } from './toast';
 
 /** Save text as a file via a Blob download. No-op outside the browser. */
-export function downloadText(filename: string, text: string, mime = "text/plain"): void {
-  if (typeof document === "undefined" || typeof URL.createObjectURL !== "function") return;
+export function downloadText(filename: string, text: string, mime = 'text/plain'): void {
+  if (typeof document === 'undefined' || typeof URL.createObjectURL !== 'function') return;
   const url = URL.createObjectURL(new Blob([text], { type: mime }));
-  const a = document.createElement("a");
+  const a = document.createElement('a');
   a.href = url;
   a.download = filename;
   document.body.appendChild(a);
@@ -21,13 +21,13 @@ export function downloadText(filename: string, text: string, mime = "text/plain"
 export async function saveTextWithFeedback(
   filename: string,
   text: string,
-  mime = "text/plain",
+  mime = 'text/plain',
 ): Promise<void> {
   try {
     const result = await saveTextFile(filename, text);
-    if (result.kind === "saved") {
+    if (result.kind === 'saved') {
       toast.success(`Saved to ${result.path}`);
-    } else if (result.kind === "not-desktop") {
+    } else if (result.kind === 'not-desktop') {
       downloadText(filename, text, mime);
       toast.success(`Downloaded ${filename}`);
     }

@@ -82,7 +82,7 @@ const EXT_LANG: Record<string, string> = {
 
 #### JSON 树形视图
 
-```
+```text
 ┌──────────────────────────────────────────┐
 │  ▼ {                             3 keys  │
 │    name: "market-report"                  │
@@ -94,7 +94,7 @@ const EXT_LANG: Record<string, string> = {
 
 #### 音频播放器
 
-```
+```text
 ┌──────────────────────────────────────────┐
 │  ▶ ───●────────────────────── 02:34      │
 │  ♫ 音量                                  │

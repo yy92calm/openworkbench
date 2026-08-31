@@ -12,12 +12,12 @@
  *
  * Run: pnpm serve  (or: tsx src/cli.ts)
  */
-import { startRelayFromEnv } from "./server";
+import { startRelayFromEnv } from './server';
 
 async function main(): Promise<void> {
   const relay = startRelayFromEnv();
   const port = await relay.listen();
-  const scheme = relay.hasTls ? "https/wss" : "http/ws";
+  const scheme = relay.hasTls ? 'https/wss' : 'http/ws';
   console.log(`[relay] listening on ${scheme} :${port}`);
 }
 

@@ -5,14 +5,15 @@
  * (../src/protocol).
  */
 
-import { WebSocket as WsClient } from "ws";
+import { WebSocket as WsClient } from 'ws';
+
 import type {
   RelayDeviceInfo,
   RelayListDevices,
   RelayMessage,
   RelayRequest,
   RelayResponseHead,
-} from "../../src/protocol";
+} from '../../src/protocol';
 
 interface RelayGuestOptions {
   WebSocketImpl?: typeof WsClient;
@@ -55,29 +56,38 @@ export function makeGuestTransport(opts: RelayGuestOptions = {}): RelayGuest {
       return;
     }
     // Room (peer) messages don't have an `id` — ignore them here.
-    if (!("id" in msg)) return;
+    if (!('id' in msg)) return;
     const p = pending.get(msg.id);
     if (!p) return;
     switch (msg.type) {
-      case "head": {
+      case 'head': {
         if (p.done) break;
-        p.headResolve(new Response(p.stream, {
-          status: msg.status,
-          headers: new Headers(msg.headers ?? {}),
-        }));
+        p.headResolve(
+          new Response(p.stream, {
+            status: msg.status,
+            headers: new Headers(msg.headers ?? {}),
+          }),
+        );
         break;
       }
-      case "chunk": {
-        if (!p.controller) { p.buffered.push(msg.chunk); break; }
+      case 'chunk': {
+        if (!p.controller) {
+          p.buffered.push(msg.chunk);
+          break;
+        }
         p.controller.enqueue(new TextEncoder().encode(msg.chunk));
         break;
       }
-      case "done": {
+      case 'done': {
         if (p.done) break;
         p.done = true;
         pending.delete(msg.id);
         if (p.controller) {
-          try { p.controller.close(); } catch { /* closed */ }
+          try {
+            p.controller.close();
+          } catch {
+            /* closed */
+          }
         }
         break;
       }
@@ -88,21 +98,25 @@ export function makeGuestTransport(opts: RelayGuestOptions = {}): RelayGuest {
     async connect(relayUrl, deviceId, token) {
       this.close?.();
       const url = new URL(relayUrl);
-      url.searchParams.set("role", "guest");
-      url.searchParams.set("device", deviceId);
-      url.searchParams.set("token", token);
+      url.searchParams.set('role', 'guest');
+      url.searchParams.set('device', deviceId);
+      url.searchParams.set('token', token);
       ws = new Ws(url.toString());
-      ws.on("open", () => {});
-      ws.on("message", (data) => handleMessage(data));
-      ws.on("error", (e) => {
+      ws.on('open', () => {});
+      ws.on('message', (data) => handleMessage(data));
+      ws.on('error', (e) => {
         const err = new Error(`relay connection failed: ${(e as Error).message}`);
         for (const [, p] of pending) p.headReject(err);
       });
-      ws.on("close", () => {
-        const err = new Error("relay connection closed");
+      ws.on('close', () => {
+        const err = new Error('relay connection closed');
         for (const [id, p] of pending) {
           pending.delete(id);
-          try { p.controller?.error(err); } catch { /* closed */ }
+          try {
+            p.controller?.error(err);
+          } catch {
+            /* closed */
+          }
           // Attach a noop to avoid unhandled rejections when the caller does not
           // await the head promise (e.g. expecting a failed pairing).
           p.headReject(err);
@@ -110,20 +124,28 @@ export function makeGuestTransport(opts: RelayGuestOptions = {}): RelayGuest {
         }
       });
       await new Promise<void>((resolve, reject) => {
-        ws!.once("open", () => resolve());
-        ws!.once("error", (e) => reject(new Error((e as Error).message)));
-        ws!.once("close", () => reject(new Error("relay connection closed before open")));
+        ws!.once('open', () => resolve());
+        ws!.once('error', (e) => reject(new Error((e as Error).message)));
+        ws!.once('close', () => reject(new Error('relay connection closed before open')));
       });
     },
     async fetchImpl(input, init) {
-      const url = typeof input === "string" ? new URL(input) : input instanceof URL ? input : new URL(input.url);
+      const url =
+        typeof input === 'string'
+          ? new URL(input)
+          : input instanceof URL
+            ? input
+            : new URL(input.url);
       const headers: Record<string, string> = {};
-      if (init?.headers) new Headers(init.headers).forEach((v, k) => { headers[k] = v; });
+      if (init?.headers)
+        new Headers(init.headers).forEach((v, k) => {
+          headers[k] = v;
+        });
       const body = init?.body == null ? undefined : String(init.body);
       const msg: RelayRequest = {
-        type: "request",
+        type: 'request',
         id: nextId(),
-        method: init?.method ?? "GET",
+        method: init?.method ?? 'GET',
         path: url.pathname + url.search,
         ...(Object.keys(headers).length ? { headers } : {}),
         ...(body !== undefined ? { body } : {}),
@@ -150,12 +172,15 @@ export function makeGuestTransport(opts: RelayGuestOptions = {}): RelayGuest {
         p.headReject = reject;
       });
       p.headPromise = headPromise;
-      if (!ws || ws.readyState !== Ws.OPEN) throw new Error("relay not connected");
+      if (!ws || ws.readyState !== Ws.OPEN) throw new Error('relay not connected');
       ws.send(JSON.stringify(msg));
       return headPromise;
     },
     close() {
-      if (ws) { ws.close(); ws = null; }
+      if (ws) {
+        ws.close();
+        ws = null;
+      }
     },
   };
 }
@@ -177,20 +202,26 @@ export function listAccountDevices(
       ws.close();
       fn();
     };
-    ws.on("open", () => {
-      const msg: RelayListDevices = { type: "list-devices", id: "devices" };
+    ws.on('open', () => {
+      const msg: RelayListDevices = { type: 'list-devices', id: 'devices' };
       ws.send(JSON.stringify(msg));
     });
-    ws.on("message", (data) => {
+    ws.on('message', (data) => {
       let parsed: RelayMessage | null = null;
-      try { parsed = JSON.parse(String(data)) as RelayMessage; } catch { return; }
-      if (parsed.type !== "device-list" || parsed.id !== "devices") return;
+      try {
+        parsed = JSON.parse(String(data)) as RelayMessage;
+      } catch {
+        return;
+      }
+      if (parsed.type !== 'device-list' || parsed.id !== 'devices') return;
       done(() => resolve(parsed.devices));
     });
-    ws.on("close", () => {
-      if (!settled) reject(new Error("relay: connection closed without device-list (check token)"));
+    ws.on('close', () => {
+      if (!settled) reject(new Error('relay: connection closed without device-list (check token)'));
     });
-    ws.on("error", (e) => done(() => reject(new Error(`relay: connection failed: ${(e as Error).message}`))));
+    ws.on('error', (e) =>
+      done(() => reject(new Error(`relay: connection failed: ${(e as Error).message}`))),
+    );
   });
 }
 

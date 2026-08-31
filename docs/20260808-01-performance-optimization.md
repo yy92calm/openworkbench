@@ -25,7 +25,7 @@ Workbench 的运行时是 OpenCode sidecar，通过 HTTP + SSE 通信。Reasonix
 
 #### A1. 系统提示前缀稳定性
 
-**现状**
+##### 现状
 
 - `app-config/.opencode/opencode.json` 的 `instructions: ["AGENTS.md"]` 把整个
   AGENTS.md 注入每个会话的系统提示。该文件既是项目说明又承载了 10 个 Agent 的
@@ -36,13 +36,13 @@ Workbench 的运行时是 OpenCode sidecar，通过 HTTP + SSE 通信。Reasonix
 - 客户端 SDK 的 `sendPrompt`（OpenCodeClient.ts:535）每次直接 POST，不对
   输入做任何结构化分层。
 
-**差距与原因**
+##### 差距与原因
 
 Reasonix 明确要求「前缀永不中途变更，动态内容放到 turn 尾部」。AGENTS.md 越
 大、越常被改动，前缀缓存越容易失效。此外每次重启重写 opencode.json 会让
 provider 的 `limit` 等字段短暂缺失，间接影响模型选择路径的稳定性。
 
-**方案**
+##### 方案
 
 1. **AGENTS.md 瘦身**：把稳定不变的「项目结构、Agent 列表、安全提示」保留在
    AGENTS.md；把「MCP 查询对照表、Skills 分层细节」这类长而稳定的内容移到
@@ -60,12 +60,12 @@ provider 的 `limit` 等字段短暂缺失，间接影响模型选择路径的�
 
 #### A2. 上下文压缩（compaction）分级
 
-**现状**
+##### 现状（A2）
 
 - `opencode.json` 已开 `compaction.prune: true`，是 OpenCode 内置的简单剪枝，
   无分级阈值。
 
-**Reasonix 做法（对照）**
+##### Reasonix 做法（对照）
 
 Reasonix 把上下文维护分成四级：
 
@@ -80,7 +80,7 @@ Reasonix 把上下文维护分成四级：
 配对），只折叠 assistant/tool 工作，用户 turn 与历史摘要保留原文，原始内容
 归档到 JSONL 以便追溯。
 
-**方案**
+##### 方案（A2）
 
 1. 在 `app-config/.opencode/opencode.json` 明确写出 `compaction` 的阈值配置
    （OpenCode 支持则配置，不支持则记录期望值并确认 sidecar 行为）。
@@ -95,20 +95,20 @@ Reasonix 把上下文维护分成四级：
 
 #### A3. 工具 schema 收缩（MCP 按需启用）
 
-**现状**
+##### 现状（A3）
 
 - `opencode.json` 的 `mcp` 段一次性启用 wind / juyuan / etf 三个远程 MCP，
   每个都带大量工具定义。所有工具 schema 进入系统提示前缀，前缀越长，
   缓存计算量越大，首 token 延迟越高。
 
-**Reasonix 做法（对照）**
+##### Reasonix 做法（对照）（A3）
 
 - Reasonix 默认（Token Economy）只暴露 9 个核心工具，其余工具通过
   `connect_tool_source` **按需连接**；工具 schema 稳定前缀在会话中不改变。
 - 工具 schema 契约文档化（`TOOL_CONTRACT.md`），用测试锁定「文档描述的
   表面 == 实际注册的 schema」，防止无意识变更破坏缓存。
 
-**方案**
+##### 方案（A3）
 
 1. 按 Agent 最小化启用 MCP：在 `AGENTS.md` 或各 Agent 定义中明确「数据源
    按任务选择」，MCP 服务器默认不全部开启，进入对应任务时通过斜杠命令或
@@ -123,16 +123,16 @@ Reasonix 把上下文维护分成四级：
 
 #### A4. 双模型（planner + executor）的缓存隔离
 
-**现状**
+##### 现状（A4）
 
 - Workbench 每次会话单模型，无 planner/executor 分工。
 
-**Reasonix 做法（对照）**
+##### Reasonix 做法（对照）（A4）
 
 - Reasonix 支持双模型协作，但把 planner 与 executor 放在**独立的会话**中，
   各自前缀保持缓存稳定——绝不在一段共享对话里切换模型（那样会破坏前缀）。
 
-**方案**
+##### 方案（A4）
 
 - 本方案**不引入**双模型（超出当前需要，Workbench 以配置驱动为主）。但记录
   这一约束：若未来在 Workbench 增加「研究型 / 执行型」分工，必须用独立会话
@@ -142,17 +142,17 @@ Reasonix 把上下文维护分成四级：
 
 #### A5. 记忆与指令分层
 
-**现状**
+##### 现状（A5）
 
 - 无记忆层。AGENTS.md 是唯一指令来源，会话内产生的持久事实没有独立存储。
 
-**Reasonix 做法（对照）**
+##### Reasonix 做法（对照）（A5）
 
 - 指令（必须每 turn 在）：AGENTS.md / CLAUDE.md，进入稳定前缀，保持短。
 - 事实（可能过时）：memory 文件，不进入前缀，每次 turn 用 BM25 从原始用户
   消息召回，追加到**用户 turn 尾部**（低权威后缀）。绝不 mutate 系统提示。
 
-**方案**
+##### 方案（A5）
 
 1. 短期：不新增记忆系统。把「项目事实」（如工作流约定）留在 AGENTS.md，
    但遵循 A1 的瘦身原则。
@@ -165,7 +165,7 @@ Reasonix 把上下文维护分成四级：
 
 #### B1. 流式渲染帧合并（rAF 节流）
 
-**现状**
+##### 现状（B1）
 
 - SSE 每个 token 触发一次 `text.updated`（OpenCodeClient.ts:769），`runtime.ts`
   的 `onEvent` 每次 `set()` 更新 zustand store（runtime.ts:700-721），
@@ -175,7 +175,7 @@ Reasonix 把上下文维护分成四级：
 - `MarkdownViewer`（MarkdownViewer.tsx:132）无 memo，每个 token 都整段重跑
   react-markdown 解析。
 
-**方案**
+##### 方案（B1）
 
 1. **SDK 层节流**：在 `OpenCodeClient.emit` 前按 session 对 `text.updated` /
    `reasoning.updated` 做 rAF（约 60fps）合并：同一 partId 的连续 delta 在
@@ -201,12 +201,12 @@ Reasonix 把上下文维护分成四级：
 
 #### B2. 长会话列表虚拟化 / 暖冷分层
 
-**现状**
+##### 现状（B2）
 
 - `BlockList` 顺序渲染全部 block，无虚拟化。单会话 100+ block 时首渲染与
   更新成本线性增长。
 
-**方案**
+##### 方案（B2）
 
 1. 引入 `react-window` 或自实现简单窗口：只渲染视口内的 block（约 ±3 行
    缓冲区）。block 高度可预估（文本行数与宽度相关），用
@@ -219,13 +219,13 @@ Reasonix 把上下文维护分成四级：
 
 #### B3. 会话列表（侧边栏）渲染优化
 
-**现状**
+##### 现状（B3）
 
 - `Sidebar.tsx:62-65` 每次 `sessions` 变化全量 `map` 出所有 `SessionRow`；
   `refreshSessions`（runtime.ts:847）每次会话列表变化都全量 `set`。
 - 会话多了以后每新增一条都重渲染全部行。
 
-**方案**
+##### 方案（B3）
 
 1. `SessionRow` 用 `React.memo`，仅当自身 `row.id`/`isRunning`/`meta` 变化时
    重渲染。
@@ -238,13 +238,13 @@ Reasonix 把上下文维护分成四级：
 
 #### B4. 自动滚动优化
 
-**现状**
+##### 现状（B4）
 
 - `LiveSessionPage.tsx:235-236` 用 `smooth` 滚动到最底；`blockCount` 变化时
   触发（258-263）。每次 token 更新若块数变化会反复 smooth，且每次 `setState`
   触发 `scrollToBottom` 使用 `smooth` 累积视觉延迟。
 
-**方案**
+##### 方案（B4）
 
 1. 只在「新 block 出现」时滚动，`text.updated` 更新已有 block 时不滚（已有
    block 内容增长时视口已经在底部则顺其自然）。
@@ -259,13 +259,13 @@ Reasonix 把上下文维护分成四级：
 
 #### C1. Profile 部署增量更新
 
-**现状**
+##### 现状（C1）
 
 - `deployBundledProfile`（server.ts:147-159）每次 `rmSync` + `cpSync` 整个
   profile 目录。profile 含 AGENTS.md、agents/、skills/、commands/、docs/ 等，
   文件多，且每次改动全量复制。
 
-**方案**
+##### 方案（C1）
 
 - 改为**增量同步**：对比源目录与目标目录的 mtime/size，只复制变更文件；
   删除源中已不存在的目标文件（mirror 语义）。可用一个小型 `syncDir(src, dst)`
@@ -275,14 +275,14 @@ Reasonix 把上下文维护分成四级：
 
 #### C2. 启动加载并行化
 
-**现状**
+##### 现状（C2）
 
 - `loadCatalog`（runtime.ts:494-515）串行：先 `listSkills`（空时重试 4 次，
   每次 400ms 睡），再 agents / defaultModel / commands，最后
   `loadMcpServers` + `loadProviders`（这两个是 `void` 并行）。
 - skills 的空重试等待会阻塞整个目录加载路径。
 
-**方案**
+##### 方案（C2）
 
 1. `listSkills` 的空重试不应阻塞其余目录加载：把 skills 空重试与
    agents/commands/defaultModel 并行发起（`Promise.all`）。
@@ -295,18 +295,18 @@ Reasonix 把上下文维护分成四级：
 
 #### D1. 依赖与体积
 
-**现状**
+##### 现状（D1）
 
 - Electron 应用打包体积主要受 `node_modules` 与 sidecar 二进制影响。
   渲染层依赖 react-markdown / highlight.js 等，属必要。
 - 打包配置见 `apps/desktop/electron-builder.config.ts`。
 
-**Reasonix 做法（对照）**
+##### Reasonix 做法（对照）（D1）
 
 - Reasonix 强调「单静态二进制、标准库优先、依赖极简」。对 Electron 应用
   而言对应的是：**只打包实际用到的依赖，禁用 tree-shaking 死角，压缩资源**。
 
-**方案**
+##### 方案（D1）
 
 1. `electron-builder` 的 `files` 白名单收紧：确认 `node_modules` 只含生产依赖，
   排除 devDependencies 与测试文件（若当前 `files` 用了 `**/*` 则收窄）。
@@ -320,12 +320,12 @@ Reasonix 把上下文维护分成四级：
 
 #### D2. 单二进制 sidecar 拉取与缓存
 
-**现状**
+##### 现状（D2）
 
 - `scripts/dev/fetch-opencode.sh` 负责下载 OpenCode 二进制，AGENTS.md 要求
   pin 版本。若每次都重新下载则慢。
 
-**方案**
+##### 方案（D2）
 
 - 确认脚本带缓存（校验已下载的二进制指纹后跳过下载）；若无缓存，增加
   「已存在且指纹匹配则跳过」的逻辑。

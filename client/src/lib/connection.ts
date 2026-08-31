@@ -1,7 +1,8 @@
-import { RelayHttpTransport, listAccountDevices, type RelayDeviceInfo } from "../client";
-import { OpenCodeClient, HostClient } from "@workbench/sdk";
+import { HostClient, OpenCodeClient } from '@workbench/sdk';
 
-export type { RelayDeviceInfo } from "../client";
+import { listAccountDevices, type RelayDeviceInfo, RelayHttpTransport } from '../client';
+
+export type { RelayDeviceInfo } from '../client';
 
 export interface ConnectionConfig {
   relayUrl: string;
@@ -11,7 +12,7 @@ export interface ConnectionConfig {
   token: string;
 }
 
-const CONFIG_KEY = "workbench.remote.config";
+const CONFIG_KEY = 'workbench.remote.config';
 
 let transport: RelayHttpTransport | null = null;
 let client: OpenCodeClient | null = null;
@@ -32,7 +33,7 @@ export function loadConfig(): ConnectionConfig | null {
     if (!raw) return null;
     const c = JSON.parse(raw) as ConnectionConfig;
     if (!c.relayUrl || !c.token) return null;
-    return { ...c, deviceId: c.deviceId ?? "" };
+    return { ...c, deviceId: c.deviceId ?? '' };
   } catch {
     return null;
   }
@@ -66,7 +67,7 @@ async function buildClient(t: RelayHttpTransport, c: ConnectionConfig): Promise<
   // comes online, so the user can still see the device list / sessions.
   await t.connect(c.relayUrl, c.deviceId, c.token);
   const c2 = new OpenCodeClient({
-    baseUrl: "http://relay",
+    baseUrl: 'http://relay',
     fetchImpl: t.fetchImpl,
   });
   // Kick off SSE in the background. Failures (host offline → 502) do not
@@ -97,7 +98,11 @@ const openSheetListeners = new Set<() => void>();
 
 export function openDeviceSheet(): void {
   for (const cb of openSheetListeners) {
-    try { cb(); } catch { /* listener errors are isolated */ }
+    try {
+      cb();
+    } catch {
+      /* listener errors are isolated */
+    }
   }
 }
 
@@ -134,7 +139,7 @@ function scheduleReconnect(): void {
  *  returns the existing client when already connected. */
 export async function connect(c: ConnectionConfig): Promise<OpenCodeClient> {
   if (client) return client;
-  if (!c.deviceId) throw new Error("请先选择设备");
+  if (!c.deviceId) throw new Error('请先选择设备');
   cfg = c;
   const t = makeTransport();
   client = await buildClient(t, c);
@@ -182,6 +187,6 @@ export function getTransport(): RelayHttpTransport | null {
 /** Lazily build a HostClient backed by the current relay transport. Throws if
  *  not connected — call from inside a view that only renders after connect. */
 export function getHostClient(): HostClient {
-  if (!transport) throw new Error("relay not connected");
+  if (!transport) throw new Error('relay not connected');
   return new HostClient(transport.fetchImpl);
 }

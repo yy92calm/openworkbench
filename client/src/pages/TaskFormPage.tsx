@@ -1,15 +1,16 @@
-import { useEffect, useState } from "react";
-import { ArrowLeft, Check } from "lucide-react";
-import type { ScheduledTask, CreateTaskInput } from "@workbench/sdk";
-import { getHostClient } from "@/lib/connection";
+import type { CreateTaskInput, ScheduledTask } from '@workbench/sdk';
+import { ArrowLeft, Check } from 'lucide-react';
+import { useEffect, useState } from 'react';
+
+import { getHostClient } from '@/lib/connection';
 
 const CRON_PRESETS: { label: string; value: string }[] = [
-  { label: "每小时", value: "0 * * * *" },
-  { label: "每天早上8点", value: "0 8 * * *" },
-  { label: "工作日早上9点", value: "0 9 * * 1-5" },
-  { label: "每周一", value: "0 9 * * 1" },
-  { label: "每月1号", value: "0 8 1 * *" },
-  { label: "自定义", value: "" },
+  { label: '每小时', value: '0 * * * *' },
+  { label: '每天早上8点', value: '0 8 * * *' },
+  { label: '工作日早上9点', value: '0 9 * * 1-5' },
+  { label: '每周一', value: '0 9 * * 1' },
+  { label: '每月1号', value: '0 8 1 * *' },
+  { label: '自定义', value: '' },
 ];
 
 interface Props {
@@ -19,16 +20,16 @@ interface Props {
 
 export function TaskFormPage({ taskId, onDone }: Props) {
   const [task, setTask] = useState<ScheduledTask | null>(null);
-  const [name, setName] = useState("");
-  const [preset, setPreset] = useState("");
-  const [cron, setCron] = useState("");
-  const [prompt, setPrompt] = useState("");
-  const [agent, setAgent] = useState("");
-  const [model, setModel] = useState("");
-  const [tags, setTags] = useState("");
-  const [cronError, setCronError] = useState("");
+  const [name, setName] = useState('');
+  const [preset, setPreset] = useState('');
+  const [cron, setCron] = useState('');
+  const [prompt, setPrompt] = useState('');
+  const [agent, setAgent] = useState('');
+  const [model, setModel] = useState('');
+  const [tags, setTags] = useState('');
+  const [cronError, setCronError] = useState('');
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState('');
 
   useEffect(() => {
     if (!taskId) return;
@@ -40,11 +41,11 @@ export function TaskFormPage({ taskId, onDone }: Props) {
           setName(t.name);
           setCron(t.cron);
           setPrompt(t.prompt);
-          setAgent(t.agent ?? "");
-          setModel(t.model ?? "");
-          setTags(t.tags?.join(", ") ?? "");
+          setAgent(t.agent ?? '');
+          setModel(t.model ?? '');
+          setTags(t.tags?.join(', ') ?? '');
           const m = CRON_PRESETS.find((p) => p.value === t.cron);
-          setPreset(m ? m.value : "");
+          setPreset(m ? m.value : '');
         }
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err));
@@ -56,25 +57,25 @@ export function TaskFormPage({ taskId, onDone }: Props) {
     setPreset(value);
     if (value) {
       setCron(value);
-      setCronError("");
+      setCronError('');
     }
   };
 
   const handleCron = (value: string) => {
     setCron(value);
-    setPreset("");
-    if (value.trim().split(/\s+/).length === 5) setCronError("");
+    setPreset('');
+    if (value.trim().split(/\s+/).length === 5) setCronError('');
   };
 
   const submit = async () => {
     const parts = cron.trim().split(/\s+/);
     if (parts.length !== 5) {
-      setCronError("Cron 表达式需要 5 个字段（分 时 日 月 周）");
+      setCronError('Cron 表达式需要 5 个字段（分 时 日 月 周）');
       return;
     }
     if (!name.trim() || !prompt.trim()) return;
     setSaving(true);
-    setError("");
+    setError('');
     try {
       const input: CreateTaskInput = {
         name: name.trim(),
@@ -82,7 +83,12 @@ export function TaskFormPage({ taskId, onDone }: Props) {
         prompt: prompt.trim(),
         agent: agent.trim() || undefined,
         model: model.trim() || undefined,
-        tags: tags.trim() ? tags.split(",").map((t) => t.trim()).filter(Boolean) : undefined,
+        tags: tags.trim()
+          ? tags
+              .split(',')
+              .map((t) => t.trim())
+              .filter(Boolean)
+          : undefined,
       };
       const host = getHostClient();
       if (task) {
@@ -104,7 +110,7 @@ export function TaskFormPage({ taskId, onDone }: Props) {
         <button onClick={onDone} className="icon-btn" aria-label="返回">
           <ArrowLeft size={18} />
         </button>
-        <h1 className="page-title">{task ? "编辑任务" : "新建任务"}</h1>
+        <h1 className="page-title">{task ? '编辑任务' : '新建任务'}</h1>
         <button
           onClick={() => void submit()}
           disabled={saving || !name.trim() || !prompt.trim()}
@@ -127,7 +133,9 @@ export function TaskFormPage({ taskId, onDone }: Props) {
           <label>执行计划</label>
           <select value={preset} onChange={(e) => handlePreset(e.target.value)}>
             {CRON_PRESETS.map((p) => (
-              <option key={p.label} value={p.value}>{p.label}</option>
+              <option key={p.label} value={p.value}>
+                {p.label}
+              </option>
             ))}
           </select>
         </div>
@@ -155,17 +163,29 @@ export function TaskFormPage({ taskId, onDone }: Props) {
 
         <div className="field">
           <label>Agent（可选）</label>
-          <input value={agent} onChange={(e) => setAgent(e.target.value)} placeholder="留空使用默认" />
+          <input
+            value={agent}
+            onChange={(e) => setAgent(e.target.value)}
+            placeholder="留空使用默认"
+          />
         </div>
 
         <div className="field">
           <label>模型（可选）</label>
-          <input value={model} onChange={(e) => setModel(e.target.value)} placeholder="留空使用默认" />
+          <input
+            value={model}
+            onChange={(e) => setModel(e.target.value)}
+            placeholder="留空使用默认"
+          />
         </div>
 
         <div className="field">
           <label>标签（逗号分隔）</label>
-          <input value={tags} onChange={(e) => setTags(e.target.value)} placeholder="report, daily" />
+          <input
+            value={tags}
+            onChange={(e) => setTags(e.target.value)}
+            placeholder="report, daily"
+          />
         </div>
       </div>
     </div>

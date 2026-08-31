@@ -1,8 +1,8 @@
-import type { ElectronAPI } from "../electron";
+import type { ElectronAPI } from '../electron';
 
 function api(): ElectronAPI {
-  if (typeof window === "undefined" || !window.electronAPI)
-    throw new Error("not running in the Electron desktop app");
+  if (typeof window === 'undefined' || !window.electronAPI)
+    throw new Error('not running in the Electron desktop app');
   return window.electronAPI;
 }
 
@@ -11,21 +11,21 @@ export const isDesktop = true;
 /** Start the bundled agent runtime (desktop only). Returns its base URL,
  *  or null for claude-code (no sidecar). `kind` selects the engine:
  *  "opencode" (default) or "claude-code". */
-export async function startRuntime(kind?: "opencode" | "claude-code"): Promise<string | null> {
+export async function startRuntime(kind?: 'opencode' | 'claude-code'): Promise<string | null> {
   try {
     return await api().startRuntime(kind);
   } catch (err) {
-    console.error("[startRuntime] failed:", err);
+    console.error('[startRuntime] failed:', err);
     return null;
   }
 }
 
 /** Restart the sidecar (stop + start). Used after provider config changes. */
-export async function restartRuntime(kind?: "opencode" | "claude-code"): Promise<string | null> {
+export async function restartRuntime(kind?: 'opencode' | 'claude-code'): Promise<string | null> {
   try {
     return await api().restartRuntime(kind);
   } catch (err) {
-    console.error("[restartRuntime] failed:", err);
+    console.error('[restartRuntime] failed:', err);
     return null;
   }
 }
@@ -55,21 +55,19 @@ export async function openExternal(url: string): Promise<void> {
   try {
     await api().openUrl(url);
   } catch {
-    window.open(url, "_blank", "noopener,noreferrer");
+    window.open(url, '_blank', 'noopener,noreferrer');
   }
 }
 
 export type SaveResult =
-  | { kind: "saved"; path: string }
-  | { kind: "canceled" }
-  | { kind: "not-desktop" };
+  { kind: 'saved'; path: string } | { kind: 'canceled' } | { kind: 'not-desktop' };
 
 export async function saveTextFile(filename: string, content: string): Promise<SaveResult> {
   try {
     const path = await api().saveTextFile(filename, content);
-    return path ? { kind: "saved", path } : { kind: "canceled" };
+    return path ? { kind: 'saved', path } : { kind: 'canceled' };
   } catch {
-    return { kind: "not-desktop" };
+    return { kind: 'not-desktop' };
   }
 }
 
@@ -96,7 +94,9 @@ export async function setWorkspaceBase(path: string): Promise<string> {
 export async function openWorkspaceBase(): Promise<void> {
   try {
     await api().openWorkspaceBase();
-  } catch { /* noop if not desktop */ }
+  } catch {
+    /* noop if not desktop */
+  }
 }
 
 export async function setWorkspace(path: string): Promise<string> {
@@ -123,7 +123,7 @@ export interface ToolStatus {
 
 export async function detectTools(): Promise<ToolStatus[]> {
   try {
-    return await api().detectTools() as ToolStatus[];
+    return (await api().detectTools()) as ToolStatus[];
   } catch {
     return [];
   }
@@ -132,13 +132,17 @@ export async function detectTools(): Promise<ToolStatus[]> {
 export async function logDebug(message: string): Promise<void> {
   try {
     await api().logDebug(message);
-  } catch { /* never break the app on diagnostics */ }
+  } catch {
+    /* never break the app on diagnostics */
+  }
 }
 
 export async function checkForUpdates(alertOnUpToDate?: boolean): Promise<void> {
   try {
     await api().checkForUpdates(alertOnUpToDate);
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 }
 
 export async function exportLogs(): Promise<string | null> {
@@ -213,7 +217,7 @@ export interface ExecutionRecord {
   taskId: string;
   taskName: string;
   triggeredAt: string;
-  status: "running" | "completed" | "failed" | "timeout";
+  status: 'running' | 'completed' | 'failed' | 'timeout';
   sessionId?: string;
   error?: string;
   durationMs?: number;
@@ -222,7 +226,7 @@ export interface ExecutionRecord {
 
 export async function schedulerList(): Promise<ScheduledTask[]> {
   try {
-    return await api().schedulerList() as ScheduledTask[];
+    return (await api().schedulerList()) as ScheduledTask[];
   } catch {
     return [];
   }
@@ -264,15 +268,18 @@ export async function profileWritePatch(raw: string): Promise<{ ok: boolean; err
 
 export async function schedulerCreate(task: CreateTaskInput): Promise<ScheduledTask | null> {
   try {
-    return await api().schedulerCreate(task) as ScheduledTask;
+    return (await api().schedulerCreate(task)) as ScheduledTask;
   } catch {
     return null;
   }
 }
 
-export async function schedulerUpdate(id: string, patch: UpdateTaskInput): Promise<ScheduledTask | null> {
+export async function schedulerUpdate(
+  id: string,
+  patch: UpdateTaskInput,
+): Promise<ScheduledTask | null> {
   try {
-    return await api().schedulerUpdate(id, patch) as ScheduledTask;
+    return (await api().schedulerUpdate(id, patch)) as ScheduledTask;
   } catch {
     return null;
   }
@@ -281,12 +288,14 @@ export async function schedulerUpdate(id: string, patch: UpdateTaskInput): Promi
 export async function schedulerDelete(id: string): Promise<void> {
   try {
     await api().schedulerDelete(id);
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 }
 
 export async function schedulerToggle(id: string, enabled: boolean): Promise<ScheduledTask | null> {
   try {
-    return await api().schedulerToggle(id, enabled) as ScheduledTask;
+    return (await api().schedulerToggle(id, enabled)) as ScheduledTask;
   } catch {
     return null;
   }
@@ -294,15 +303,18 @@ export async function schedulerToggle(id: string, enabled: boolean): Promise<Sch
 
 export async function schedulerFireNow(id: string): Promise<ExecutionRecord | null> {
   try {
-    return await api().schedulerFireNow(id) as ExecutionRecord;
+    return (await api().schedulerFireNow(id)) as ExecutionRecord;
   } catch {
     return null;
   }
 }
 
-export async function schedulerHistory(taskId?: string, limit?: number): Promise<ExecutionRecord[]> {
+export async function schedulerHistory(
+  taskId?: string,
+  limit?: number,
+): Promise<ExecutionRecord[]> {
   try {
-    return await api().schedulerHistory(taskId, limit) as ExecutionRecord[];
+    return (await api().schedulerHistory(taskId, limit)) as ExecutionRecord[];
   } catch {
     return [];
   }
@@ -311,18 +323,22 @@ export async function schedulerHistory(taskId?: string, limit?: number): Promise
 export async function schedulerDeleteExecution(id: string): Promise<void> {
   try {
     await api().schedulerDeleteExecution(id);
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 }
 
 export async function schedulerClearHistory(taskId?: string): Promise<void> {
   try {
     await api().schedulerClearHistory(taskId);
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 }
 
 // ---- Room (peer chat) ----
 
-export type RoomStatus = "off" | "connecting" | "joined" | "error";
+export type RoomStatus = 'off' | 'connecting' | 'joined' | 'error';
 
 export interface RoomMember {
   id: string;
@@ -339,29 +355,37 @@ export interface RoomMessageMeta {
 }
 
 export type RoomEvent =
-  | { type: "status"; status: RoomStatus }
-  | { type: "joined"; roomId: string; inviteCode: string; members: RoomMember[]; enforceViewOnce: boolean; isCreator: boolean; destroyExpiresAt: number | null }
-  | { type: "member-joined"; member: RoomMember }
-  | { type: "member-left"; memberId: string }
+  | { type: 'status'; status: RoomStatus }
   | {
-      type: "message";
+      type: 'joined';
+      roomId: string;
+      inviteCode: string;
+      members: RoomMember[];
+      enforceViewOnce: boolean;
+      isCreator: boolean;
+      destroyExpiresAt: number | null;
+    }
+  | { type: 'member-joined'; member: RoomMember }
+  | { type: 'member-left'; memberId: string }
+  | {
+      type: 'message';
       msg: {
         messageId: string;
         from: string;
         nonce: string;
         ct: string;
-        kind?: "text" | "audio" | "file";
+        kind?: 'text' | 'audio' | 'file';
         fileId?: string;
         meta?: RoomMessageMeta;
         viewOnce?: boolean;
         at: number;
       };
     }
-  | { type: "message-viewed"; messageId: string }
-  | { type: "view-once-changed"; enforce: boolean }
-  | { type: "destroy-countdown"; expiresAt: number | null }
-  | { type: "destroyed" }
-  | { type: "error"; message: string };
+  | { type: 'message-viewed'; messageId: string }
+  | { type: 'view-once-changed'; enforce: boolean }
+  | { type: 'destroy-countdown'; expiresAt: number | null }
+  | { type: 'destroyed' }
+  | { type: 'error'; message: string };
 
 export async function roomCreate(): Promise<{ inviteCode: string }> {
   return api().roomCreate();
@@ -371,7 +395,11 @@ export async function roomValidate(code: string): Promise<boolean> {
   return api().roomValidate(code);
 }
 
-export async function roomJoin(inviteCode: string, nickname: string, opts?: { enforceViewOnce?: boolean }): Promise<boolean> {
+export async function roomJoin(
+  inviteCode: string,
+  nickname: string,
+  opts?: { enforceViewOnce?: boolean },
+): Promise<boolean> {
   return api().roomJoin(inviteCode, nickname, opts);
 }
 
@@ -411,7 +439,7 @@ export async function roomUploadBlob(
 
 export async function roomSendFile(
   fileId: string,
-  kind: "audio" | "file",
+  kind: 'audio' | 'file',
   meta: RoomMessageMeta,
   viewOnce: boolean,
 ): Promise<string> {
@@ -429,9 +457,7 @@ export async function roomDownloadFile(
 }
 
 /** Open an OS save dialog and return the chosen path or null if cancelled. */
-export async function roomSaveDialog(
-  defaultName: string,
-): Promise<string | null> {
+export async function roomSaveDialog(defaultName: string): Promise<string | null> {
   return api().roomSaveDialog(defaultName);
 }
 

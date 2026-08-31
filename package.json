@@ -7,12 +7,26 @@
   "scripts": {
     "dev": "pnpm --filter @workbench/desktop dev",
     "build": "pnpm --filter @workbench/desktop build",
-    "test": "pnpm --filter @workbench/desktop test",
-    "typecheck": "pnpm --filter @workbench/desktop typecheck",
-    "lint": "pnpm --filter @workbench/desktop lint"
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "md:check": "markdownlint-cli2",
+    "typecheck": "pnpm -r typecheck && pnpm --dir relay typecheck && pnpm --dir client typecheck",
+    "test": "pnpm -r test && pnpm --dir relay test"
   },
   "engines": {
     "node": ">=20"
   },
-  "packageManager": "pnpm@9.4.0"
+  "packageManager": "pnpm@9.4.0",
+  "devDependencies": {
+    "@eslint/js": "^9",
+    "eslint": "^9",
+    "eslint-plugin-react-hooks": "^5",
+    "eslint-plugin-simple-import-sort": "^12",
+    "globals": "^17.11.0",
+    "markdownlint-cli2": "^0.14",
+    "prettier": "^3",
+    "typescript-eslint": "^8"
+  }
 }

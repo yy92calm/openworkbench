@@ -1,14 +1,14 @@
-import { create } from "zustand";
+import { create } from 'zustand';
 
 export interface Toast {
   id: number;
-  tone: "success" | "error";
+  tone: 'success' | 'error';
   message: string;
 }
 
 interface ToastState {
   toasts: Toast[];
-  push: (tone: Toast["tone"], message: string) => void;
+  push: (tone: Toast['tone'], message: string) => void;
   dismiss: (id: number) => void;
 }
 
@@ -26,6 +26,6 @@ export const useToastStore = create<ToastState>((set) => ({
 }));
 
 export const toast = {
-  success: (message: string) => useToastStore.getState().push("success", message),
-  error: (message: string) => useToastStore.getState().push("error", message),
+  success: (message: string) => useToastStore.getState().push('success', message),
+  error: (message: string) => useToastStore.getState().push('error', message),
 };

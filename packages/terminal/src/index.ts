@@ -5,5 +5,5 @@
  * Renderer:      import { TerminalPanel } from "@fafawork/terminal/panel"
  */
 
-export { createTerminal } from "./main/index";
-export type { TerminalPlugin } from "./main/index";
+export type { TerminalPlugin } from './main/index';
+export { createTerminal } from './main/index';

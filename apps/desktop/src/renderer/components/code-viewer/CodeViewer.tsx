@@ -1,5 +1,5 @@
-import { useMemo } from "react";
-import hljs from "highlight.js/lib/common";
+import hljs from 'highlight.js/lib/common';
+import { useMemo } from 'react';
 
 interface Props {
   code: string;
@@ -20,7 +20,7 @@ export function CodeViewer({ code, language, startLine = 1 }: Props) {
     }
   }, [code, language]);
 
-  const lineCount = code.replace(/\n$/, "").split("\n").length;
+  const lineCount = code.replace(/\n$/, '').split('\n').length;
 
   return (
     <div className="flex overflow-x-auto rounded-input border border-code-border bg-code-bg font-mono text-[12.5px] leading-[1.55]">
@@ -33,15 +33,15 @@ export function CodeViewer({ code, language, startLine = 1 }: Props) {
         ))}
       </div>
       <pre className="flex-1 overflow-visible px-4 py-3">
-        <code className="hljs bg-transparent text-code-text" dangerouslySetInnerHTML={{ __html: html }} />
+        <code
+          className="hljs bg-transparent text-code-text"
+          dangerouslySetInnerHTML={{ __html: html }}
+        />
       </pre>
     </div>
   );
 }
 
 function escapeHtml(s: string) {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }

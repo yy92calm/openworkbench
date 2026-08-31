@@ -79,7 +79,7 @@ desktop 端复制同逻辑（`apps/desktop/src/renderer/lib/roomShare.ts`），
 
 **列表页改造成聊天工具风格**：
 
-```
+```text
 header: 「会话分享」标题
 最近会话列表（聊天列表项）：
   ┌────────────────────────────────┐

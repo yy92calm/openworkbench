@@ -15,7 +15,7 @@ sidecar，[SessionMeta](../../packages/sdk/src/types.ts) 类型没有来源字�
 
 ### 数据流
 
-```
+```text
 guest POST /session  →  relayHost.handleMessage()
                          │
                          ├─ 转发到 sidecar（透明，不改变现有行为）

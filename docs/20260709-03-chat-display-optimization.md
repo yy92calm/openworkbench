@@ -26,7 +26,7 @@
 
 #### 1. 工具调用行增强
 
-**输入摘要（inputSummary）**
+##### 输入摘要（inputSummary）
 
 在 `foldEvent()` 中从 `event.input` 提取关键信息，格式化为一行摘要：
 
@@ -39,7 +39,7 @@
 | `task` | `{subagent_type}: {description}` |
 | 其他 | `{tool_name}` |
 
-**输出摘要（outputSummary）**
+##### 输出摘要（outputSummary）
 
 在 `foldEvent()` 中从 `event.output` 提取关键信息：
 
@@ -51,7 +51,7 @@
 | `task` | `{subagent_session_id}` |
 | 其他 | 首行输出（截断到 80 字符） |
 
-**Meta 信息**
+##### Meta 信息
 
 在 `foldEvent()` 中计算并填充 `meta` 字段：
 
@@ -61,21 +61,21 @@
 | bash 输出 | `{lines} 行` |
 | write 文件 | `{size}`（如 `12KB`） |
 
-**错误信息展示**
+##### 错误信息展示
 
 当 `status === "failed"` 时，在 `ToolCallRow` 中显示红色错误摘要（从 `outputSummary` 中提取错误信息首行）。
 
-**可展开详情**
+##### 可展开详情
 
 失败或需要关注的工具调用行，点击可展开显示完整输入/输出（`<pre>` 块）。
 
 #### 2. 工件卡片增强
 
-**内容预览**
+##### 内容预览
 
 当 `ArtifactBlock.content` 存在时，在卡片中显示前 2 行的文本预览（等宽字体，灰色）。
 
-**文件元数据**
+##### 文件元数据
 
 在卡片底部显示 `language` 标签（如果存在）和文件大小。
 
@@ -87,7 +87,7 @@
 
 #### 工具调用行（增强后）
 
-```
+```text
 ┌──────────────────────────────────────────────────────────────┐
 │  ✓ Wrote report.md                          2.3s · 156 行   │
 │    $ python analyze.py --input data.csv                     │
@@ -104,7 +104,7 @@
 
 #### 工件卡片（增强后）
 
-```
+```text
 ┌──────────────────────────────────────┐
 │  📄 report.md                       │
 │  artifact · via write               │

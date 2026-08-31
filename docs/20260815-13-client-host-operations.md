@@ -73,7 +73,7 @@ REST 风格，路径参数用 `:id` 表示。响应统一为 JSON。
 
 ### 数据流
 
-```
+```text
 client Tab 点击
   │
   ▼
@@ -112,6 +112,7 @@ if (msg.path.startsWith("/__host/")) {
 发回。错误返回 `{ error }` + 对应 status。
 
 依赖的 main process 模块都已 export，直接 import：
+
 - `cronEngine` from `./scheduler`
 - `artifactFile` from `./artifact_file`（`import * as`）
 - `workspaceDir`, `baseWorkspaceDir`, `setWorkspace`, `newDatedWorkspace` from `./server`
@@ -136,7 +137,7 @@ if (msg.path.startsWith("/__host/")) {
 | 确认操作 | 居中 ConfirmDialog | 底部 action sheet 或全屏确认页 |
 | 触控目标 | 28-32px | ≥ 44px（iOS HIG） |
 
-```
+```text
 client/sdk/src/hostClient.ts         新增：封装 /__host/* 调用
 client/sdk/src/types.ts              新增：ScheduledTask/ExecutionRecord/DirEntry 等类型镜像
 client/src/lib/connection.ts         暴露 getHostClient()
@@ -196,7 +197,7 @@ export class HostClient {
 App.tsx 改造为底部 Tab（移动端友好，桌面端是左侧 Sidebar 但 web 端
 窄屏更适合底部 Tab）。视觉与桌面端 token 一致：
 
-```
+```text
 ┌─────────────────────────┐
 │                         │
 │   (当前 Tab 的页面内容)   │  ← 桌面端主区相同布局

@@ -1,6 +1,7 @@
-import { ChildProcess, spawn } from "node:child_process";
-import { workspaceDir } from "./server";
-import { enrichedPath } from "./shell_env";
+import { ChildProcess, spawn } from 'node:child_process';
+
+import { workspaceDir } from './server';
+import { enrichedPath } from './shell_env';
 
 interface KernelEntry {
   child: ChildProcess;
@@ -10,7 +11,7 @@ interface KernelEntry {
 const kernelMap = new Map<string, KernelEntry>();
 
 function kernelKey(lang: string, notebook?: string): string {
-  return `${lang}:${notebook ?? "default"}`;
+  return `${lang}:${notebook ?? 'default'}`;
 }
 
 export function kernelExecute(
@@ -23,26 +24,30 @@ export function kernelExecute(
     let entry = kernelMap.get(key);
 
     if (!entry) {
-      const cmd = language === "python3" ? "python3" : language;
-      const child = spawn(cmd, ["-c", code], {
-        env: { ...process.env, PATH: enrichedPath(), HOME: process.env.HOME ?? "" },
+      const cmd = language === 'python3' ? 'python3' : language;
+      const child = spawn(cmd, ['-c', code], {
+        env: { ...process.env, PATH: enrichedPath(), HOME: process.env.HOME ?? '' },
         cwd: workspaceDir(),
-        stdio: ["pipe", "pipe", "pipe"],
+        stdio: ['pipe', 'pipe', 'pipe'],
       });
       entry = { child, language };
       kernelMap.set(key, entry);
     }
 
     const { child } = entry;
-    let stdout = "";
-    let stderr = "";
-    child.stdout!.on("data", (d: Buffer) => { stdout += d.toString(); });
-    child.stderr!.on("data", (d: Buffer) => { stderr += d.toString(); });
-    child.on("exit", (code) => {
+    let stdout = '';
+    let stderr = '';
+    child.stdout!.on('data', (d: Buffer) => {
+      stdout += d.toString();
+    });
+    child.stderr!.on('data', (d: Buffer) => {
+      stderr += d.toString();
+    });
+    child.on('exit', (code) => {
       kernelMap.delete(key);
       resolve({ stdout, stderr, exitCode: code });
     });
-    child.on("error", reject);
+    child.on('error', reject);
     child.stdin!.write(code);
     child.stdin!.end();
   });

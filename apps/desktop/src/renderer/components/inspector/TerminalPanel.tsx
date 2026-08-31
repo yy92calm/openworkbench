@@ -1,28 +1,30 @@
-import { useEffect, useRef, useCallback, useState } from "react";
-import { Terminal } from "@xterm/xterm";
-import { FitAddon } from "@xterm/addon-fit";
-import { WebLinksAddon } from "@xterm/addon-web-links";
-import { SearchAddon } from "@xterm/addon-search";
-import "@xterm/xterm/css/xterm.css";
-import { ArrowDown, ArrowUp, ChevronDown, Plus, X } from "lucide-react";
-import { cn } from "@/lib/cn";
-import { useUiStore } from "@/lib/store";
+import '@xterm/xterm/css/xterm.css';
 
-const isMac = navigator.userAgent.includes("Mac");
-const isWindows = navigator.userAgent.includes("Windows");
+import { FitAddon } from '@xterm/addon-fit';
+import { SearchAddon } from '@xterm/addon-search';
+import { WebLinksAddon } from '@xterm/addon-web-links';
+import { Terminal } from '@xterm/xterm';
+import { ArrowDown, ArrowUp, ChevronDown, Plus, X } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+
+import { cn } from '@/lib/cn';
+import { useUiStore } from '@/lib/store';
+
+const isMac = navigator.userAgent.includes('Mac');
+const isWindows = navigator.userAgent.includes('Windows');
 
 const SHELLS = isWindows
   ? [
-      { value: "powershell", label: "PowerShell" },
-      { value: "pwsh7", label: "PowerShell 7" },
-      { value: "cmd", label: "CMD" },
+      { value: 'powershell', label: 'PowerShell' },
+      { value: 'pwsh7', label: 'PowerShell 7' },
+      { value: 'cmd', label: 'CMD' },
     ]
   : [
-      { value: "bash", label: "Bash" },
-      { value: "zsh", label: "Zsh" },
+      { value: 'bash', label: 'Bash' },
+      { value: 'zsh', label: 'Zsh' },
     ];
 
-const FONT_KEY = "workbench.terminal.fontSize";
+const FONT_KEY = 'workbench.terminal.fontSize';
 const FONT_MIN = 10;
 const FONT_MAX = 24;
 const FONT_DEFAULT = 13;
@@ -64,33 +66,33 @@ function TerminalView({
   const fontSizeRef = useRef(fontSize);
   fontSizeRef.current = fontSize;
   const [showSearch, setShowSearch] = useState(false);
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState('');
   const theme = useUiStore((s) => s.theme);
 
   const getTerminalTheme = useCallback(() => {
     const cs = getComputedStyle(document.documentElement);
-    const v = (name: string) => cs.getPropertyValue(name).trim() || "#000";
+    const v = (name: string) => cs.getPropertyValue(name).trim() || '#000';
     return {
-      background: v("--surface"),
-      foreground: v("--text"),
-      cursor: v("--accent"),
-      selectionBackground: v("--accent-soft") || "rgba(193,95,60,0.3)",
-      black: v("--bg"),
-      red: v("--error"),
-      green: v("--ok"),
-      yellow: v("--warn"),
-      blue: v("--accent"),
-      magenta: "#c08ae0",
-      cyan: "#5fc8c8",
-      white: v("--text-dim"),
-      brightBlack: v("--border"),
-      brightRed: v("--error"),
-      brightGreen: v("--ok"),
-      brightYellow: v("--warn"),
-      brightBlue: v("--accent-strong"),
-      brightMagenta: "#d4a8f0",
-      brightCyan: "#7dd8d8",
-      brightWhite: v("--text"),
+      background: v('--surface'),
+      foreground: v('--text'),
+      cursor: v('--accent'),
+      selectionBackground: v('--accent-soft') || 'rgba(193,95,60,0.3)',
+      black: v('--bg'),
+      red: v('--error'),
+      green: v('--ok'),
+      yellow: v('--warn'),
+      blue: v('--accent'),
+      magenta: '#c08ae0',
+      cyan: '#5fc8c8',
+      white: v('--text-dim'),
+      brightBlack: v('--border'),
+      brightRed: v('--error'),
+      brightGreen: v('--ok'),
+      brightYellow: v('--warn'),
+      brightBlue: v('--accent-strong'),
+      brightMagenta: '#d4a8f0',
+      brightCyan: '#7dd8d8',
+      brightWhite: v('--text'),
     };
   }, []);
 
@@ -125,7 +127,7 @@ function TerminalView({
       fontSize,
       fontFamily: "'JetBrains Mono', 'SF Mono', 'Cascadia Code', monospace",
       cursorBlink: true,
-      cursorStyle: "block",
+      cursorStyle: 'block',
       scrollback: SCROLLBACK,
       theme: getTerminalTheme(),
       allowProposedApi: true,
@@ -145,34 +147,37 @@ function TerminalView({
     // Copy / paste / find / font-size via xterm's key handler. Return false
     // to suppress the default terminal behavior for handled combos.
     term.attachCustomKeyEventHandler((e) => {
-      if (e.type !== "keydown") return true;
+      if (e.type !== 'keydown') return true;
       const copyPasteMod = isMac ? e.metaKey : e.ctrlKey && e.shiftKey;
       // Copy: selection only (no selection -> let Ctrl+C reach the shell).
-      if (copyPasteMod && e.key.toLowerCase() === "c" && term.hasSelection()) {
+      if (copyPasteMod && e.key.toLowerCase() === 'c' && term.hasSelection()) {
         navigator.clipboard.writeText(term.getSelection()).catch(() => {});
         return false;
       }
       // Paste.
-      if (copyPasteMod && e.key.toLowerCase() === "v") {
-        navigator.clipboard.readText().then((t) => term.paste(t)).catch(() => {});
+      if (copyPasteMod && e.key.toLowerCase() === 'v') {
+        navigator.clipboard
+          .readText()
+          .then((t) => term.paste(t))
+          .catch(() => {});
         return false;
       }
       // Find.
-      if ((isMac ? e.metaKey : e.ctrlKey) && e.key.toLowerCase() === "f") {
+      if ((isMac ? e.metaKey : e.ctrlKey) && e.key.toLowerCase() === 'f') {
         setShowSearch((s) => !s);
         return false;
       }
       // Font size.
       const fmod = isMac ? e.metaKey : e.ctrlKey;
-      if (fmod && (e.key === "=" || e.key === "+")) {
+      if (fmod && (e.key === '=' || e.key === '+')) {
         onFontSizeChange(Math.min(FONT_MAX, fontSizeRef.current + 1));
         return false;
       }
-      if (fmod && e.key === "-") {
+      if (fmod && e.key === '-') {
         onFontSizeChange(Math.max(FONT_MIN, fontSizeRef.current - 1));
         return false;
       }
-      if (fmod && e.key === "0") {
+      if (fmod && e.key === '0') {
         onFontSizeChange(FONT_DEFAULT);
         return false;
       }
@@ -180,7 +185,7 @@ function TerminalView({
     });
 
     // Create PTY session in the main process.
-    window.electronAPI.invoke("terminal:create", id, "local", shell).then(() => {
+    window.electronAPI.invoke('terminal:create', id, 'local', shell).then(() => {
       onConnectedChange(true);
       term.focus();
     });
@@ -189,30 +194,30 @@ function TerminalView({
       term.write(data as string),
     );
     const removeExit = window.electronAPI.on(`terminal:exit:${id}`, (code: unknown) => {
-      term.write(`\r\n\x1b[31m进程已退出 (code: ${code ?? "unknown"})\x1b[0m\r\n`);
+      term.write(`\r\n\x1b[31m进程已退出 (code: ${code ?? 'unknown'})\x1b[0m\r\n`);
       onConnectedChange(false);
     });
     const removeError = window.electronAPI.on(`terminal:error:${id}`, (msg: unknown) => {
       term.write(`\r\n\x1b[31m错误: ${msg}\x1b[0m\r\n`);
     });
 
-    term.onData((data: string) => window.electronAPI.invoke("terminal:write", id, data));
+    term.onData((data: string) => window.electronAPI.invoke('terminal:write', id, data));
 
     const doResize = () => {
       fit.fit();
       const dims = fit.proposeDimensions();
-      if (dims) window.electronAPI.invoke("terminal:resize", id, dims.cols, dims.rows);
+      if (dims) window.electronAPI.invoke('terminal:resize', id, dims.cols, dims.rows);
     };
     const onWinResize = () => doResize();
-    window.addEventListener("resize", onWinResize);
+    window.addEventListener('resize', onWinResize);
     const ro = new ResizeObserver(doResize);
     if (containerRef.current) ro.observe(containerRef.current);
     setTimeout(doResize, 50);
 
     return () => {
       ro.disconnect();
-      window.removeEventListener("resize", onWinResize);
-      window.electronAPI.invoke("terminal:close", id);
+      window.removeEventListener('resize', onWinResize);
+      window.electronAPI.invoke('terminal:close', id);
       removeData();
       removeExit();
       removeError();
@@ -229,7 +234,10 @@ function TerminalView({
     if (term.hasSelection()) {
       navigator.clipboard.writeText(term.getSelection()).catch(() => {});
     } else {
-      navigator.clipboard.readText().then((t) => term.paste(t)).catch(() => {});
+      navigator.clipboard
+        .readText()
+        .then((t) => term.paste(t))
+        .catch(() => {});
     }
   };
 
@@ -253,10 +261,10 @@ function TerminalView({
               runSearch(false, e.target.value);
             }}
             onKeyDown={(e) => {
-              if (e.key === "Enter") {
+              if (e.key === 'Enter') {
                 e.preventDefault();
                 runSearch(e.shiftKey, query);
-              } else if (e.key === "Escape") {
+              } else if (e.key === 'Escape') {
                 setShowSearch(false);
               }
             }}
@@ -359,11 +367,18 @@ export function TerminalPanel({ onClose }: TerminalPanelProps) {
             onClick={() => setActiveId(t.id)}
             title={shellLabel(t.shell)}
             className={cn(
-              "group flex cursor-pointer items-center gap-1 rounded px-1.5 py-0.5 text-[11px] transition-colors",
-              t.id === activeId ? "bg-surface-2 text-text" : "text-muted hover:bg-surface-2 hover:text-text",
+              'group flex cursor-pointer items-center gap-1 rounded px-1.5 py-0.5 text-[11px] transition-colors',
+              t.id === activeId
+                ? 'bg-surface-2 text-text'
+                : 'text-muted hover:bg-surface-2 hover:text-text',
             )}
           >
-            <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", t.connected ? "bg-ok" : "bg-border")} />
+            <span
+              className={cn(
+                'h-1.5 w-1.5 shrink-0 rounded-full',
+                t.connected ? 'bg-ok' : 'bg-border',
+              )}
+            />
             <span>终端 {i + 1}</span>
             <button
               onClick={(e) => {
@@ -414,7 +429,10 @@ export function TerminalPanel({ onClose }: TerminalPanelProps) {
           survive tab switches. */}
       <div className="relative min-h-0 flex-1">
         {tabs.map((t) => (
-          <div key={t.id} className={cn("absolute inset-0", t.id === activeId ? "block" : "hidden")}>
+          <div
+            key={t.id}
+            className={cn('absolute inset-0', t.id === activeId ? 'block' : 'hidden')}
+          >
             <TerminalView
               id={t.id}
               shell={t.shell}

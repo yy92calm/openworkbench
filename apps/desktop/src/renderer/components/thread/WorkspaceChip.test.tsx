@@ -1,19 +1,21 @@
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { useRuntimeStore } from "@/lib/runtime";
-import { WorkspaceChip } from "./WorkspaceChip";
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { useRuntimeStore } from '@/lib/runtime';
+
+import { WorkspaceChip } from './WorkspaceChip';
 
 afterEach(cleanup);
 
 // workspacePath reflects the folder setWorkspace last persisted, like the real bridge.
-const mocks = vi.hoisted(() => ({ pickedFolder: null as string | null, activePath: "/ws/base" }));
+const mocks = vi.hoisted(() => ({ pickedFolder: null as string | null, activePath: '/ws/base' }));
 
-vi.mock("@/lib/tauri", () => ({
+vi.mock('@/lib/tauri', () => ({
   isTauri: true,
   logDebug: async () => {},
   detectTools: async () => [],
-  startRuntime: async () => "http://127.0.0.1:1",
+  startRuntime: async () => 'http://127.0.0.1:1',
   workspacePath: async () => mocks.activePath,
   setWorkspace: async (path: string) => {
     mocks.activePath = path;
@@ -22,9 +24,9 @@ vi.mock("@/lib/tauri", () => ({
   newDatedWorkspace: async (name: string) => `/ws/${name}`,
   pickFolder: async () => mocks.pickedFolder,
 }));
-vi.mock("@/lib/kernel", () => ({ kernelReset: async () => {} }));
+vi.mock('@/lib/kernel', () => ({ kernelReset: async () => {} }));
 // switchWorkspace reconnects after a pick — give it a client that connects instantly.
-vi.mock("@workbench/sdk", () => {
+vi.mock('@workbench/sdk', () => {
   class OpenCodeClient {
     private statusCb: (s: string) => void = () => {};
     onStatus(cb: (s: string) => void) {
@@ -32,13 +34,13 @@ vi.mock("@workbench/sdk", () => {
     }
     onEvent() {}
     async connect() {
-      this.statusCb("ready");
+      this.statusCb('ready');
     }
     async listSessions() {
       return [];
     }
     async listSkills() {
-      return [{ name: "stub" }];
+      return [{ name: 'stub' }];
     }
     async listAgents() {
       return [];
@@ -48,40 +50,45 @@ vi.mock("@workbench/sdk", () => {
     }
     close() {}
   }
-  return { OpenCodeClient, DEFAULT_OPENCODE_URL: "http://127.0.0.1:4096" };
+  return { OpenCodeClient, DEFAULT_OPENCODE_URL: 'http://127.0.0.1:4096' };
 });
 
-describe("WorkspaceChip", () => {
+describe('WorkspaceChip', () => {
   beforeEach(() => {
     mocks.pickedFolder = null;
-    mocks.activePath = "/ws/base";
-    useRuntimeStore.setState({ currentId: null, workspacePinned: false, workspace: "/ws/base", serverUrl: "http://127.0.0.1:1" });
+    mocks.activePath = '/ws/base';
+    useRuntimeStore.setState({
+      currentId: null,
+      workspacePinned: false,
+      workspace: '/ws/base',
+      serverUrl: 'http://127.0.0.1:1',
+    });
   });
 
-  it("is a bare folder icon for a fresh draft (dated folder is the default)", () => {
+  it('is a bare folder icon for a fresh draft (dated folder is the default)', () => {
     render(<WorkspaceChip />);
-    const btn = screen.getByRole("button", { name: "Choose session folder" });
-    expect(btn.title).toContain("new dated folder");
+    const btn = screen.getByRole('button', { name: 'Choose session folder' });
+    expect(btn.title).toContain('new dated folder');
     // No folder name shown until the user actually picks one.
-    expect(screen.queryByText("base")).not.toBeInTheDocument();
+    expect(screen.queryByText('base')).not.toBeInTheDocument();
   });
 
-  it("picking a folder pins it and shows its name", async () => {
-    mocks.pickedFolder = "/ws/mine";
+  it('picking a folder pins it and shows its name', async () => {
+    mocks.pickedFolder = '/ws/mine';
     render(<WorkspaceChip />);
-    await userEvent.click(screen.getByRole("button", { name: "Choose session folder" }));
+    await userEvent.click(screen.getByRole('button', { name: 'Choose session folder' }));
     await waitFor(() => expect(useRuntimeStore.getState().workspacePinned).toBe(true));
-    expect(await screen.findByText("mine")).toBeInTheDocument();
+    expect(await screen.findByText('mine')).toBeInTheDocument();
   });
 
-  it("cancelling the picker changes nothing", async () => {
+  it('cancelling the picker changes nothing', async () => {
     render(<WorkspaceChip />);
-    await userEvent.click(screen.getByRole("button", { name: "Choose session folder" }));
+    await userEvent.click(screen.getByRole('button', { name: 'Choose session folder' }));
     expect(useRuntimeStore.getState().workspacePinned).toBe(false);
   });
 
-  it("disappears for an open session (the Files toggle names the folder instead)", () => {
-    useRuntimeStore.setState({ currentId: "ses_1", workspace: "/ws/2026-07-04-0900" });
+  it('disappears for an open session (the Files toggle names the folder instead)', () => {
+    useRuntimeStore.setState({ currentId: 'ses_1', workspace: '/ws/2026-07-04-0900' });
     const { container } = render(<WorkspaceChip />);
     expect(container).toBeEmptyDOMElement();
   });

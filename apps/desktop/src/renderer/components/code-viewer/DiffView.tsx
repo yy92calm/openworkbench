@@ -1,8 +1,9 @@
-import { useMemo } from "react";
-import { cn } from "@/lib/cn";
+import { useMemo } from 'react';
+
+import { cn } from '@/lib/cn';
 
 interface DiffLine {
-  type: "add" | "del" | "ctx";
+  type: 'add' | 'del' | 'ctx';
   oldLine?: number;
   newLine?: number;
   text: string;
@@ -13,13 +14,13 @@ interface DiffLine {
  * Supports standard `git diff` and `diff -u` output.
  */
 function parseDiff(diff: string): DiffLine[] {
-  const lines = diff.split("\n");
+  const lines = diff.split('\n');
   const result: DiffLine[] = [];
   let oldLine = 0;
   let newLine = 0;
 
   for (const raw of lines) {
-    if (raw.startsWith("---") || raw.startsWith("+++") || raw.startsWith("@@")) {
+    if (raw.startsWith('---') || raw.startsWith('+++') || raw.startsWith('@@')) {
       // Chunk header: @@ -oldStart,count +newStart,count @@
       const m = /^@@\s+-(\d+)(?:,\d+)?\s+\+(\d+)(?:,\d+)?\s+@@/.exec(raw);
       if (m) {
@@ -28,14 +29,14 @@ function parseDiff(diff: string): DiffLine[] {
       }
       continue;
     }
-    if (raw.startsWith("+")) {
-      result.push({ type: "add", newLine, text: raw.slice(1) });
+    if (raw.startsWith('+')) {
+      result.push({ type: 'add', newLine, text: raw.slice(1) });
       newLine++;
-    } else if (raw.startsWith("-")) {
-      result.push({ type: "del", oldLine, text: raw.slice(1) });
+    } else if (raw.startsWith('-')) {
+      result.push({ type: 'del', oldLine, text: raw.slice(1) });
       oldLine++;
     } else {
-      result.push({ type: "ctx", oldLine, newLine, text: raw });
+      result.push({ type: 'ctx', oldLine, newLine, text: raw });
       oldLine++;
       newLine++;
     }
@@ -49,8 +50,8 @@ function parseDiff(diff: string): DiffLine[] {
  */
 export function DiffView({
   diff,
-  oldLabel = "旧版本",
-  newLabel = "新版本",
+  oldLabel = '旧版本',
+  newLabel = '新版本',
   sideBySide = false,
   maxHeight = 400,
 }: {
@@ -82,24 +83,25 @@ function UnifiedDiff({ lines, maxHeight }: { lines: DiffLine[]; maxHeight: numbe
           {lines.map((line, i) => (
             <tr
               key={i}
-              className={cn(
-                line.type === "add" && "bg-ok/8",
-                line.type === "del" && "bg-error/8",
-              )}
+              className={cn(line.type === 'add' && 'bg-ok/8', line.type === 'del' && 'bg-error/8')}
             >
               <td className="w-10 select-none px-2 text-right text-[11px] text-muted">
-                {line.oldLine ?? ""}
+                {line.oldLine ?? ''}
               </td>
               <td className="w-10 select-none px-2 text-right text-[11px] text-muted">
-                {line.newLine ?? ""}
+                {line.newLine ?? ''}
               </td>
-              <td className={cn(
-                "px-1",
-                line.type === "add" && "text-ok",
-                line.type === "del" && "text-error",
-              )}>
-                <span className="select-none mr-1">{line.type === "add" ? "+" : line.type === "del" ? "-" : " "}</span>
-                {line.text || "\u00A0"}
+              <td
+                className={cn(
+                  'px-1',
+                  line.type === 'add' && 'text-ok',
+                  line.type === 'del' && 'text-error',
+                )}
+              >
+                <span className="select-none mr-1">
+                  {line.type === 'add' ? '+' : line.type === 'del' ? '-' : ' '}
+                </span>
+                {line.text || '\u00A0'}
               </td>
             </tr>
           ))}
@@ -120,8 +122,8 @@ function SideBySideDiff({
   newLabel: string;
   maxHeight: number;
 }) {
-  const oldLines = lines.filter((l) => l.type !== "add");
-  const newLines = lines.filter((l) => l.type !== "del");
+  const oldLines = lines.filter((l) => l.type !== 'add');
+  const newLines = lines.filter((l) => l.type !== 'del');
 
   return (
     <div className="flex overflow-auto rounded-md border border-border" style={{ maxHeight }}>
@@ -133,12 +135,12 @@ function SideBySideDiff({
         <table className="w-full border-collapse font-mono text-[12px] leading-5">
           <tbody>
             {oldLines.map((line, i) => (
-              <tr key={i} className={line.type === "del" ? "bg-error/8" : ""}>
+              <tr key={i} className={line.type === 'del' ? 'bg-error/8' : ''}>
                 <td className="w-10 select-none px-2 text-right text-[11px] text-muted">
-                  {line.oldLine ?? ""}
+                  {line.oldLine ?? ''}
                 </td>
-                <td className={cn("px-1", line.type === "del" && "text-error")}>
-                  {line.text || "\u00A0"}
+                <td className={cn('px-1', line.type === 'del' && 'text-error')}>
+                  {line.text || '\u00A0'}
                 </td>
               </tr>
             ))}
@@ -153,12 +155,12 @@ function SideBySideDiff({
         <table className="w-full border-collapse font-mono text-[12px] leading-5">
           <tbody>
             {newLines.map((line, i) => (
-              <tr key={i} className={line.type === "add" ? "bg-ok/8" : ""}>
+              <tr key={i} className={line.type === 'add' ? 'bg-ok/8' : ''}>
                 <td className="w-10 select-none px-2 text-right text-[11px] text-muted">
-                  {line.newLine ?? ""}
+                  {line.newLine ?? ''}
                 </td>
-                <td className={cn("px-1", line.type === "add" && "text-ok")}>
-                  {line.text || "\u00A0"}
+                <td className={cn('px-1', line.type === 'add' && 'text-ok')}>
+                  {line.text || '\u00A0'}
                 </td>
               </tr>
             ))}

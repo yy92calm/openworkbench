@@ -1,13 +1,14 @@
-import { useState, useCallback, useEffect } from "react";
-import { RefreshCw } from "lucide-react";
-import type { ArtifactBlock } from "@workbench/shared";
-import { fileInspectorFromBlock } from "@/lib/artifacts";
-import { InspectorShell } from "@/components/inspector/InspectorShell";
-import { ContextPanel } from "@/components/inspector/ContextPanel";
-import { BrowserPanel } from "@fafawork/browser-mcp/panel";
-import { TerminalPanel } from "@/components/inspector/TerminalPanel";
-import { FileBrowserPanel } from "@/components/inspector/FileBrowserPanel";
-import { useResizable } from "@/lib/useResizable";
+import { BrowserPanel } from '@fafawork/browser-mcp/panel';
+import type { ArtifactBlock } from '@workbench/shared';
+import { RefreshCw } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+
+import { ContextPanel } from '@/components/inspector/ContextPanel';
+import { FileBrowserPanel } from '@/components/inspector/FileBrowserPanel';
+import { InspectorShell } from '@/components/inspector/InspectorShell';
+import { TerminalPanel } from '@/components/inspector/TerminalPanel';
+import { fileInspectorFromBlock } from '@/lib/artifacts';
+import { useResizable } from '@/lib/useResizable';
 
 /**
  * Right-side dock: context, browser, terminal, files, or artifact preview.
@@ -27,7 +28,7 @@ export function WorkbenchDock({
 }: {
   artifact: ArtifactBlock | null;
   browserUrl: string;
-  tab: "context" | "browser" | "terminal" | "files";
+  tab: 'context' | 'browser' | 'terminal' | 'files';
   dockVisible: boolean;
   onCloseArtifact: () => void;
   onBrowserUrlChange: (url: string) => void;
@@ -45,8 +46,8 @@ export function WorkbenchDock({
   const [browserEverOpened, setBrowserEverOpened] = useState(false);
   const [terminalEverOpened, setTerminalEverOpened] = useState(false);
   useEffect(() => {
-    if (tab === "browser") setBrowserEverOpened(true);
-    if (tab === "terminal") setTerminalEverOpened(true);
+    if (tab === 'browser') setBrowserEverOpened(true);
+    if (tab === 'terminal') setTerminalEverOpened(true);
   }, [tab]);
   const showArtifact = !!artifact;
 
@@ -54,12 +55,16 @@ export function WorkbenchDock({
     <>
       <div
         {...handleProps}
-        className={dockVisible ? "w-1 shrink-0 cursor-col-resize hover:bg-accent/30 active:bg-accent/50 transition-colors" : "hidden"}
+        className={
+          dockVisible
+            ? 'w-1 shrink-0 cursor-col-resize hover:bg-accent/30 active:bg-accent/50 transition-colors'
+            : 'hidden'
+        }
       />
       <div
         ref={targetRef as React.RefObject<HTMLDivElement>}
-        className={dockVisible ? "hidden h-full shrink-0 overflow-hidden lg:block" : "hidden"}
-        style={{ width: 480, contentVisibility: isDragging ? "hidden" : undefined }}
+        className={dockVisible ? 'hidden h-full shrink-0 overflow-hidden lg:block' : 'hidden'}
+        style={{ width: 480, contentVisibility: isDragging ? 'hidden' : undefined }}
       >
         {showArtifact && (
           <div className="relative h-full">
@@ -84,9 +89,9 @@ export function WorkbenchDock({
                 open does), then kept alive across tab switches. */}
             {browserEverOpened && (
               <div
-                className={tab === "browser" ? "h-full" : "hidden h-full"}
-                aria-hidden={tab !== "browser" ? "true" : undefined}
-                tabIndex={tab !== "browser" ? -1 : undefined}
+                className={tab === 'browser' ? 'h-full' : 'hidden h-full'}
+                aria-hidden={tab !== 'browser' ? 'true' : undefined}
+                tabIndex={tab !== 'browser' ? -1 : undefined}
               >
                 <BrowserPanel
                   url={browserUrl}
@@ -96,17 +101,17 @@ export function WorkbenchDock({
               </div>
             )}
             {/* Other panels: rendered only when active (terminal keeps alive) */}
-            {tab === "context" && <ContextPanel onClose={() => {}} />}
+            {tab === 'context' && <ContextPanel onClose={() => {}} />}
             {terminalEverOpened && (
               <div
-                className={tab === "terminal" ? "h-full" : "hidden h-full"}
-                aria-hidden={tab !== "terminal" ? "true" : undefined}
-                tabIndex={tab !== "terminal" ? -1 : undefined}
+                className={tab === 'terminal' ? 'h-full' : 'hidden h-full'}
+                aria-hidden={tab !== 'terminal' ? 'true' : undefined}
+                tabIndex={tab !== 'terminal' ? -1 : undefined}
               >
                 <TerminalPanel onClose={onCloseTerminal} />
               </div>
             )}
-            {tab === "files" && <FileBrowserPanel onClose={onCloseFileBrowser} />}
+            {tab === 'files' && <FileBrowserPanel onClose={onCloseFileBrowser} />}
           </>
         )}
       </div>

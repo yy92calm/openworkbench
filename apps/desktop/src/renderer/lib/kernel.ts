@@ -1,4 +1,4 @@
-import type { FileRoot } from "@workbench/shared";
+import type { FileRoot } from '@workbench/shared';
 
 export interface ExecResult {
   ok: boolean;
@@ -7,21 +7,21 @@ export interface ExecResult {
   error: string | null;
 }
 
-export type KernelLanguage = "python" | "r";
+export type KernelLanguage = 'python' | 'r';
 
 export function isCodeLanguage(lang: string): lang is KernelLanguage {
-  return lang === "python" || lang === "r";
+  return lang === 'python' || lang === 'r';
 }
 
 function electronAPI() {
-  if (typeof window === "undefined" || !window.electronAPI)
-    throw new Error("not running in the desktop app");
+  if (typeof window === 'undefined' || !window.electronAPI)
+    throw new Error('not running in the desktop app');
   return window.electronAPI;
 }
 
 export async function kernelExecute(
   code: string,
-  language: KernelLanguage = "python",
+  language: KernelLanguage = 'python',
   notebook?: string,
   _root?: FileRoot,
 ): Promise<ExecResult | null> {
@@ -45,7 +45,9 @@ export async function kernelReset(
 ): Promise<void> {
   try {
     await electronAPI().kernelReset(language, notebook);
-  } catch { /* kernel reset must never fail */ }
+  } catch {
+    /* kernel reset must never fail */
+  }
 }
 
 export function formatExecResult(r: ExecResult): string {
@@ -53,5 +55,5 @@ export function formatExecResult(r: ExecResult): string {
   const parts: string[] = [];
   if (r.stdout) parts.push(r.stdout.trimEnd());
   if (r.result !== null) parts.push(r.result);
-  return parts.join("\n") || "(no output)";
+  return parts.join('\n') || '(no output)';
 }

@@ -1,4 +1,4 @@
-import type { TurnDividerBlock } from "@workbench/shared";
+import type { TurnDividerBlock } from '@workbench/shared';
 
 export function TurnDivider({ block }: { block: TurnDividerBlock }) {
   return (

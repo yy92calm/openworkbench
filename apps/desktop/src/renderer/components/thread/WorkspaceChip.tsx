@@ -1,12 +1,18 @@
-import { useState } from "react";
-import { FolderOpen } from "lucide-react";
-import { isTauri, pickFolder } from "@/lib/tauri";
-import { datedWorkspaceName, useRuntimeStore } from "@/lib/runtime";
+import { FolderOpen } from 'lucide-react';
+import { useState } from 'react';
+
+import { datedWorkspaceName, useRuntimeStore } from '@/lib/runtime';
+import { isTauri, pickFolder } from '@/lib/tauri';
 
 /** Last path segment of the workspace folder, or "Workspace" when unknown. */
 export function baseName(path: string | null): string {
-  if (!path) return "Workspace";
-  return path.replace(/[/\\]+$/, "").split(/[/\\]/).pop() || "Workspace";
+  if (!path) return 'Workspace';
+  return (
+    path
+      .replace(/[/\\]+$/, '')
+      .split(/[/\\]/)
+      .pop() || 'Workspace'
+  );
 }
 
 /**
@@ -44,7 +50,7 @@ export function WorkspaceChip() {
       disabled={busy || sending}
       title={
         workspacePinned
-          ? `${workspace ?? ""} — click to choose a different folder`
+          ? `${workspace ?? ''} — click to choose a different folder`
           : `Starts in a new dated folder (${datedWorkspaceName()}) — click to choose a folder instead`
       }
       aria-label="Choose session folder"

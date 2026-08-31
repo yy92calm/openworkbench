@@ -1,6 +1,7 @@
-import { useMemo } from "react";
-import { DRAFT_KEY, useRuntimeStore } from "@/lib/runtime";
-import { cn } from "@/lib/cn";
+import { useMemo } from 'react';
+
+import { cn } from '@/lib/cn';
+import { DRAFT_KEY, useRuntimeStore } from '@/lib/runtime';
 
 /** Conservative fallback when the provider reports no window for the model. */
 const DEFAULT_CONTEXT_WINDOW = 128_000;
@@ -11,15 +12,13 @@ const DEFAULT_CONTEXT_WINDOW = 128_000;
  */
 function resolveContextWindow(
   defaultModel: string | null,
-  providers: import("@workbench/sdk").ProviderInfo[],
+  providers: import('@workbench/sdk').ProviderInfo[],
 ): number {
   if (defaultModel) {
-    const slash = defaultModel.indexOf("/");
-    const providerId = slash > 0 ? defaultModel.slice(0, slash) : "";
+    const slash = defaultModel.indexOf('/');
+    const providerId = slash > 0 ? defaultModel.slice(0, slash) : '';
     const modelId = slash > 0 ? defaultModel.slice(slash + 1) : defaultModel;
-    const found = providers
-      .find((p) => p.id === providerId)
-      ?.models.find((m) => m.id === modelId);
+    const found = providers.find((p) => p.id === providerId)?.models.find((m) => m.id === modelId);
     if (found?.contextLimit) return found.contextLimit;
   }
   return DEFAULT_CONTEXT_WINDOW;
@@ -33,7 +32,7 @@ function fmt(n: number): string {
 }
 
 function formatCost(cost: number): string {
-  if (cost < 0.0001) return "$" + cost.toExponential(2);
+  if (cost < 0.0001) return '$' + cost.toExponential(2);
   if (cost < 1) return `$${cost.toFixed(4)}`;
   return `$${cost.toFixed(2)}`;
 }
@@ -47,13 +46,16 @@ function Ring({ pct }: { pct: number }) {
   const r = 36;
   const circ = 2 * Math.PI * r;
   const offset = circ * (1 - safePct);
-  const tone = safePct >= DANGER_AT ? "var(--error)" : safePct >= WARNING_AT ? "var(--warn)" : "var(--ok)";
+  const tone =
+    safePct >= DANGER_AT ? 'var(--error)' : safePct >= WARNING_AT ? 'var(--warn)' : 'var(--ok)';
 
   return (
     <svg width="96" height="96" viewBox="0 0 96 96" className="shrink-0">
       <circle cx="48" cy="48" r={r} fill="none" stroke="var(--border)" strokeWidth="6" />
       <circle
-        cx="48" cy="48" r={r}
+        cx="48"
+        cy="48"
+        r={r}
         fill="none"
         stroke={tone}
         strokeWidth="6"
@@ -61,9 +63,17 @@ function Ring({ pct }: { pct: number }) {
         strokeDasharray={circ}
         strokeDashoffset={offset}
         transform="rotate(-90 48 48)"
-        style={{ transition: "stroke-dashoffset 0.4s ease, stroke 0.3s ease" }}
+        style={{ transition: 'stroke-dashoffset 0.4s ease, stroke 0.3s ease' }}
       />
-      <text x="48" y="48" textAnchor="middle" dominantBaseline="central" fontSize="13" fontWeight="600" fill="var(--text)">
+      <text
+        x="48"
+        y="48"
+        textAnchor="middle"
+        dominantBaseline="central"
+        fontSize="13"
+        fontWeight="600"
+        fill="var(--text)"
+      >
         {(safePct * 100).toFixed(0)}%
       </text>
     </svg>
@@ -76,12 +86,14 @@ function Ring({ pct }: { pct: number }) {
  */
 export function TokenUsage() {
   const currentId = useRuntimeStore((s) => s.currentId);
-  const thread = useRuntimeStore((s) => (s.currentId ? s.threads[s.currentId] : s.threads[DRAFT_KEY]));
+  const thread = useRuntimeStore((s) =>
+    s.currentId ? s.threads[s.currentId] : s.threads[DRAFT_KEY],
+  );
   const sessions = useRuntimeStore((s) => s.sessions);
   const defaultModel = useRuntimeStore((s) => s.defaultModel);
   const providers = useRuntimeStore((s) => s.providers);
   const session = sessions.find((s) => s.id === currentId);
-  const modelName = defaultModel ? defaultModel.split("/").pop()! : null;
+  const modelName = defaultModel ? defaultModel.split('/').pop()! : null;
 
   const contextWindow = useMemo(
     () => resolveContextWindow(defaultModel, providers),
@@ -102,10 +114,11 @@ export function TokenUsage() {
   const blockChars = useMemo(() => {
     let chars = 0;
     for (const b of thread?.blocks ?? []) {
-      if (b.kind === "user") chars += b.text.length;
-      else if (b.kind === "agent") chars += b.markdown.length;
-      else if (b.kind === "reasoning") chars += b.text.length;
-      else if (b.kind === "tool-call") chars += (b.inputSummary?.length ?? 0) + (b.outputSummary?.length ?? 0);
+      if (b.kind === 'user') chars += b.text.length;
+      else if (b.kind === 'agent') chars += b.markdown.length;
+      else if (b.kind === 'reasoning') chars += b.text.length;
+      else if (b.kind === 'tool-call')
+        chars += (b.inputSummary?.length ?? 0) + (b.outputSummary?.length ?? 0);
     }
     return chars;
   }, [thread?.blocks]);
@@ -113,15 +126,17 @@ export function TokenUsage() {
   const displayTotal = hasRealData ? totalTokens : estimatedTokens;
   const pct = Math.min(displayTotal / contextWindow, 1);
   const safePct = Number.isFinite(pct) ? pct : 0;
-  const tone = safePct >= DANGER_AT ? "text-error" : safePct >= WARNING_AT ? "text-warn" : "text-ok";
+  const tone =
+    safePct >= DANGER_AT ? 'text-error' : safePct >= WARNING_AT ? 'text-warn' : 'text-ok';
 
   // Message history from thread blocks
   const messages = useMemo(() => {
     const msgs: { role: string; summary: string }[] = [];
     for (const b of thread?.blocks ?? []) {
-      if (b.kind === "user") msgs.push({ role: "user", summary: b.text.slice(0, 80) });
-      else if (b.kind === "agent") msgs.push({ role: "assistant", summary: b.markdown.slice(0, 80) });
-      else if (b.kind === "tool-call") msgs.push({ role: "tool", summary: b.title ?? b.tool });
+      if (b.kind === 'user') msgs.push({ role: 'user', summary: b.text.slice(0, 80) });
+      else if (b.kind === 'agent')
+        msgs.push({ role: 'assistant', summary: b.markdown.slice(0, 80) });
+      else if (b.kind === 'tool-call') msgs.push({ role: 'tool', summary: b.title ?? b.tool });
     }
     return msgs;
   }, [thread?.blocks]);
@@ -133,7 +148,9 @@ export function TokenUsage() {
         {session?.title && (
           <div className="flex items-center justify-between text-[11px]">
             <span className="text-muted">会话</span>
-            <span className="truncate text-text ml-2" title={session.title}>{session.title}</span>
+            <span className="truncate text-text ml-2" title={session.title}>
+              {session.title}
+            </span>
           </div>
         )}
         {modelName && (
@@ -151,8 +168,8 @@ export function TokenUsage() {
       {/* Ring */}
       <div className="flex flex-col items-center gap-1">
         <Ring pct={safePct} />
-        <span className={cn("text-[11px] font-medium", tone)}>
-          {safePct >= DANGER_AT ? "接近上限" : safePct >= WARNING_AT ? "即将占满" : "充足"}
+        <span className={cn('text-[11px] font-medium', tone)}>
+          {safePct >= DANGER_AT ? '接近上限' : safePct >= WARNING_AT ? '即将占满' : '充足'}
         </span>
       </div>
 
@@ -176,7 +193,9 @@ export function TokenUsage() {
           {(cacheRead > 0 || cacheWrite > 0) && (
             <div className="flex items-center justify-between text-[11px]">
               <span className="text-text">缓存 读/写</span>
-              <span className="font-mono text-muted">{fmt(cacheRead)} / {fmt(cacheWrite)}</span>
+              <span className="font-mono text-muted">
+                {fmt(cacheRead)} / {fmt(cacheWrite)}
+              </span>
             </div>
           )}
           <div className="mt-1 flex items-center justify-between border-t border-border pt-1 text-[11px]">
@@ -207,18 +226,23 @@ export function TokenUsage() {
           <div className="mb-1 text-[11px] font-medium text-muted">请求报文</div>
           <div className="max-h-48 space-y-1 overflow-y-auto">
             {messages.map((m, i) => (
-              <div key={i} className="flex items-start gap-1.5 rounded px-1.5 py-1 text-[11px] odd:bg-surface-2">
+              <div
+                key={i}
+                className="flex items-start gap-1.5 rounded px-1.5 py-1 text-[11px] odd:bg-surface-2"
+              >
                 <span
                   className={cn(
-                    "shrink-0 rounded px-1 py-px text-[10px] font-medium",
-                    m.role === "user" && "bg-accent/15 text-accent",
-                    m.role === "assistant" && "bg-ok/15 text-ok",
-                    m.role === "tool" && "bg-link/15 text-link",
+                    'shrink-0 rounded px-1 py-px text-[10px] font-medium',
+                    m.role === 'user' && 'bg-accent/15 text-accent',
+                    m.role === 'assistant' && 'bg-ok/15 text-ok',
+                    m.role === 'tool' && 'bg-link/15 text-link',
                   )}
                 >
-                  {m.role === "user" ? "用户" : m.role === "assistant" ? "AI" : "工具"}
+                  {m.role === 'user' ? '用户' : m.role === 'assistant' ? 'AI' : '工具'}
                 </span>
-                <span className="truncate text-muted" title={m.summary}>{m.summary}</span>
+                <span className="truncate text-muted" title={m.summary}>
+                  {m.summary}
+                </span>
               </div>
             ))}
           </div>

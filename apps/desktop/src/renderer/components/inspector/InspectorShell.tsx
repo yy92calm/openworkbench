@@ -1,19 +1,22 @@
-import type { Inspector, FilePreviewInspector as FilePreviewInspectorT } from "@workbench/shared";
-import { ArtifactInspector } from "./ArtifactInspector";
-import { NotebookInspector } from "./NotebookInspector";
-import { PdfInspector } from "./PdfInspector";
-import { FilePreviewInspector } from "./FilePreviewInspector";
+import type { FilePreviewInspector as FilePreviewInspectorT, Inspector } from '@workbench/shared';
+
+import { ArtifactInspector } from './ArtifactInspector';
+import { FilePreviewInspector } from './FilePreviewInspector';
+import { NotebookInspector } from './NotebookInspector';
+import { PdfInspector } from './PdfInspector';
 
 /** Derive a FilePreviewInspector-compatible object from a NotebookFileInspector. */
-function notebookFileToPreview(inspector: Extract<Inspector, { variant: "notebook-file" }>): FilePreviewInspectorT {
+function notebookFileToPreview(
+  inspector: Extract<Inspector, { variant: 'notebook-file' }>,
+): FilePreviewInspectorT {
   const filename = inspector.path.split(/[\\/]/).pop() ?? inspector.path;
   return {
-    variant: "file",
+    variant: 'file',
     path: inspector.path,
     root: inspector.root,
     filename,
-    artifact: "code",
-    language: "json",
+    artifact: 'code',
+    language: 'json',
   };
 }
 
@@ -30,13 +33,13 @@ export function InspectorShell({
 }) {
   return (
     <div className="h-full border-l border-border bg-surface" data-variant={inspector.variant}>
-      {inspector.variant === "artifact" && <ArtifactInspector data={inspector} onClose={onClose} />}
-      {inspector.variant === "notebook" && (
+      {inspector.variant === 'artifact' && <ArtifactInspector data={inspector} onClose={onClose} />}
+      {inspector.variant === 'notebook' && (
         <NotebookInspector data={inspector} onClose={onClose} onEvaluate={onEvaluate} />
       )}
-      {inspector.variant === "pdf" && <PdfInspector data={inspector} onClose={onClose} />}
-      {inspector.variant === "file" && <FilePreviewInspector data={inspector} onClose={onClose} />}
-      {inspector.variant === "notebook-file" && (
+      {inspector.variant === 'pdf' && <PdfInspector data={inspector} onClose={onClose} />}
+      {inspector.variant === 'file' && <FilePreviewInspector data={inspector} onClose={onClose} />}
+      {inspector.variant === 'notebook-file' && (
         <FilePreviewInspector data={notebookFileToPreview(inspector)} onClose={onClose} />
       )}
     </div>

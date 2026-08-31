@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useRef, useState } from 'react';
 
 /** Drag-to-resize hook. Manipulates the target element's width directly via
  *  DOM during drag (no React re-renders). Commits the final width to state
@@ -30,20 +30,20 @@ export function useResizable(initialWidth: number, min = 180, max = Infinity, re
         }
       };
       const onMouseUp = () => {
-        document.removeEventListener("mousemove", onMouseMove);
-        document.removeEventListener("mouseup", onMouseUp);
-        document.body.style.cursor = "";
-        document.body.style.userSelect = "";
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
         // Commit the final width so React knows about it.
         if (targetRef.current) {
           committedWidth.current = targetRef.current.offsetWidth;
         }
         setIsDragging(false);
       };
-      document.addEventListener("mousemove", onMouseMove);
-      document.addEventListener("mouseup", onMouseUp);
-      document.body.style.cursor = "col-resize";
-      document.body.style.userSelect = "none";
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
     },
     [min, max, reverse],
   );

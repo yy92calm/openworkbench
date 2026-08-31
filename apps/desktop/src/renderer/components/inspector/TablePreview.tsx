@@ -23,7 +23,10 @@ export function TablePreview({ table }: { table: TableData }) {
             {table.rows.map((row, i) => (
               <tr key={i} className="border-b border-border/60 last:border-0">
                 {row.map((cell, j) => (
-                  <td key={j} className="whitespace-nowrap px-3 py-1.5 font-mono text-[12.5px] text-text">
+                  <td
+                    key={j}
+                    className="whitespace-nowrap px-3 py-1.5 font-mono text-[12.5px] text-text"
+                  >
                     {cell}
                   </td>
                 ))}
@@ -33,7 +36,9 @@ export function TablePreview({ table }: { table: TableData }) {
         </table>
       </div>
       {table.truncated && (
-        <div className="py-2 text-center text-xs text-muted">Showing the first {table.rows.length} rows</div>
+        <div className="py-2 text-center text-xs text-muted">
+          Showing the first {table.rows.length} rows
+        </div>
       )}
     </div>
   );

@@ -1,75 +1,77 @@
-import { describe, expect, it, vi } from "vitest";
-import { act, fireEvent, render, screen } from "@testing-library/react";
-import { useUiStore } from "@/lib/store";
-import { Composer } from "./Composer";
+import { act, fireEvent, render, screen } from '@testing-library/react';
+import { describe, expect, it, vi } from 'vitest';
 
-describe("Composer", () => {
-  it("appends a prepared draft below text the user was already typing", () => {
+import { useUiStore } from '@/lib/store';
+
+import { Composer } from './Composer';
+
+describe('Composer', () => {
+  it('appends a prepared draft below text the user was already typing', () => {
     useUiStore.setState({ composerDraft: null });
     render(<Composer onSend={vi.fn()} />);
-    const input = screen.getByLabelText<HTMLTextAreaElement>("有什么想问的？");
-    fireEvent.change(input, { target: { value: "half-written thought" } });
+    const input = screen.getByLabelText<HTMLTextAreaElement>('有什么想问的？');
+    fireEvent.change(input, { target: { value: 'half-written thought' } });
 
-    act(() => useUiStore.getState().setComposerDraft("Reproduce `fig/plot.py`…"));
-    expect(input.value).toBe("half-written thought\n\nReproduce `fig/plot.py`…");
+    act(() => useUiStore.getState().setComposerDraft('Reproduce `fig/plot.py`…'));
+    expect(input.value).toBe('half-written thought\n\nReproduce `fig/plot.py`…');
     expect(useUiStore.getState().composerDraft).toBeNull(); // consumed once
 
     // An empty composer takes the draft as-is.
-    fireEvent.change(input, { target: { value: "" } });
-    act(() => useUiStore.getState().setComposerDraft("just the draft"));
-    expect(input.value).toBe("just the draft");
+    fireEvent.change(input, { target: { value: '' } });
+    act(() => useUiStore.getState().setComposerDraft('just the draft'));
+    expect(input.value).toBe('just the draft');
   });
 
-  it("sends on Enter but never during IME composition", () => {
+  it('sends on Enter but never during IME composition', () => {
     const onSend = vi.fn();
     render(<Composer onSend={onSend} />);
-    const input = screen.getByLabelText("有什么想问的？");
-    fireEvent.change(input, { target: { value: "ni hao" } });
+    const input = screen.getByLabelText('有什么想问的？');
+    fireEvent.change(input, { target: { value: 'ni hao' } });
 
     // Enter while composing (picking a pinyin candidate) must not send.
-    fireEvent.keyDown(input, { key: "Enter", isComposing: true });
+    fireEvent.keyDown(input, { key: 'Enter', isComposing: true });
     // WebKit reports the committing keydown as legacy keyCode 229.
-    fireEvent.keyDown(input, { key: "Enter", keyCode: 229 });
+    fireEvent.keyDown(input, { key: 'Enter', keyCode: 229 });
     // Shift+Enter inserts a newline, never sends.
-    fireEvent.keyDown(input, { key: "Enter", shiftKey: true });
+    fireEvent.keyDown(input, { key: 'Enter', shiftKey: true });
     expect(onSend).not.toHaveBeenCalled();
 
-    fireEvent.keyDown(input, { key: "Enter" });
+    fireEvent.keyDown(input, { key: 'Enter' });
     expect(onSend).toHaveBeenCalledTimes(1);
-    expect(onSend).toHaveBeenCalledWith("ni hao");
+    expect(onSend).toHaveBeenCalledWith('ni hao');
   });
 
-  it("does not send when empty or disabled", () => {
+  it('does not send when empty or disabled', () => {
     const onSend = vi.fn();
     const { rerender } = render(<Composer onSend={onSend} />);
-    const input = screen.getByLabelText("有什么想问的？");
-    fireEvent.keyDown(input, { key: "Enter" });
+    const input = screen.getByLabelText('有什么想问的？');
+    fireEvent.keyDown(input, { key: 'Enter' });
     expect(onSend).not.toHaveBeenCalled();
 
     rerender(<Composer onSend={onSend} disabled />);
-    fireEvent.change(input, { target: { value: "hello" } });
-    fireEvent.keyDown(input, { key: "Enter" });
+    fireEvent.change(input, { target: { value: 'hello' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
     expect(onSend).not.toHaveBeenCalled();
   });
 
-  it("turns the send button into Stop while working, back to Send when done", () => {
+  it('turns the send button into Stop while working, back to Send when done', () => {
     const onStop = vi.fn();
     const { rerender } = render(<Composer onSend={vi.fn()} disabled working onStop={onStop} />);
     // The send arrow is gone; in its place a live Stop button (the composer
     // itself stays disabled while the agent works).
-    expect(screen.queryByLabelText("发送")).toBeNull();
-    fireEvent.click(screen.getByLabelText("停止"));
+    expect(screen.queryByLabelText('发送')).toBeNull();
+    fireEvent.click(screen.getByLabelText('停止'));
     expect(onStop).toHaveBeenCalledTimes(1);
 
     rerender(<Composer onSend={vi.fn()} onStop={onStop} />);
-    expect(screen.queryByLabelText("停止")).toBeNull();
-    expect(screen.getByLabelText("发送")).toBeInTheDocument();
+    expect(screen.queryByLabelText('停止')).toBeNull();
+    expect(screen.getByLabelText('发送')).toBeInTheDocument();
   });
 });
 
 const COMMANDS = [
-  { name: "init", description: "guided AGENTS.md setup", source: "command" },
-  { name: "analyze-data", description: "Analyze a dataset end to end.", source: "skill" },
+  { name: 'init', description: 'guided AGENTS.md setup', source: 'command' },
+  { name: 'analyze-data', description: 'Analyze a dataset end to end.', source: 'skill' },
 ];
 
 describe("Composer '!' shell mode", () => {
@@ -77,171 +79,171 @@ describe("Composer '!' shell mode", () => {
     const onSend = vi.fn();
     const onRunShell = vi.fn();
     render(<Composer onSend={onSend} onRunShell={onRunShell} />);
-    const input = screen.getByLabelText<HTMLTextAreaElement>("有什么想问的？");
-    fireEvent.change(input, { target: { value: "!pwd && ls" } });
-    expect(screen.getByText("shell")).toBeInTheDocument(); // mode is visible
-    fireEvent.keyDown(input, { key: "Enter" });
-    expect(onRunShell).toHaveBeenCalledWith("pwd && ls");
+    const input = screen.getByLabelText<HTMLTextAreaElement>('有什么想问的？');
+    fireEvent.change(input, { target: { value: '!pwd && ls' } });
+    expect(screen.getByText('shell')).toBeInTheDocument(); // mode is visible
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(onRunShell).toHaveBeenCalledWith('pwd && ls');
     expect(onSend).not.toHaveBeenCalled();
-    expect(input.value).toBe(""); // cleared for the next command
+    expect(input.value).toBe(''); // cleared for the next command
   });
 
   it("a bare '!' runs nothing", () => {
     const onRunShell = vi.fn();
     render(<Composer onSend={vi.fn()} onRunShell={onRunShell} />);
-    const input = screen.getByLabelText("有什么想问的？");
-    fireEvent.change(input, { target: { value: "!  " } });
-    fireEvent.keyDown(input, { key: "Enter" });
+    const input = screen.getByLabelText('有什么想问的？');
+    fireEvent.change(input, { target: { value: '!  ' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
     expect(onRunShell).not.toHaveBeenCalled();
   });
 
-  it("stays a plain prompt when no shell handler is provided (mock sessions)", () => {
+  it('stays a plain prompt when no shell handler is provided (mock sessions)', () => {
     const onSend = vi.fn();
     render(<Composer onSend={onSend} />);
-    const input = screen.getByLabelText("有什么想问的？");
-    fireEvent.change(input, { target: { value: "!pwd" } });
-    expect(screen.queryByText("shell")).toBeNull();
-    fireEvent.keyDown(input, { key: "Enter" });
-    expect(onSend).toHaveBeenCalledWith("!pwd");
+    const input = screen.getByLabelText('有什么想问的？');
+    fireEvent.change(input, { target: { value: '!pwd' } });
+    expect(screen.queryByText('shell')).toBeNull();
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(onSend).toHaveBeenCalledWith('!pwd');
   });
 });
 
 describe("Composer '/' command palette", () => {
   it("opens on '/', filters while typing, and Enter commits the pick into a chip", () => {
     render(<Composer onSend={vi.fn()} onRunCommand={vi.fn()} commands={COMMANDS} />);
-    const input = screen.getByLabelText<HTMLTextAreaElement>("有什么想问的？");
-    fireEvent.change(input, { target: { value: "/ana" } });
-    expect(screen.getByRole("listbox")).toBeInTheDocument();
-    expect(screen.getAllByRole("option")).toHaveLength(1);
-    fireEvent.keyDown(input, { key: "Enter" }); // autocomplete, not send
+    const input = screen.getByLabelText<HTMLTextAreaElement>('有什么想问的？');
+    fireEvent.change(input, { target: { value: '/ana' } });
+    expect(screen.getByRole('listbox')).toBeInTheDocument();
+    expect(screen.getAllByRole('option')).toHaveLength(1);
+    fireEvent.keyDown(input, { key: 'Enter' }); // autocomplete, not send
     // The command becomes a distinct chip; the input holds only the arguments.
-    expect(screen.getByText("/analyze-data")).toBeInTheDocument();
-    expect(input.value).toBe("");
-    expect(screen.queryByRole("listbox")).toBeNull(); // arguments next
+    expect(screen.getByText('/analyze-data')).toBeInTheDocument();
+    expect(input.value).toBe('');
+    expect(screen.queryByRole('listbox')).toBeNull(); // arguments next
   });
 
-  it("Enter sends a completed command with its arguments", () => {
+  it('Enter sends a completed command with its arguments', () => {
     const onSend = vi.fn();
     const onRunCommand = vi.fn();
     render(<Composer onSend={onSend} onRunCommand={onRunCommand} commands={COMMANDS} />);
-    const input = screen.getByLabelText("有什么想问的？");
-    fireEvent.change(input, { target: { value: "/init focus on tests" } });
-    fireEvent.keyDown(input, { key: "Enter" });
-    expect(onRunCommand).toHaveBeenCalledWith("init", "focus on tests");
+    const input = screen.getByLabelText('有什么想问的？');
+    fireEvent.change(input, { target: { value: '/init focus on tests' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(onRunCommand).toHaveBeenCalledWith('init', 'focus on tests');
     expect(onSend).not.toHaveBeenCalled();
   });
 
-  it("arrow keys move the selection; Escape closes the palette", () => {
+  it('arrow keys move the selection; Escape closes the palette', () => {
     render(<Composer onSend={vi.fn()} onRunCommand={vi.fn()} commands={COMMANDS} />);
-    const input = screen.getByLabelText("有什么想问的？");
-    fireEvent.change(input, { target: { value: "/" } });
-    const options = screen.getAllByRole("option");
+    const input = screen.getByLabelText('有什么想问的？');
+    fireEvent.change(input, { target: { value: '/' } });
+    const options = screen.getAllByRole('option');
     expect(options).toHaveLength(2);
-    expect(options[0]).toHaveAttribute("aria-selected", "true");
-    fireEvent.keyDown(input, { key: "ArrowDown" });
-    expect(screen.getAllByRole("option")[1]).toHaveAttribute("aria-selected", "true");
-    fireEvent.keyDown(input, { key: "Escape" });
-    expect(screen.queryByRole("listbox")).toBeNull();
+    expect(options[0]).toHaveAttribute('aria-selected', 'true');
+    fireEvent.keyDown(input, { key: 'ArrowDown' });
+    expect(screen.getAllByRole('option')[1]).toHaveAttribute('aria-selected', 'true');
+    fireEvent.keyDown(input, { key: 'Escape' });
+    expect(screen.queryByRole('listbox')).toBeNull();
   });
 
   it("an unknown '/name' falls back to a plain prompt", () => {
     const onSend = vi.fn();
     const onRunCommand = vi.fn();
     render(<Composer onSend={onSend} onRunCommand={onRunCommand} commands={COMMANDS} />);
-    const input = screen.getByLabelText("有什么想问的？");
-    fireEvent.change(input, { target: { value: "/etc/hosts looks wrong" } });
-    fireEvent.keyDown(input, { key: "Enter" });
-    expect(onSend).toHaveBeenCalledWith("/etc/hosts looks wrong");
+    const input = screen.getByLabelText('有什么想问的？');
+    fireEvent.change(input, { target: { value: '/etc/hosts looks wrong' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(onSend).toHaveBeenCalledWith('/etc/hosts looks wrong');
     expect(onRunCommand).not.toHaveBeenCalled();
   });
 });
 
-describe("Composer command chip", () => {
+describe('Composer command chip', () => {
   it("typing a known '/name' plus space commits it into a chip; Enter runs it with args", () => {
     const onRunCommand = vi.fn();
     render(<Composer onSend={vi.fn()} onRunCommand={onRunCommand} commands={COMMANDS} />);
-    const input = screen.getByLabelText<HTMLTextAreaElement>("有什么想问的？");
-    fireEvent.change(input, { target: { value: "/init " } });
-    expect(screen.getByText("/init")).toBeInTheDocument(); // the chip
-    expect(input.value).toBe("");
-    fireEvent.change(input, { target: { value: "focus on tests" } });
-    fireEvent.keyDown(input, { key: "Enter" });
-    expect(onRunCommand).toHaveBeenCalledWith("init", "focus on tests");
-    expect(screen.queryByText("/init")).toBeNull(); // chip cleared after send
+    const input = screen.getByLabelText<HTMLTextAreaElement>('有什么想问的？');
+    fireEvent.change(input, { target: { value: '/init ' } });
+    expect(screen.getByText('/init')).toBeInTheDocument(); // the chip
+    expect(input.value).toBe('');
+    fireEvent.change(input, { target: { value: 'focus on tests' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(onRunCommand).toHaveBeenCalledWith('init', 'focus on tests');
+    expect(screen.queryByText('/init')).toBeNull(); // chip cleared after send
   });
 
-  it("a chipped command runs with no arguments", () => {
+  it('a chipped command runs with no arguments', () => {
     const onRunCommand = vi.fn();
     render(<Composer onSend={vi.fn()} onRunCommand={onRunCommand} commands={COMMANDS} />);
-    const input = screen.getByLabelText("有什么想问的？");
-    fireEvent.change(input, { target: { value: "/init " } });
-    fireEvent.keyDown(input, { key: "Enter" });
-    expect(onRunCommand).toHaveBeenCalledWith("init", "");
+    const input = screen.getByLabelText('有什么想问的？');
+    fireEvent.change(input, { target: { value: '/init ' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(onRunCommand).toHaveBeenCalledWith('init', '');
   });
 
   it("an unknown '/name' plus space never chips", () => {
     render(<Composer onSend={vi.fn()} onRunCommand={vi.fn()} commands={COMMANDS} />);
-    const input = screen.getByLabelText<HTMLTextAreaElement>("有什么想问的？");
-    fireEvent.change(input, { target: { value: "/etc/hosts " } });
-    expect(input.value).toBe("/etc/hosts ");
+    const input = screen.getByLabelText<HTMLTextAreaElement>('有什么想问的？');
+    fireEvent.change(input, { target: { value: '/etc/hosts ' } });
+    expect(input.value).toBe('/etc/hosts ');
   });
 
   it("pasting '/name args' chips the command and keeps the args (multi-line too)", () => {
     const onRunCommand = vi.fn();
     render(<Composer onSend={vi.fn()} onRunCommand={onRunCommand} commands={COMMANDS} />);
-    const input = screen.getByLabelText<HTMLTextAreaElement>("有什么想问的？");
+    const input = screen.getByLabelText<HTMLTextAreaElement>('有什么想问的？');
     // A paste arrives as one change event with the full text already in place.
-    fireEvent.change(input, { target: { value: "/init focus on tests\nand the docs" } });
-    expect(screen.getByLabelText("移除命令")).toBeInTheDocument(); // the chip
-    expect(input.value).toBe("focus on tests\nand the docs");
-    fireEvent.keyDown(input, { key: "Enter" });
-    expect(onRunCommand).toHaveBeenCalledWith("init", "focus on tests\nand the docs");
+    fireEvent.change(input, { target: { value: '/init focus on tests\nand the docs' } });
+    expect(screen.getByLabelText('移除命令')).toBeInTheDocument(); // the chip
+    expect(input.value).toBe('focus on tests\nand the docs');
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(onRunCommand).toHaveBeenCalledWith('init', 'focus on tests\nand the docs');
   });
 
   it("pasting an unknown '/path args' stays a plain prompt", () => {
     render(<Composer onSend={vi.fn()} onRunCommand={vi.fn()} commands={COMMANDS} />);
-    const input = screen.getByLabelText<HTMLTextAreaElement>("有什么想问的？");
-    fireEvent.change(input, { target: { value: "/etc/hosts looks wrong" } });
-    expect(screen.queryByLabelText("移除命令")).toBeNull();
-    expect(input.value).toBe("/etc/hosts looks wrong");
+    const input = screen.getByLabelText<HTMLTextAreaElement>('有什么想问的？');
+    fireEvent.change(input, { target: { value: '/etc/hosts looks wrong' } });
+    expect(screen.queryByLabelText('移除命令')).toBeNull();
+    expect(input.value).toBe('/etc/hosts looks wrong');
   });
 
-  it("Backspace on an empty input un-chips back to editable text", () => {
+  it('Backspace on an empty input un-chips back to editable text', () => {
     render(<Composer onSend={vi.fn()} onRunCommand={vi.fn()} commands={COMMANDS} />);
-    const input = screen.getByLabelText<HTMLTextAreaElement>("有什么想问的？");
-    fireEvent.change(input, { target: { value: "/init " } });
-    expect(screen.getByLabelText("移除命令")).toBeInTheDocument(); // the chip
-    fireEvent.keyDown(input, { key: "Backspace" });
-    expect(screen.queryByLabelText("移除命令")).toBeNull();
-    expect(input.value).toBe("/init"); // name editable again, palette reopens
+    const input = screen.getByLabelText<HTMLTextAreaElement>('有什么想问的？');
+    fireEvent.change(input, { target: { value: '/init ' } });
+    expect(screen.getByLabelText('移除命令')).toBeInTheDocument(); // the chip
+    fireEvent.keyDown(input, { key: 'Backspace' });
+    expect(screen.queryByLabelText('移除命令')).toBeNull();
+    expect(input.value).toBe('/init'); // name editable again, palette reopens
   });
 });
 
-describe("Composer input history (↑/↓)", () => {
+describe('Composer input history (↑/↓)', () => {
   const send = (input: HTMLElement, text: string) => {
     fireEvent.change(input, { target: { value: text } });
-    fireEvent.keyDown(input, { key: "Enter" });
+    fireEvent.keyDown(input, { key: 'Enter' });
   };
 
-  it("ArrowUp recalls sent inputs newest-first; ArrowDown returns to the draft", () => {
+  it('ArrowUp recalls sent inputs newest-first; ArrowDown returns to the draft', () => {
     window.localStorage.clear();
     render(<Composer onSend={vi.fn()} />);
-    const input = screen.getByLabelText<HTMLTextAreaElement>("有什么想问的？");
-    send(input, "first message");
-    send(input, "second message");
+    const input = screen.getByLabelText<HTMLTextAreaElement>('有什么想问的？');
+    send(input, 'first message');
+    send(input, 'second message');
 
-    fireEvent.change(input, { target: { value: "a draft" } });
+    fireEvent.change(input, { target: { value: 'a draft' } });
     input.setSelectionRange(0, 0);
-    fireEvent.keyDown(input, { key: "ArrowUp" });
-    expect(input.value).toBe("second message");
-    fireEvent.keyDown(input, { key: "ArrowUp" });
-    expect(input.value).toBe("first message");
-    fireEvent.keyDown(input, { key: "ArrowUp" }); // past the oldest: stays
-    expect(input.value).toBe("first message");
-    fireEvent.keyDown(input, { key: "ArrowDown" });
-    expect(input.value).toBe("second message");
-    fireEvent.keyDown(input, { key: "ArrowDown" }); // past the newest: draft back
-    expect(input.value).toBe("a draft");
+    fireEvent.keyDown(input, { key: 'ArrowUp' });
+    expect(input.value).toBe('second message');
+    fireEvent.keyDown(input, { key: 'ArrowUp' });
+    expect(input.value).toBe('first message');
+    fireEvent.keyDown(input, { key: 'ArrowUp' }); // past the oldest: stays
+    expect(input.value).toBe('first message');
+    fireEvent.keyDown(input, { key: 'ArrowDown' });
+    expect(input.value).toBe('second message');
+    fireEvent.keyDown(input, { key: 'ArrowDown' }); // past the newest: draft back
+    expect(input.value).toBe('a draft');
   });
 
   it("recalls '!' shell and '/' command sends in their typed form", () => {
@@ -249,35 +251,40 @@ describe("Composer input history (↑/↓)", () => {
     const onRunShell = vi.fn();
     const onRunCommand = vi.fn();
     render(
-      <Composer onSend={vi.fn()} onRunShell={onRunShell} onRunCommand={onRunCommand} commands={COMMANDS} />,
+      <Composer
+        onSend={vi.fn()}
+        onRunShell={onRunShell}
+        onRunCommand={onRunCommand}
+        commands={COMMANDS}
+      />,
     );
-    const input = screen.getByLabelText<HTMLTextAreaElement>("有什么想问的？");
-    send(input, "!pwd");
-    fireEvent.change(input, { target: { value: "/init " } }); // chips
-    fireEvent.change(input, { target: { value: "focus" } });
-    fireEvent.keyDown(input, { key: "Enter" });
+    const input = screen.getByLabelText<HTMLTextAreaElement>('有什么想问的？');
+    send(input, '!pwd');
+    fireEvent.change(input, { target: { value: '/init ' } }); // chips
+    fireEvent.change(input, { target: { value: 'focus' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
 
     input.setSelectionRange(0, 0);
-    fireEvent.keyDown(input, { key: "ArrowUp" });
-    expect(input.value).toBe("/init focus");
-    fireEvent.keyDown(input, { key: "ArrowUp" });
-    expect(input.value).toBe("!pwd");
+    fireEvent.keyDown(input, { key: 'ArrowUp' });
+    expect(input.value).toBe('/init focus');
+    fireEvent.keyDown(input, { key: 'ArrowUp' });
+    expect(input.value).toBe('!pwd');
   });
 
-  it("does not navigate history while the caret is mid-text or the palette is open", () => {
+  it('does not navigate history while the caret is mid-text or the palette is open', () => {
     window.localStorage.clear();
     render(<Composer onSend={vi.fn()} onRunCommand={vi.fn()} commands={COMMANDS} />);
-    const input = screen.getByLabelText<HTMLTextAreaElement>("有什么想问的？");
-    send(input, "older entry");
+    const input = screen.getByLabelText<HTMLTextAreaElement>('有什么想问的？');
+    send(input, 'older entry');
 
-    fireEvent.change(input, { target: { value: "typing" } });
+    fireEvent.change(input, { target: { value: 'typing' } });
     input.setSelectionRange(3, 3); // caret mid-text: ArrowUp is caret movement
-    fireEvent.keyDown(input, { key: "ArrowUp" });
-    expect(input.value).toBe("typing");
+    fireEvent.keyDown(input, { key: 'ArrowUp' });
+    expect(input.value).toBe('typing');
 
-    fireEvent.change(input, { target: { value: "/" } }); // palette open: ↑ drives it
+    fireEvent.change(input, { target: { value: '/' } }); // palette open: ↑ drives it
     input.setSelectionRange(0, 0);
-    fireEvent.keyDown(input, { key: "ArrowUp" });
-    expect(input.value).toBe("/");
+    fireEvent.keyDown(input, { key: 'ArrowUp' });
+    expect(input.value).toBe('/');
   });
 });

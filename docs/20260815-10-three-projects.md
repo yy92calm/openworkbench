@@ -24,7 +24,7 @@
 
 ### 目标结构（三项目各持一份协议，代码零 import）
 
-```
+```text
 apps/desktop/ + packages/    ← 项目1 Workbench（桌端 host，协议类型在本地）
 relay/                       ← 项目2 中继（服务器；协议 = src/protocol.ts）
 client/                      ← 项目3 客户端（顶层；协议 = src/protocol.ts 自持）

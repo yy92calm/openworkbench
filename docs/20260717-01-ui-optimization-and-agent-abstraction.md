@@ -37,7 +37,7 @@
 
 **布局 A：经典（classic）** — 当前布局的改良版
 
-```
+```text
 ┌──────────────────────────────────────────────────┐
 │  App Chrome（可选 macOS 交通灯适配 + 面包屑）      │
 ├────────┬──────────────────────────┬───────────────┤
@@ -54,7 +54,7 @@
 
 **布局 B：工作台（workbench）** — 默认，带标签页和项目树
 
-```
+```text
 ┌──────────────────────────────────────────────────────┐
 │  [Tab1] [Tab2] [+]    搜索  [面板开关] [设置]         │
 ├────────┬─────────────────────────┬───────────────────┤
@@ -88,12 +88,12 @@
 
 ### 1.2 标签页系统（Tabs）
 
-#### 现状
+#### 现状（1.2）
 
 - 无标签页。一次只能打开一个会话，切换通过侧边栏列表。
 - 后台会话不保留状态。
 
-#### 设计方案
+#### 设计方案（1.2）
 
 引入 Reasonix 风格的 Tab 系统：
 
@@ -122,7 +122,7 @@ interface TabMeta {
 }
 ```
 
-#### 变更范围
+#### 变更范围（1.2）
 
 | 文件 | 改动 |
 |------|------|
@@ -132,12 +132,12 @@ interface TabMeta {
 
 ### 1.3 项目树（Project Tree）
 
-#### 现状
+#### 现状（1.3）
 
 - 侧边栏显示扁平会话列表（按时间排序）
 - 无目录层次、无分组
 
-#### 设计方案
+#### 设计方案（1.3）
 
 引入 Reasonix 风格的 ProjectTree，替代扁平会话列表：
 
@@ -164,7 +164,7 @@ interface ProjectNode {
 }
 ```
 
-#### 变更范围
+#### 变更范围（1.3）
 
 | 文件 | 改动 |
 |------|------|
@@ -175,14 +175,14 @@ interface ProjectNode {
 
 ### 1.4 对话流优化（Thread / Transcript）
 
-#### 现状
+#### 现状（1.4）
 
 - `BlockList`：顺序渲染 ThreadBlock 数组（UserMessage / AssistantText / ToolCall / Artifact / Figure / Reasoning）
 - 无分组、无暖冷分层、无动画
 - 自动滚动：简单的 scrollToBottom
 - Skeleton：基本骨架屏
 
-#### 设计方案
+#### 设计方案（1.4）
 
 引入 Reasonix Transcript 的设计模式：
 
@@ -213,7 +213,7 @@ interface ProjectNode {
 - 三个弹跳圆点（现有 `typing-dot` 动画已实现，保留）
 - 当前工具名称显示在指示器旁（现有 `currentTool` 逻辑保留）
 
-#### 变更范围
+#### 变更范围（1.4）
 
 | 文件 | 改动 |
 |------|------|
@@ -226,14 +226,14 @@ interface ProjectNode {
 
 ### 1.5 Composer 增强
 
-#### 现状
+#### 现状（1.5）
 
 - `Composer.tsx`（565 行）：textarea + 文件附件 chips + shell 模式（`!`）+ 斜杠命令（`/`）下拉
 - 附件：拖放/粘贴文件转为 workspace 文件
 - 历史：↑/↓ 导航 input history
 - 发送按钮/Stop 按钮切换
 
-#### 设计方案
+#### 设计方案（1.5）
 
 基于现有 Composer 能力进行增强，保持 Tailwind + Radix UI 风格：
 
@@ -251,7 +251,7 @@ interface ProjectNode {
 
 **底部工具栏扩展**：
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │  [模型选择] [Effort] [协作模式] [审批模式] [Token 模式]     │
 │  ┌─────────────────────────────────────────────────────────┐│
@@ -269,7 +269,7 @@ interface ProjectNode {
 - Token 模式切换（full / economy / delivery）
 - Context 窗口环形图（creation 风格）
 
-#### 变更范围
+#### 变更范围（1.5）
 
 | 文件 | 改动 |
 |------|------|
@@ -283,13 +283,13 @@ interface ProjectNode {
 
 ### 1.6 主题系统
 
-#### 现状
+#### 现状（1.6）
 
 - 两套 CSS 变量（light / dark），通过 `data-theme` 切换
 - 手写 `:root` 和 `[data-theme="dark"]`
 - Tailwind 通过 `var(--xxx)` 引用
 
-#### 设计方案
+#### 设计方案（1.6）
 
 参考 Reasonix 的 6 方向 × 明暗 主题体系，提取为 CSS 变量文件结构：
 
@@ -332,7 +332,7 @@ interface ProjectNode {
 - 四档：inter / yahei / noto / custom
 - 等宽字体：cascadia / jetbrains / sfmono / custom
 
-#### 变更范围
+#### 变更范围（1.6）
 
 | 文件 | 改动 |
 |------|------|
@@ -344,11 +344,11 @@ interface ProjectNode {
 
 ### 1.7 状态栏（Status Bar）
 
-#### 现状
+#### 现状（1.7）
 
 - `StatusBar.tsx`（336 行）：显示 agent 状态、session 计数 + 连接按钮
 
-#### 设计方案
+#### 设计方案（1.7）
 
 参考 Reasonix StatusBar，显示更多运行时指标：
 
@@ -360,7 +360,7 @@ interface ProjectNode {
 - Turn 计数
 - 可配置可见项（`statusBarItems`）
 
-#### 变更范围
+#### 变更范围（1.7）
 
 | 文件 | 改动 |
 |------|------|
@@ -370,18 +370,18 @@ interface ProjectNode {
 
 ### 1.8 启动/引导流
 
-#### 现状
+#### 现状（1.8）
 
 - 无启动闪屏
 - 无首次运行引导
 
-#### 设计方案
+#### 设计方案（1.8）
 
 - **StartupSplash**：启动时显示品牌 logo + 加载状态，`sessionStorage` 标记避免同会话重复
 - **OnboardingOverlay**：首次运行时引导用户配置 API key（如果未检测到已配置的 provider）
 - **Welcome**：空状态落地页，显示快捷键提示和常用操作入口
 
-#### 变更范围
+#### 变更范围（1.8）
 
 | 文件 | 改动 |
 |------|------|
@@ -392,13 +392,13 @@ interface ProjectNode {
 
 ### 1.9 快捷键系统
 
-#### 现状
+#### 现状（1.9）
 
 - 无全局快捷键框架
 - Esc 打断运行中 turn（在 LiveSessionPage 中实现）
 - `useGlobalShortcut` 不存在
 
-#### 设计方案
+#### 设计方案（1.9）
 
 参考 `keyboardShortcuts.ts`（Reasonix 21 个动作），提取 Workbench 所需的公共快捷键：
 
@@ -416,7 +416,7 @@ interface ProjectNode {
 
 自定义快捷键持久化：`reasonix.customShortcuts` → `workbench.customShortcuts`
 
-#### 变更范围
+#### 变更范围（1.9）
 
 | 文件 | 改动 |
 |------|------|
@@ -428,7 +428,7 @@ interface ProjectNode {
 
 ## 方向二：Agent 接入层设计
 
-### 设计目标
+### 设计目标（方向二）
 
 当前 `packages/sdk/src/OpenCodeClient.ts` 与 OpenCode 服务的 HTTP+SSE API 紧耦合。设计一个抽象的 `AgentRuntime` 接口层，使 Workbench 可以对接不同的 Agent 运行时（opencode / claude code），同时共享同一套 UI 前端。
 
@@ -436,7 +436,7 @@ interface ProjectNode {
 
 #### 当前架构
 
-```
+```text
 ┌─────────────────────────────────────────────────┐
 │ Renderer (React)                                 │
 │  zustand `runtime.ts` store                     │
@@ -460,7 +460,7 @@ interface ProjectNode {
 
 #### OpenCode 事件流
 
-```
+```text
 SSE /event →
   message.updated
   message.part.updated / message.part.delta
@@ -495,7 +495,7 @@ REST API →
 
 #### 新架构
 
-```
+```text
 ┌───────────────────────────────────────────────────┐
 │ Renderer (React)                                   │
 │  zustand `runtime.ts` store                        │
@@ -692,9 +692,10 @@ Claude Code 目前提供 CLI 界面，可以通过其 HTTP/API 或进程间通�
 
 #### 集成方案
 
-**方案 A（推荐）：CLI 包装 + SSE 模拟**
+##### 方案 A（推荐）：CLI 包装 + SSE 模拟
 
 Claude Code 提供 `claude` CLI，支持：
+
 - `claude -p "prompt"` — 单次 prompt 模式
 - `claude` — 交互式会话
 
@@ -740,7 +741,7 @@ export class ClaudeCodeAdapter implements AgentRuntime {
 }
 ```
 
-**方案 B（备选）：Claude Code 的 API/插件模式**
+##### 方案 B（备选）：Claude Code 的 API/插件模式
 
 如果 Claude Code 在未来版本中提供 HTTP API 或插件 SDK，则采用与 OpenCodeAdapter 同样的 HTTP+SSE 模式：
 
@@ -841,7 +842,7 @@ const runtime = createAgentRuntime({
 
 ### 2.6 包结构变化
 
-```
+```text
 packages/sdk/src/
 ├── index.ts                       # 导出公共类型和工厂
 ├── types.ts                       # 现有 OpenCode 类型（保留向后兼容）
@@ -872,7 +873,7 @@ packages/sdk/src/
 
 ## 方向三：打包配置与运行时引擎选择
 
-### 设计目标
+### 设计目标（方向三）
 
 打包时同时捆绑 OpenCode 和 Claude Code 两套运行时配置，用户在设置页面选择使用哪个引擎。两种引擎的启动方式完全不同：
 
@@ -881,7 +882,7 @@ packages/sdk/src/
 
 ### 3.1 当前打包链路
 
-```
+```text
 electron-builder.config.ts
   extraResources:
     binaries/opencode        -> resources/binaries/opencode
@@ -904,7 +905,7 @@ renderer/runtime.ts
 
 ### 3.2 新打包链路（双引擎）
 
-```
+```text
 electron-builder.config.ts
   extraResources:
     binaries/opencode          -> resources/binaries/opencode
@@ -916,7 +917,7 @@ electron-builder.config.ts
 
 ### 3.3 运行时启动分支
 
-```
+```text
 renderer/runtime.ts
   bootstrap():
     kind = useUiStore.agentRuntimeKind       -- "opencode" | "claude-code"
@@ -945,11 +946,11 @@ renderer/runtime.ts
 
 ClaudeCodeAdapter 依赖 `@anthropic-ai/claude-agent-sdk`（Node-only，捆绑原生二进制）。渲染器无法直接导入。两种方案：
 
-**方案 A（推荐）：主进程 HTTP 桥接**
+#### 方案 A（推荐）：主进程 HTTP 桥接
 
 主进程启动一个微型 HTTP+SSE 服务器，将 ClaudeCodeAdapter 的能力暴露为与 OpenCode 兼容的 HTTP 接口。渲染器继续用 `OpenCodeClient` 连接，完全透明。
 
-```
+```text
 main process:
   ClaudeCodeAdapter (in-process, via Agent SDK)
        ↕
@@ -963,7 +964,7 @@ renderer:
 优点：渲染器零改动，事件流、会话管理、权限交互全部复用 OpenCode 路径
 缺点：多一层 HTTP 序列化开销（本地通信，可忽略）
 
-**方案 B：IPC 通道代理**
+#### 方案 B：IPC 通道代理
 
 每个 AgentRuntime 方法映射为一个 IPC handler。渲染器通过 `ipcRenderer.invoke` 调用。
 
@@ -991,7 +992,7 @@ renderer:
 
 ### 3.6 Claude Code Profile（`app-config/.claude/`）
 
-```
+```text
 app-config/.claude/
 ├── CLAUDE.md              # 项目记忆（对应 .opencode/AGENTS.md）
 ├── settings.json          # 权限、模型配置
@@ -1002,6 +1003,7 @@ app-config/.claude/
 ```
 
 `settings.json` 示例：
+
 ```json
 {
   "permissions": {
@@ -1075,7 +1077,7 @@ app-config/.claude/
 | 5D.3 | 全局 CSS 重构 | 1d |
 | **小计** | | **4d** |
 
-**总计预计工时：24 个工作日**
+总计预计工时：24 个工作日
 
 ---
 

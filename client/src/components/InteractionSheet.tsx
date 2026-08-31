@@ -1,16 +1,10 @@
-import { useState } from "react";
-import { ShieldQuestion, HelpCircle, Check, X, Loader2 } from "lucide-react";
-import type {
-  QuestionAskedEvent,
-  PermissionAskedEvent,
-  PermissionReply,
-} from "@workbench/sdk";
+import type { PermissionAskedEvent, PermissionReply, QuestionAskedEvent } from '@workbench/sdk';
+import { Check, HelpCircle, Loader2, ShieldQuestion, X } from 'lucide-react';
+import { useState } from 'react';
 
 /** A pending interactive request (question or permission) that blocks the
  *  agent until the user answers. Rendered as a bottom sheet overlay. */
-export type Interaction =
-  | QuestionAskedEvent
-  | PermissionAskedEvent;
+export type Interaction = QuestionAskedEvent | PermissionAskedEvent;
 
 interface Props {
   interaction: Interaction;
@@ -40,26 +34,19 @@ export function InteractionSheet({
     }
   };
 
-  const isQuestion = interaction.type === "question.asked";
+  const isQuestion = interaction.type === 'question.asked';
 
   return (
     <div className="sheet-backdrop" onClick={onDismiss}>
       <div className="sheet-card" onClick={(e) => e.stopPropagation()}>
         <div className="sheet-head">
           {isQuestion ? (
-            <HelpCircle size={16} style={{ color: "var(--accent)" }} />
+            <HelpCircle size={16} style={{ color: 'var(--accent)' }} />
           ) : (
-            <ShieldQuestion size={16} style={{ color: "var(--warn)" }} />
+            <ShieldQuestion size={16} style={{ color: 'var(--warn)' }} />
           )}
-          <span className="sheet-title">
-            {isQuestion ? "需要你的回答" : "需要你的批准"}
-          </span>
-          <button
-            onClick={onDismiss}
-            className="sheet-close"
-            disabled={busy}
-            aria-label="收起"
-          >
+          <span className="sheet-title">{isQuestion ? '需要你的回答' : '需要你的批准'}</span>
+          <button onClick={onDismiss} className="sheet-close" disabled={busy} aria-label="收起">
             <X size={14} />
           </button>
         </div>
@@ -96,9 +83,7 @@ function QuestionBody({
 }) {
   // One selection set per question (multiple not used in practice — but the
   // API takes string[][], so we keep the shape).
-  const [selected, setSelected] = useState<string[][]>(
-    q.questions.map(() => []),
-  );
+  const [selected, setSelected] = useState<string[][]>(q.questions.map(() => []));
 
   const toggle = (qi: number, label: string, multiple: boolean) => {
     setSelected((prev) => {
@@ -130,17 +115,17 @@ function QuestionBody({
                 <button
                   key={opt.label}
                   onClick={() => toggle(qi, opt.label, !!item.multiple)}
-                  className={`q-option ${on ? "on" : ""}`}
+                  className={`q-option ${on ? 'on' : ''}`}
                   disabled={busy}
                 >
-                  <span className={`q-check ${item.multiple ? "square" : "circle"} ${on ? "on" : ""}`}>
+                  <span
+                    className={`q-check ${item.multiple ? 'square' : 'circle'} ${on ? 'on' : ''}`}
+                  >
                     {on && <Check size={11} strokeWidth={3} />}
                   </span>
                   <span className="q-option-text">
                     <span className="q-option-label">{opt.label}</span>
-                    {opt.description && (
-                      <span className="q-option-desc">{opt.description}</span>
-                    )}
+                    {opt.description && <span className="q-option-desc">{opt.description}</span>}
                   </span>
                 </button>
               );
@@ -182,30 +167,20 @@ function PermissionBody({
         <span className="perm-badge">{actionLabel}</span>
       </div>
       {p.resources.map((r, i) => (
-        <pre key={i} className="perm-resource">{r}</pre>
+        <pre key={i} className="perm-resource">
+          {r}
+        </pre>
       ))}
 
       <div className="sheet-actions">
-        <button
-          onClick={() => onReply("reject")}
-          className="btn-danger"
-          disabled={busy}
-        >
+        <button onClick={() => onReply('reject')} className="btn-danger" disabled={busy}>
           {busy ? <Loader2 size={14} className="spin" /> : <X size={14} />}
           拒绝
         </button>
-        <button
-          onClick={() => onReply("once")}
-          className="btn-ghost"
-          disabled={busy}
-        >
+        <button onClick={() => onReply('once')} className="btn-ghost" disabled={busy}>
           允许一次
         </button>
-        <button
-          onClick={() => onReply("always")}
-          className="btn-primary"
-          disabled={busy}
-        >
+        <button onClick={() => onReply('always')} className="btn-primary" disabled={busy}>
           {busy ? <Loader2 size={14} className="spin" /> : <Check size={14} />}
           总是允许
         </button>
@@ -216,12 +191,12 @@ function PermissionBody({
 
 function actionText(action: string): string {
   const map: Record<string, string> = {
-    bash: "执行命令",
-    write: "写入文件",
-    edit: "编辑文件",
-    skill: "调用技能",
-    external_directory: "访问外部目录",
-    doom_loop: "循环操作",
+    bash: '执行命令',
+    write: '写入文件',
+    edit: '编辑文件',
+    skill: '调用技能',
+    external_directory: '访问外部目录',
+    doom_loop: '循环操作',
   };
   return map[action] ?? action;
 }

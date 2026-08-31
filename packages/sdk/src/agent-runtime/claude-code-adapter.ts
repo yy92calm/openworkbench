@@ -32,19 +32,12 @@
 // only be imported from the Electron main process, never the renderer. The
 // factory uses a dynamic import() so this module (and its `node:` deps) never
 // enters the renderer bundle.
+//
+// The SDK's own types (sdk.d.ts) are used directly; `query()` is the only
+// surface we touch, via the dynamic import in loadSdk().
 
-// Minimal type declaration for the dynamically-imported SDK so tsc doesn't
-// require the package to be installed. The real types come from
-// @anthropic-ai/claude-agent-sdk when it's installed.
-declare module "@anthropic-ai/claude-agent-sdk" {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  export function query(opts: Record<string, any>): AsyncIterable<Record<string, any>>;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const _default: { query: typeof query };
-  export default _default;
-}
-
-import type { AgentRuntime } from "./adapter";
+import type { AgentRuntime } from './adapter';
+import { type ClaudeSdkMessage, extractEvents, extractSessionId } from './claude-event-extractor';
 import type {
   AgentCommandInfo,
   AgentHistoryMessage,
@@ -57,8 +50,7 @@ import type {
   PermissionMode,
   PermissionReply,
   RuntimeStatus,
-} from "./types";
-import { extractEvents, extractSessionId, type ClaudeSdkMessage } from "./claude-event-extractor";
+} from './types';
 
 export interface ClaudeCodeAdapterOptions {
   /** Path to the claude CLI (reserved - the SDK bundles its own binary). */
@@ -74,12 +66,12 @@ export interface ClaudeCodeAdapterOptions {
 /** Maps the app's permission presets to Claude Code permission modes. */
 function claudePermissionMode(mode: PermissionMode): string {
   switch (mode) {
-    case "review":
-      return "default";
-    case "auto":
-      return "acceptEdits";
-    case "yolo":
-      return "bypassPermissions";
+    case 'review':
+      return 'default';
+    case 'auto':
+      return 'acceptEdits';
+    case 'yolo':
+      return 'bypassPermissions';
   }
 }
 
@@ -92,12 +84,15 @@ interface ActiveTurn {
 }
 
 export class ClaudeCodeAdapter implements AgentRuntime {
-  private status: RuntimeStatus = "offline";
+  private status: RuntimeStatus = 'offline';
   private readonly eventListeners = new Set<(e: AgentRuntimeEvent) => void>();
   private readonly statusListeners = new Set<(s: RuntimeStatus) => void>();
-  private readonly sessions = new Map<string, { sdkSessionId: string | null; title: string; history: AgentHistoryMessage[] }>();
+  private readonly sessions = new Map<
+    string,
+    { sdkSessionId: string | null; title: string; history: AgentHistoryMessage[] }
+  >();
   private readonly activeTurns = new Map<string, ActiveTurn>();
-  private permissionMode: PermissionMode = "auto";
+  private permissionMode: PermissionMode = 'auto';
   private readonly opts: ClaudeCodeAdapterOptions;
 
   constructor(opts: ClaudeCodeAdapterOptions = {}) {
@@ -115,9 +110,9 @@ export class ClaudeCodeAdapter implements AgentRuntime {
     // sufficient since the SDK lazy-loads its binary on first query().
     try {
       await this.loadSdk();
-      this.setStatus("ready");
+      this.setStatus('ready');
     } catch (err) {
-      this.setStatus("error");
+      this.setStatus('error');
       throw new Error(
         `Claude Agent SDK not available: ${err instanceof Error ? err.message : String(err)}. ` +
           'Install it with `npm install @anthropic-ai/claude-agent-sdk`.',
@@ -131,7 +126,7 @@ export class ClaudeCodeAdapter implements AgentRuntime {
       turn.abort.abort();
     }
     this.activeTurns.clear();
-    this.setStatus("offline");
+    this.setStatus('offline');
   }
 
   onEvent(l: (e: AgentRuntimeEvent) => void): () => void {
@@ -150,7 +145,7 @@ export class ClaudeCodeAdapter implements AgentRuntime {
     // Mint a local id; the canonical Claude session_id arrives on the first
     // turn's init event and is stored back here.
     const id = crypto.randomUUID();
-    this.sessions.set(id, { sdkSessionId: null, title: "New session", history: [] });
+    this.sessions.set(id, { sdkSessionId: null, title: 'New session', history: [] });
     return id;
   }
 
@@ -193,15 +188,15 @@ export class ClaudeCodeAdapter implements AgentRuntime {
     this.activeTurns.set(sessionId, { iterator, abort, sdkSessionId: session.sdkSessionId });
 
     // Record the user message in our in-memory history.
-    session.history.push({ role: "user", parts: [{ type: "text", text }] });
+    session.history.push({ role: 'user', parts: [{ type: 'text', text }] });
 
     // Pump the iterator on a microtask so sendPrompt resolves immediately
     // (the turn streams via onEvent, matching OpenCode's prompt_async contract).
     void this.pumpIterator(sessionId, iterator);
 
     // Update the session title from the first prompt (like OpenCode does).
-    if (session.title === "New session") {
-      session.title = text.slice(0, 60) || "Untitled";
+    if (session.title === 'New session') {
+      session.title = text.slice(0, 60) || 'Untitled';
     }
   }
 
@@ -210,13 +205,16 @@ export class ClaudeCodeAdapter implements AgentRuntime {
     if (!turn) return;
     turn.abort.abort();
     this.activeTurns.delete(sessionId);
-    this.emit({ type: "session.idle", sessionId });
+    this.emit({ type: 'session.idle', sessionId });
   }
 
   async runShell(sessionId: string, command: string, _agent?: string): Promise<void> {
     // Claude Code's Bash tool runs inside the agent loop, not as a standalone
     // shell. Route it as a prompt so the agent executes it.
-    return this.sendPrompt(sessionId, `Run this shell command and show the output:\n\`\`\`bash\n${command}\n\`\`\``);
+    return this.sendPrompt(
+      sessionId,
+      `Run this shell command and show the output:\n\`\`\`bash\n${command}\n\`\`\``,
+    );
   }
 
   async runCommand(sessionId: string, command: string, args?: string): Promise<void> {
@@ -238,11 +236,11 @@ export class ClaudeCodeAdapter implements AgentRuntime {
     // AskUserQuestion answers are fed back via the SDK's input mechanism,
     // which requires the turn to still be active. Implementation deferred to
     // when the SDK's user-input API stabilizes.
-    throw new Error("answerQuestion is not yet supported for Claude Code");
+    throw new Error('answerQuestion is not yet supported for Claude Code');
   }
 
   async rejectQuestion(_requestId: string): Promise<void> {
-    throw new Error("rejectQuestion is not yet supported for Claude Code");
+    throw new Error('rejectQuestion is not yet supported for Claude Code');
   }
 
   async listPermissions(): Promise<AgentRuntimeEvent[]> {
@@ -271,7 +269,7 @@ export class ClaudeCodeAdapter implements AgentRuntime {
   }
 
   async listAgents(): Promise<AgentInfo[]> {
-    return [{ name: "claude", description: "Claude Code default agent", mode: "default" }];
+    return [{ name: 'claude', description: 'Claude Code default agent', mode: 'default' }];
   }
 
   async listCommands(): Promise<AgentCommandInfo[]> {
@@ -291,11 +289,11 @@ export class ClaudeCodeAdapter implements AgentRuntime {
   async listProviders(): Promise<AgentProviderInfo[]> {
     return [
       {
-        id: "anthropic",
-        name: "Anthropic",
+        id: 'anthropic',
+        name: 'Anthropic',
         models: this.opts.model
           ? [{ id: this.opts.model, name: this.opts.model }]
-          : [{ id: "claude-sonnet-4-5-20250929", name: "Claude Sonnet 4.5" }],
+          : [{ id: 'claude-sonnet-4-5-20250929', name: 'Claude Sonnet 4.5' }],
       },
     ];
   }
@@ -315,21 +313,18 @@ export class ClaudeCodeAdapter implements AgentRuntime {
 
   /** Dynamically import the Agent SDK so it (and its node deps) never enters
    *  the renderer bundle. Throws if the package isn't installed. */
-  private async loadSdk(): Promise<typeof import("@anthropic-ai/claude-agent-sdk")> {
+  private async loadSdk(): Promise<typeof import('@anthropic-ai/claude-agent-sdk')> {
     try {
-      return await import("@anthropic-ai/claude-agent-sdk");
+      return await import('@anthropic-ai/claude-agent-sdk');
     } catch {
       throw new Error(
-        "@anthropic-ai/claude-agent-sdk is not installed. " +
-          "Install it with `npm install @anthropic-ai/claude-agent-sdk` to use Claude Code.",
+        '@anthropic-ai/claude-agent-sdk is not installed. ' +
+          'Install it with `npm install @anthropic-ai/claude-agent-sdk` to use Claude Code.',
       );
     }
   }
 
-  private buildQueryOptions(
-    resumeId: string | null,
-    signal: AbortSignal,
-  ): Record<string, unknown> {
+  private buildQueryOptions(resumeId: string | null, signal: AbortSignal): Record<string, unknown> {
     const opts: Record<string, unknown> = {
       abortController: signal,
       permissionMode: claudePermissionMode(this.permissionMode),
@@ -349,7 +344,7 @@ export class ClaudeCodeAdapter implements AgentRuntime {
     const turn = this.activeTurns.get(sessionId);
     if (!session || !turn) return;
 
-    const assistantParts: AgentHistoryMessage["parts"] = [];
+    const assistantParts: AgentHistoryMessage['parts'] = [];
     try {
       for await (const msg of iterable) {
         // Capture the canonical session id from the init event.
@@ -361,8 +356,8 @@ export class ClaudeCodeAdapter implements AgentRuntime {
         // Forward extracted events.
         for (const event of extractEvents(msg, sessionId)) {
           // Track assistant text for history.
-          if (event.type === "text.updated") {
-            assistantParts.push({ type: "text", text: event.text });
+          if (event.type === 'text.updated') {
+            assistantParts.push({ type: 'text', text: event.text });
           }
           this.emit(event);
         }
@@ -370,14 +365,14 @@ export class ClaudeCodeAdapter implements AgentRuntime {
     } catch (err) {
       // An aborted turn throws; emit a clean idle so the UI unlocks.
       const msg = err instanceof Error ? err.message : String(err);
-      if (!msg.toLowerCase().includes("abort")) {
-        this.emit({ type: "error", sessionId, message: msg });
+      if (!msg.toLowerCase().includes('abort')) {
+        this.emit({ type: 'error', sessionId, message: msg });
       }
     } finally {
       this.activeTurns.delete(sessionId);
       // Record assistant output in history (best-effort).
       if (assistantParts.length > 0) {
-        session.history.push({ role: "assistant", completed: Date.now(), parts: assistantParts });
+        session.history.push({ role: 'assistant', completed: Date.now(), parts: assistantParts });
       }
     }
   }

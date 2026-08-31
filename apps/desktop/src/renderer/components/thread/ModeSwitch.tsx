@@ -1,13 +1,14 @@
-import { useState } from "react";
-import { Shield, ShieldAlert, Zap } from "lucide-react";
-import type { PermissionMode } from "@workbench/sdk";
-import { cn } from "@/lib/cn";
-import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import type { PermissionMode } from '@workbench/sdk';
+import { Shield, ShieldAlert, Zap } from 'lucide-react';
+import { useState } from 'react';
+
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { cn } from '@/lib/cn';
 
 const MODES: { value: PermissionMode; label: string; icon: React.ReactNode }[] = [
-  { value: "review", label: "审核", icon: <ShieldAlert size={12} /> },
-  { value: "auto", label: "自动", icon: <Shield size={12} /> },
-  { value: "yolo", label: "YOLO", icon: <Zap size={12} /> },
+  { value: 'review', label: '审核', icon: <ShieldAlert size={12} /> },
+  { value: 'auto', label: '自动', icon: <Shield size={12} /> },
+  { value: 'yolo', label: 'YOLO', icon: <Zap size={12} /> },
 ];
 
 export function ModeSwitch({
@@ -21,7 +22,7 @@ export function ModeSwitch({
   // guard. Switching out of yolo does not.
   const [pendingYolo, setPendingYolo] = useState(false);
   const choose = (next: PermissionMode) => {
-    if (next === "yolo" && mode !== "yolo") setPendingYolo(true);
+    if (next === 'yolo' && mode !== 'yolo') setPendingYolo(true);
     else onChange(next);
   };
 
@@ -32,22 +33,22 @@ export function ModeSwitch({
           <button
             key={m.value}
             className={cn(
-              "flex items-center gap-1 rounded-sm px-2 py-1 text-[11px] font-medium transition-colors",
+              'flex items-center gap-1 rounded-sm px-2 py-1 text-[11px] font-medium transition-colors',
               mode === m.value
-                ? m.value === "yolo"
-                  ? "bg-warn/20 text-warn"
-                  : m.value === "review"
-                    ? "bg-error/15 text-error"
-                    : "bg-accent/15 text-accent"
-                : "text-muted hover:text-text",
+                ? m.value === 'yolo'
+                  ? 'bg-warn/20 text-warn'
+                  : m.value === 'review'
+                    ? 'bg-error/15 text-error'
+                    : 'bg-accent/15 text-accent'
+                : 'text-muted hover:text-text',
             )}
             onClick={() => choose(m.value)}
             title={
-              m.value === "review"
-                ? "每次操作需确认"
-                : m.value === "yolo"
-                  ? "全自动，无需确认（关闭死循环防护）"
-                  : "自动执行常规操作"
+              m.value === 'review'
+                ? '每次操作需确认'
+                : m.value === 'yolo'
+                  ? '全自动，无需确认（关闭死循环防护）'
+                  : '自动执行常规操作'
             }
           >
             {m.icon}
@@ -62,7 +63,7 @@ export function ModeSwitch({
           confirmLabel="我了解风险，切换到 YOLO"
           onConfirm={() => {
             setPendingYolo(false);
-            onChange("yolo");
+            onChange('yolo');
           }}
           onCancel={() => setPendingYolo(false)}
         />

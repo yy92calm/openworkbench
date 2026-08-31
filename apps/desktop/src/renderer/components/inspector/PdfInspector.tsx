@@ -1,7 +1,8 @@
-import { useRef } from "react";
-import { X } from "lucide-react";
-import type { PdfInspector as PdfInspectorT } from "@workbench/shared";
-import { useScrollMemory } from "@/lib/scrollMemory";
+import type { PdfInspector as PdfInspectorT } from '@workbench/shared';
+import { X } from 'lucide-react';
+import { useRef } from 'react';
+
+import { useScrollMemory } from '@/lib/scrollMemory';
 
 export function PdfInspector({ data, onClose }: { data: PdfInspectorT; onClose: () => void }) {
   const { doc } = data;
@@ -13,7 +14,11 @@ export function PdfInspector({ data, onClose }: { data: PdfInspectorT; onClose: 
       <header className="flex items-center gap-2 border-b border-border px-4 py-3">
         <span className="text-sm font-medium text-text">{data.title}</span>
         <div className="flex-1" />
-        <button className="text-muted hover:text-text" aria-label="Close inspector" onClick={onClose}>
+        <button
+          className="text-muted hover:text-text"
+          aria-label="Close inspector"
+          onClick={onClose}
+        >
           <X size={16} />
         </button>
       </header>
@@ -22,9 +27,7 @@ export function PdfInspector({ data, onClose }: { data: PdfInspectorT; onClose: 
         {/* Styled HTML facsimile of the compiled PDF (real pdf.js deferred). */}
         <article className="mx-auto max-w-[620px] rounded-sm bg-white px-10 py-10 font-serif text-[13px] leading-relaxed text-[#1a1a1a] shadow-card">
           <h1 className="text-center text-[19px] font-semibold leading-snug">{doc.title}</h1>
-          {doc.subtitle && (
-            <p className="mt-1 text-center text-[15px] italic">{doc.subtitle}</p>
-          )}
+          {doc.subtitle && <p className="mt-1 text-center text-[15px] italic">{doc.subtitle}</p>}
 
           {doc.summaryTable && (
             <table className="mx-auto my-5 border-collapse text-[11px]">

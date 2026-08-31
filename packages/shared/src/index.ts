@@ -1,37 +1,25 @@
 // Stable domain types for the desktop workbench.
 // Imported by the desktop app now, and by the SDK / runtime in later slices.
 
-export type RuntimeStatus = "connecting" | "ready" | "error" | "offline";
+export type RuntimeStatus = 'connecting' | 'ready' | 'error' | 'offline';
 
 // ---- User-level patch overlay (OpenCode profile) ----
 
+export type { DeployedManifest, PatchOp, PatchRejection, UserPatchSpec } from './patchOverlay';
 export {
   applyProfilePatch,
   contentHash,
   humanizePatchError,
-  validateProfilePatch,
   PatchPolicyError,
-} from "./patchOverlay";
-export type {
-  DeployedManifest,
-  PatchOp,
-  PatchRejection,
-  UserPatchSpec,
-} from "./patchOverlay";
+  validateProfilePatch,
+} from './patchOverlay';
 
 // ---- Interaction layer (keyed renderers + UI defaults) ----
 
-export {
-  parseRenderersJson,
-  parseUiDefaultsJson,
-} from "./interaction";
-export type {
-  RendererManifest,
-  UiDefaults,
-  InteractionConfig,
-} from "./interaction";
+export type { InteractionConfig, RendererManifest, UiDefaults } from './interaction';
+export { parseRenderersJson, parseUiDefaultsJson } from './interaction';
 
-export type ModelStatus = "connected" | "disconnected" | "error";
+export type ModelStatus = 'connected' | 'disconnected' | 'error';
 
 export interface Project {
   id: string;
@@ -39,7 +27,7 @@ export interface Project {
   sessions: Session[];
 }
 
-export type SessionGroup = "Examples" | "Today" | "Active" | "Earlier";
+export type SessionGroup = 'Examples' | 'Today' | 'Active' | 'Earlier';
 
 export interface Session {
   id: string;
@@ -49,7 +37,7 @@ export interface Session {
   /** Optional right-aligned count badge, e.g. running agents. */
   badge?: number;
   /** Status dot color hint. */
-  status?: "idle" | "running" | "done" | "warn";
+  status?: 'idle' | 'running' | 'done' | 'warn';
   blocks: ThreadBlock[];
   inspector?: Inspector;
 }
@@ -70,7 +58,7 @@ export type ThreadBlock =
   | ReasoningBlock;
 
 export interface UserMessageBlock {
-  kind: "user";
+  kind: 'user';
   text: string;
   /** Epoch ms when the message was sent. */
   timestamp?: number;
@@ -80,7 +68,7 @@ export interface UserMessageBlock {
 }
 
 export interface AgentMessageBlock {
-  kind: "agent";
+  kind: 'agent';
   /** Markdown; inline `code` tokens are rendered as blue mono. */
   markdown: string;
   /** Epoch ms when the message finished streaming. */
@@ -88,22 +76,17 @@ export interface AgentMessageBlock {
 }
 
 export interface StepSummaryBlock {
-  kind: "step-summary";
+  kind: 'step-summary';
   summary: string;
   steps: number;
   details?: string[];
 }
 
 export type ToolCallStatus =
-  | "pending"
-  | "running"
-  | "waiting-approval"
-  | "success"
-  | "warning"
-  | "failed";
+  'pending' | 'running' | 'waiting-approval' | 'success' | 'warning' | 'failed';
 
 export interface ToolCallBlock {
-  kind: "tool-call";
+  kind: 'tool-call';
   title: string;
   status: ToolCallStatus;
   /** Right-aligned meta, e.g. "142 lines of output" or "16m 2s". */
@@ -117,7 +100,7 @@ export interface ToolCallBlock {
 }
 
 export interface DataTableBlock {
-  kind: "table";
+  kind: 'table';
   columns: string[];
   /** Cells rendered with mono where they look code-like. */
   rows: string[][];
@@ -125,7 +108,7 @@ export interface DataTableBlock {
 }
 
 export interface FigureBlock {
-  kind: "figure";
+  kind: 'figure';
   title: string;
   /** Image URL / data URI; a placeholder this slice. */
   src: string;
@@ -143,17 +126,10 @@ export interface FigureAnnotation {
 }
 
 /** File the agent produced, surfaced as a traceable artifact in the thread. */
-export type ArtifactKind =
-  | "figure"
-  | "script"
-  | "report"
-  | "table"
-  | "notebook"
-  | "model"
-  | "data";
+export type ArtifactKind = 'figure' | 'script' | 'report' | 'table' | 'notebook' | 'model' | 'data';
 
 export interface ArtifactBlock {
-  kind: "artifact";
+  kind: 'artifact';
   /** Workspace-relative path the tool wrote. */
   path: string;
   filename: string;
@@ -171,26 +147,26 @@ export interface RunningJob {
 }
 
 export interface RunningJobsBlock {
-  kind: "running-jobs";
+  kind: 'running-jobs';
   title: string; // e.g. "REMOTE · 8"
   jobs: RunningJob[];
 }
 
 export interface StatusLineBlock {
-  kind: "status-line";
+  kind: 'status-line';
   text: string; // e.g. "8 running · 16m 2s"
-  tone?: "running" | "done" | "error";
+  tone?: 'running' | 'done' | 'error';
 }
 
 /** Visual divider between conversation turns. */
 export interface TurnDividerBlock {
-  kind: "turn-divider";
+  kind: 'turn-divider';
   label?: string;
 }
 
 /** Model reasoning / thinking process — collapsible. */
 export interface ReasoningBlock {
-  kind: "reasoning";
+  kind: 'reasoning';
   text: string;
   /** True while the reasoning is still streaming. */
   streaming?: boolean;
@@ -207,11 +183,11 @@ export type Inspector =
 
 /** Folder tree a root-relative file path resolves in: the active session
  *  workspace (default) or the base folder all session workspaces live under. */
-export type FileRoot = "workspace" | "base";
+export type FileRoot = 'workspace' | 'base';
 
 /** A real .ipynb in the workspace, opened in the runnable notebook editor. */
 export interface NotebookFileInspector {
-  variant: "notebook-file";
+  variant: 'notebook-file';
   /** Root-relative path of the notebook. */
   path: string;
   /** Folder tree `path` resolves in (default "workspace"). */
@@ -221,7 +197,7 @@ export interface NotebookFileInspector {
 /** A workspace file surfaced for preview — the agent wrote it OR code produced it.
  *  Rendered by type: HTML → live iframe, PDF → pdf.js, image → <img>, text → code. */
 export interface FilePreviewInspector {
-  variant: "file";
+  variant: 'file';
   path: string;
   filename: string;
   artifact: ArtifactKind;
@@ -241,22 +217,12 @@ export interface ArtifactVersion {
   environment?: string;
 }
 
-export type ArtifactTab =
-  | "Code"
-  | "Execution Log"
-  | "Messages"
-  | "Environment";
+export type ArtifactTab = 'Code' | 'Execution Log' | 'Messages' | 'Environment';
 
-export type ArtifactType =
-  | "figure"
-  | "report"
-  | "table"
-  | "script"
-  | "notebook"
-  | "pdf";
+export type ArtifactType = 'figure' | 'report' | 'table' | 'script' | 'notebook' | 'pdf';
 
 export interface ArtifactInspector {
-  variant: "artifact";
+  variant: 'artifact';
   title: string;
   /** Name used when downloading the script (defaults to `title`). */
   filename?: string;
@@ -283,7 +249,7 @@ export interface NotebookCell {
 }
 
 export interface NotebookInspector {
-  variant: "notebook";
+  variant: 'notebook';
   name: string;
   live: boolean;
   kernelLabel: string;
@@ -292,7 +258,7 @@ export interface NotebookInspector {
 }
 
 export interface PdfInspector {
-  variant: "pdf";
+  variant: 'pdf';
   title: string; // "report.pdf"
   /** HTML facsimile document sections rendered as a paper this slice. */
   doc: PdfDoc;
@@ -366,7 +332,7 @@ export interface Citation {
 // (SVG stat tiles, mini-bars) and agent-generated figures. Categorical hues are
 // assigned in this fixed order, never cycled.
 
-export type ChartTheme = "light" | "dark";
+export type ChartTheme = 'light' | 'dark';
 
 export interface ChartPalette {
   /** Categorical series hues, in fixed assignment order (identity encoding). */
@@ -379,20 +345,38 @@ export interface ChartPalette {
 
 /** Light-mode palette (chart surface #ffffff). */
 export const CHART_PALETTE_LIGHT: ChartPalette = {
-  categorical: ["#2a78d6", "#1baf7a", "#eda100", "#008300", "#4a3aa7", "#e34948", "#e87ba4", "#eb6834"],
-  sequential: ["#cde2fb", "#9ec5f4", "#6da7ec", "#3987e5", "#256abf", "#184f95", "#104281"],
-  status: { good: "#0ca30c", warning: "#c98a2b", serious: "#ec835a", critical: "#d03b3b" },
+  categorical: [
+    '#2a78d6',
+    '#1baf7a',
+    '#eda100',
+    '#008300',
+    '#4a3aa7',
+    '#e34948',
+    '#e87ba4',
+    '#eb6834',
+  ],
+  sequential: ['#cde2fb', '#9ec5f4', '#6da7ec', '#3987e5', '#256abf', '#184f95', '#104281'],
+  status: { good: '#0ca30c', warning: '#c98a2b', serious: '#ec835a', critical: '#d03b3b' },
 };
 
 /** Dark-mode palette — the same hues stepped for the dark surface (#1e1d24). */
 export const CHART_PALETTE_DARK: ChartPalette = {
-  categorical: ["#3987e5", "#199e70", "#c98500", "#008300", "#9085e9", "#e66767", "#d55181", "#d95926"],
-  sequential: ["#104281", "#184f95", "#256abf", "#3987e5", "#6da7ec", "#9ec5f4", "#cde2fb"],
-  status: { good: "#0ca30c", warning: "#d7a24a", serious: "#ec835a", critical: "#d03b3b" },
+  categorical: [
+    '#3987e5',
+    '#199e70',
+    '#c98500',
+    '#008300',
+    '#9085e9',
+    '#e66767',
+    '#d55181',
+    '#d95926',
+  ],
+  sequential: ['#104281', '#184f95', '#256abf', '#3987e5', '#6da7ec', '#9ec5f4', '#cde2fb'],
+  status: { good: '#0ca30c', warning: '#d7a24a', serious: '#ec835a', critical: '#d03b3b' },
 };
 
 export function chartPalette(theme: ChartTheme): ChartPalette {
-  return theme === "dark" ? CHART_PALETTE_DARK : CHART_PALETTE_LIGHT;
+  return theme === 'dark' ? CHART_PALETTE_DARK : CHART_PALETTE_LIGHT;
 }
 
 /** Categorical hue for series `i`, assigned in fixed order (wraps only past 8). */
@@ -441,7 +425,7 @@ export interface ExecutionRecord {
   taskId: string;
   taskName: string;
   triggeredAt: string;
-  status: "running" | "completed" | "failed" | "timeout";
+  status: 'running' | 'completed' | 'failed' | 'timeout';
   sessionId?: string;
   error?: string;
   durationMs?: number;

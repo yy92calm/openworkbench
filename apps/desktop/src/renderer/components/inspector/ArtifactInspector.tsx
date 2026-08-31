@@ -1,13 +1,14 @@
-import { useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, Download, X } from "lucide-react";
-import type { ArtifactInspector as ArtifactInspectorT, ArtifactTab } from "@workbench/shared";
-import { useScrollMemory } from "@/lib/scrollMemory";
-import { cn } from "@/lib/cn";
-import { CodeViewer } from "@/components/code-viewer/CodeViewer";
-import { resolveArtifactContent } from "@/lib/artifacts";
-import { saveTextWithFeedback } from "@/lib/download";
+import type { ArtifactInspector as ArtifactInspectorT, ArtifactTab } from '@workbench/shared';
+import { ChevronLeft, ChevronRight, Download, X } from 'lucide-react';
+import { useRef, useState } from 'react';
 
-const TABS: ArtifactTab[] = ["Code", "Execution Log", "Messages", "Environment"];
+import { CodeViewer } from '@/components/code-viewer/CodeViewer';
+import { resolveArtifactContent } from '@/lib/artifacts';
+import { cn } from '@/lib/cn';
+import { saveTextWithFeedback } from '@/lib/download';
+import { useScrollMemory } from '@/lib/scrollMemory';
+
+const TABS: ArtifactTab[] = ['Code', 'Execution Log', 'Messages', 'Environment'];
 
 export function ArtifactInspector({
   data,
@@ -16,9 +17,12 @@ export function ArtifactInspector({
   data: ArtifactInspectorT;
   onClose: () => void;
 }) {
-  const [tab, setTab] = useState<ArtifactTab>("Code");
+  const [tab, setTab] = useState<ArtifactTab>('Code');
   const [versionIdx, setVersionIdx] = useState(() =>
-    Math.max(0, data.versions.findIndex((v) => v.label === data.activeVersion)),
+    Math.max(
+      0,
+      data.versions.findIndex((v) => v.label === data.activeVersion),
+    ),
   );
 
   const activeLabel = data.versions[versionIdx]?.label ?? data.activeVersion;
@@ -63,7 +67,11 @@ export function ArtifactInspector({
         >
           <Download size={16} />
         </button>
-        <button className="text-muted hover:text-text" aria-label="Close inspector" onClick={onClose}>
+        <button
+          className="text-muted hover:text-text"
+          aria-label="Close inspector"
+          onClick={onClose}
+        >
           <X size={16} />
         </button>
       </header>
@@ -74,10 +82,10 @@ export function ArtifactInspector({
             key={t}
             onClick={() => setTab(t)}
             className={cn(
-              "border-b-2 py-2.5 text-sm",
+              'border-b-2 py-2.5 text-sm',
               tab === t
-                ? "border-accent text-text"
-                : "border-transparent text-muted hover:text-text",
+                ? 'border-accent text-text'
+                : 'border-transparent text-muted hover:text-text',
             )}
           >
             {t}
@@ -86,7 +94,7 @@ export function ArtifactInspector({
       </nav>
 
       <div ref={scrollRef} onScroll={onScroll} className="flex-1 overflow-y-auto p-4">
-        {tab === "Code" && (
+        {tab === 'Code' && (
           <div className="space-y-3">
             <button
               className="flex items-center gap-2 rounded-input bg-link px-3 py-1.5 text-sm font-medium text-white hover:opacity-90"
@@ -107,11 +115,15 @@ export function ArtifactInspector({
                 ))}
               </div>
             )}
-            <CodeViewer code={content.code} language={data.language} startLine={data.codeStartLine} />
+            <CodeViewer
+              code={content.code}
+              language={data.language}
+              startLine={data.codeStartLine}
+            />
           </div>
         )}
-        {tab === "Execution Log" && <Pre text={content.executionLog ?? "No execution log."} />}
-        {tab === "Messages" && (
+        {tab === 'Execution Log' && <Pre text={content.executionLog ?? 'No execution log.'} />}
+        {tab === 'Messages' && (
           <ul className="space-y-2">
             {(content.messages ?? []).map((m, i) => (
               <li key={i} className="rounded-input bg-surface-2 px-3 py-2 text-sm text-text">
@@ -123,7 +135,7 @@ export function ArtifactInspector({
             )}
           </ul>
         )}
-        {tab === "Environment" && <Pre text={content.environment ?? "No environment info."} />}
+        {tab === 'Environment' && <Pre text={content.environment ?? 'No environment info.'} />}
       </div>
     </div>
   );

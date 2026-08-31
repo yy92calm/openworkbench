@@ -1,38 +1,68 @@
-import { useEffect, useRef, useState } from "react";
-import { FolderOpen, RefreshCw, Download, Eye, EyeOff, RotateCw, Check, Plus, Trash2, Power, Volume2, Mic, Send, Loader2 } from "lucide-react";
-import { useUiStore, type AgentRuntimeKind, type Theme } from "@/lib/store";
-import { useRuntimeStore, sendConfigPrompt } from "@/lib/runtime";
-import { extractConfigPatch } from "@/lib/renderers";
-import { useI18n } from "@/lib/i18n";
+import type { DeployedManifest, InteractionConfig } from '@workbench/shared';
 import {
+  Check,
+  Download,
+  Eye,
+  EyeOff,
+  FolderOpen,
+  Loader2,
+  Mic,
+  Plus,
+  Power,
+  RefreshCw,
+  RotateCw,
+  Send,
+  Trash2,
+  Volume2,
+} from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+
+import { DataFlowCard } from '@/components/settings/DataFlowCard';
+import { RemoteCard } from '@/components/settings/RemoteCard';
+import { cn } from '@/lib/cn';
+import { useI18n } from '@/lib/i18n';
+import { extractConfigPatch } from '@/lib/renderers';
+import { sendConfigPrompt, useRuntimeStore } from '@/lib/runtime';
+import { type AgentRuntimeKind, type Theme, useUiStore } from '@/lib/store';
+import { isSttSupported } from '@/lib/stt';
+import {
+  appIdentifier,
+  appVersion,
+  channelName,
+  checkForUpdates,
+  exportLogs,
   openWorkspaceBase,
   pickFolder,
   setWorkspaceBase,
   workspaceBase,
-  checkForUpdates,
-  exportLogs,
-  channelName,
-  appIdentifier,
-  appVersion,
-} from "@/lib/tauri";
-import { toast } from "@/lib/toast";
-import { cn } from "@/lib/cn";
-import { profileManifest, profileWritePatch, profileInteraction, profileValidatePatch } from "@/lib/tauri";
-import type { DeployedManifest, InteractionConfig } from "@workbench/shared";
-import { DataFlowCard } from "@/components/settings/DataFlowCard";
-import { RemoteCard } from "@/components/settings/RemoteCard";
+} from '@/lib/tauri';
 import {
-  speak,
+  profileInteraction,
+  profileManifest,
+  profileValidatePatch,
+  profileWritePatch,
+} from '@/lib/tauri';
+import { toast } from '@/lib/toast';
+import {
   cancelSpeak,
   getVoices,
-  onVoicesReady,
   loadVoiceConfig,
+  onVoicesReady,
   saveVoiceConfig,
+  speak,
   type VoiceConfig,
-} from "@/lib/tts";
-import { isSttSupported } from "@/lib/stt";
+} from '@/lib/tts';
 
-type Section = "general" | "models" | "runtime" | "voice" | "workspace" | "remote" | "privacy" | "profile" | "about";
+type Section =
+  | 'general'
+  | 'models'
+  | 'runtime'
+  | 'voice'
+  | 'workspace'
+  | 'remote'
+  | 'privacy'
+  | 'profile'
+  | 'about';
 
 /** A saved provider configuration. */
 interface ProviderConfig {
@@ -46,11 +76,36 @@ interface ProviderConfig {
 }
 
 const PROVIDER_PRESETS = [
-  { name: "OpenAI", baseUrl: "https://api.openai.com/v1", modelId: "gpt-4o", providerName: "openai" },
-  { name: "DeepSeek", baseUrl: "https://api.deepseek.com/v1", modelId: "deepseek-chat", providerName: "deepseek" },
-  { name: "通义千问", baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1", modelId: "qwen-max", providerName: "qwen" },
-  { name: "智谱", baseUrl: "https://open.bigmodel.cn/api/paas/v4", modelId: "glm-4", providerName: "zhipu" },
-  { name: "月之暗面", baseUrl: "https://api.moonshot.cn/v1", modelId: "moonshot-v1-8k", providerName: "moonshot" },
+  {
+    name: 'OpenAI',
+    baseUrl: 'https://api.openai.com/v1',
+    modelId: 'gpt-4o',
+    providerName: 'openai',
+  },
+  {
+    name: 'DeepSeek',
+    baseUrl: 'https://api.deepseek.com/v1',
+    modelId: 'deepseek-chat',
+    providerName: 'deepseek',
+  },
+  {
+    name: '通义千问',
+    baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+    modelId: 'qwen-max',
+    providerName: 'qwen',
+  },
+  {
+    name: '智谱',
+    baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
+    modelId: 'glm-4',
+    providerName: 'zhipu',
+  },
+  {
+    name: '月之暗面',
+    baseUrl: 'https://api.moonshot.cn/v1',
+    modelId: 'moonshot-v1-8k',
+    providerName: 'moonshot',
+  },
 ] as const;
 
 /** Settings. The bundled OpenCode runtime's config - providers, model, skills,
@@ -59,7 +114,7 @@ const PROVIDER_PRESETS = [
  *  appearance, privacy, and about/diagnostics. */
 export function SettingsPage() {
   const { t } = useI18n();
-  const [section, setSection] = useState<Section>("general");
+  const [section, setSection] = useState<Section>('general');
 
   const theme = useUiStore((s) => s.theme);
   const setTheme = useUiStore((s) => s.setTheme);
@@ -69,8 +124,19 @@ export function SettingsPage() {
   const setAgentRuntimeKind = useUiStore((s) => s.setAgentRuntimeKind);
   const expandThreadDetails = useUiStore((s) => s.expandThreadDetails);
   const setExpandThreadDetails = useUiStore((s) => s.setExpandThreadDetails);
-  const { status, serverUrl, setServerUrl, connect, disconnect, defaultModel, providers, loadProviders, setDefaultModel, restart } = useRuntimeStore();
-  const connected = status === "ready";
+  const {
+    status,
+    serverUrl,
+    setServerUrl,
+    connect,
+    disconnect,
+    defaultModel,
+    providers,
+    loadProviders,
+    setDefaultModel,
+    restart,
+  } = useRuntimeStore();
+  const connected = status === 'ready';
   const [wsPath, setWsPath] = useState<string | null>(null);
   const [restartBusy, setRestartBusy] = useState(false);
 
@@ -84,29 +150,31 @@ export function SettingsPage() {
     if (!picked) return;
     try {
       setWsPath(await setWorkspaceBase(picked));
-      toast.success(t("settings.workspaceSet"));
+      toast.success(t('settings.workspaceSet'));
     } catch (err) {
-      toast.error(`${t("settings.workspaceError")} ${err instanceof Error ? err.message : String(err)}`);
+      toast.error(
+        `${t('settings.workspaceError')} ${err instanceof Error ? err.message : String(err)}`,
+      );
     }
   };
 
   const tabs: { id: Section; label: string }[] = [
-    { id: "general", label: t("settings.tabGeneral") },
-    { id: "models", label: "模型配置" },
-    { id: "runtime", label: t("settings.tabRuntime") },
-    { id: "voice", label: "语音" },
-    { id: "workspace", label: t("settings.tabWorkspace") },
-    { id: "remote", label: t("settings.tabRemote") },
-    { id: "privacy", label: t("settings.tabPrivacy") },
-    { id: "profile", label: "个性化" },
-    { id: "about", label: t("settings.tabAbout") },
+    { id: 'general', label: t('settings.tabGeneral') },
+    { id: 'models', label: '模型配置' },
+    { id: 'runtime', label: t('settings.tabRuntime') },
+    { id: 'voice', label: '语音' },
+    { id: 'workspace', label: t('settings.tabWorkspace') },
+    { id: 'remote', label: t('settings.tabRemote') },
+    { id: 'privacy', label: t('settings.tabPrivacy') },
+    { id: 'profile', label: '个性化' },
+    { id: 'about', label: t('settings.tabAbout') },
   ];
 
   return (
     <div className="h-full overflow-y-auto">
       <div className="mx-auto max-w-5xl px-8 pb-16 pt-8">
-        <h1 className="text-xl font-semibold tracking-tight text-text">{t("settings.title")}</h1>
-        <p className="mt-0.5 text-xs text-muted">{t("settings.subtitle")}</p>
+        <h1 className="text-xl font-semibold tracking-tight text-text">{t('settings.title')}</h1>
+        <p className="mt-0.5 text-xs text-muted">{t('settings.subtitle')}</p>
 
         <div className="mt-6 flex gap-6">
           <nav className="w-52 shrink-0">
@@ -116,10 +184,10 @@ export function SettingsPage() {
                   <button
                     onClick={() => setSection(tab.id)}
                     className={cn(
-                      "w-full rounded-input px-3 py-2 text-left text-[13px] transition-colors",
+                      'w-full rounded-input px-3 py-2 text-left text-[13px] transition-colors',
                       section === tab.id
-                        ? "bg-surface-2 text-text"
-                        : "text-muted hover:bg-surface-2/50 hover:text-text",
+                        ? 'bg-surface-2 text-text'
+                        : 'text-muted hover:bg-surface-2/50 hover:text-text',
                     )}
                   >
                     {tab.label}
@@ -130,22 +198,24 @@ export function SettingsPage() {
           </nav>
 
           <div className="min-w-0 flex-1">
-            {section === "general" && (
+            {section === 'general' && (
               <>
-                <Card title={t("settings.language")}>
+                <Card title={t('settings.language')}>
                   <div className="inline-flex rounded-input border border-border bg-surface-2 p-0.5">
-                    {([
-                      { value: "en", label: "English" },
-                      { value: "zh-CN", label: "中文" },
-                    ] as const).map((lang) => (
+                    {(
+                      [
+                        { value: 'en', label: 'English' },
+                        { value: 'zh-CN', label: '中文' },
+                      ] as const
+                    ).map((lang) => (
                       <button
                         key={lang.value}
                         onClick={() => setLocale(lang.value)}
                         className={cn(
-                          "rounded-[5px] px-4 py-1.5 text-[13px] transition-colors",
+                          'rounded-[5px] px-4 py-1.5 text-[13px] transition-colors',
                           locale === lang.value
-                            ? "bg-surface text-text shadow-card"
-                            : "text-muted hover:text-text",
+                            ? 'bg-surface text-text shadow-card'
+                            : 'text-muted hover:text-text',
                         )}
                       >
                         {lang.label}
@@ -154,31 +224,43 @@ export function SettingsPage() {
                   </div>
                 </Card>
 
-                <Card title={t("settings.appearance")}>
+                <Card title={t('settings.appearance')}>
                   <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
-                    {([
-                      { value: "light", label: "明亮", bg: "#f9f9f9", accent: "#10a37f" },
-                      { value: "warm", label: "暖白", bg: "#faf8f5", accent: "#c15f3c" },
-                      { value: "cool", label: "冷蓝", bg: "#f5f7fa", accent: "#3b82f6" },
-                      { value: "dark", label: "暗色", bg: "#1a1a1a", accent: "#10a37f" },
-                      { value: "black", label: "纯黑", bg: "#000000", accent: "#10a37f" },
-                      { value: "system", label: "系统", bg: "linear-gradient(135deg,#f9f9f9 50%,#1a1a1a 50%)", accent: "#10a37f" },
-                    ] as const).map((th) => (
+                    {(
+                      [
+                        { value: 'light', label: '明亮', bg: '#f9f9f9', accent: '#10a37f' },
+                        { value: 'warm', label: '暖白', bg: '#faf8f5', accent: '#c15f3c' },
+                        { value: 'cool', label: '冷蓝', bg: '#f5f7fa', accent: '#3b82f6' },
+                        { value: 'dark', label: '暗色', bg: '#1a1a1a', accent: '#10a37f' },
+                        { value: 'black', label: '纯黑', bg: '#000000', accent: '#10a37f' },
+                        {
+                          value: 'system',
+                          label: '系统',
+                          bg: 'linear-gradient(135deg,#f9f9f9 50%,#1a1a1a 50%)',
+                          accent: '#10a37f',
+                        },
+                      ] as const
+                    ).map((th) => (
                       <button
                         key={th.value}
                         onClick={() => setTheme(th.value as Theme)}
                         className={cn(
-                          "flex flex-col items-center gap-1.5 rounded-input border p-2.5 transition-all",
+                          'flex flex-col items-center gap-1.5 rounded-input border p-2.5 transition-all',
                           theme === th.value
-                            ? "border-accent ring-1 ring-accent/40"
-                            : "border-border hover:border-muted",
+                            ? 'border-accent ring-1 ring-accent/40'
+                            : 'border-border hover:border-muted',
                         )}
                       >
                         <span
                           className="h-7 w-full rounded-md border border-black/10"
                           style={{ background: th.bg }}
                         />
-                        <span className={cn("text-[11px]", theme === th.value ? "font-medium text-text" : "text-muted")}>
+                        <span
+                          className={cn(
+                            'text-[11px]',
+                            theme === th.value ? 'font-medium text-text' : 'text-muted',
+                          )}
+                        >
                           {th.label}
                         </span>
                       </button>
@@ -186,25 +268,29 @@ export function SettingsPage() {
                   </div>
                 </Card>
 
-                <Card title={t("settings.display")} hint={t("settings.displayHint")}>
+                <Card title={t('settings.display')} hint={t('settings.displayHint')}>
                   <div className="flex items-center justify-between gap-4">
                     <div className="min-w-0">
-                      <div className="text-[13px] font-medium text-text">{t("settings.expandDetails")}</div>
-                      <div className="text-[12px] text-muted">{t("settings.expandDetailsHint")}</div>
+                      <div className="text-[13px] font-medium text-text">
+                        {t('settings.expandDetails')}
+                      </div>
+                      <div className="text-[12px] text-muted">
+                        {t('settings.expandDetailsHint')}
+                      </div>
                     </div>
                     <button
                       role="switch"
                       aria-checked={expandThreadDetails}
                       onClick={() => setExpandThreadDetails(!expandThreadDetails)}
                       className={cn(
-                        "relative h-5 w-9 shrink-0 rounded-full transition-colors",
-                        expandThreadDetails ? "bg-accent" : "bg-surface-2",
+                        'relative h-5 w-9 shrink-0 rounded-full transition-colors',
+                        expandThreadDetails ? 'bg-accent' : 'bg-surface-2',
                       )}
                     >
                       <span
                         className={cn(
-                          "absolute top-0.5 h-4 w-4 rounded-full bg-surface shadow transition-transform",
-                          expandThreadDetails ? "left-[18px]" : "left-0.5",
+                          'absolute top-0.5 h-4 w-4 rounded-full bg-surface shadow transition-transform',
+                          expandThreadDetails ? 'left-[18px]' : 'left-0.5',
                         )}
                       />
                     </button>
@@ -213,39 +299,35 @@ export function SettingsPage() {
               </>
             )}
 
-            {section === "models" && (
-              <ModelsSection connected={connected} restart={restart} />
-            )}
+            {section === 'models' && <ModelsSection restart={restart} />}
 
-            {section === "voice" && (
-              <VoiceSection />
-            )}
+            {section === 'voice' && <VoiceSection />}
 
-            {section === "runtime" && (
+            {section === 'runtime' && (
               <>
-                <Card title={t("settings.runtime")} hint={t("settings.runtimeHint")}>
+                <Card title={t('settings.runtime')} hint={t('settings.runtimeHint')}>
                   <div className="flex items-center gap-2">
                     <input
                       value={serverUrl}
                       onChange={(e) => setServerUrl(e.target.value)}
                       placeholder="http://127.0.0.1:4096"
-                      className={inputCls("flex-1 font-mono")}
+                      className={inputCls('flex-1 font-mono')}
                     />
                     {connected ? (
                       <button onClick={disconnect} className={btnGhost()}>
-                        {t("settings.disconnect")}
+                        {t('settings.disconnect')}
                       </button>
                     ) : (
                       <button onClick={connect} className={btnAccent()}>
-                        {t("settings.connect")}
+                        {t('settings.connect')}
                       </button>
                     )}
                   </div>
                   <div className="mt-2.5 flex items-center gap-1.5 text-xs text-muted">
                     <span
                       className={cn(
-                        "h-1.5 w-1.5 rounded-full",
-                        connected ? "bg-ok" : status === "error" ? "bg-error" : "bg-muted",
+                        'h-1.5 w-1.5 rounded-full',
+                        connected ? 'bg-ok' : status === 'error' ? 'bg-error' : 'bg-muted',
                       )}
                     />
                     <span className="capitalize">{status}</span>
@@ -258,39 +340,44 @@ export function SettingsPage() {
                   </div>
                 </Card>
 
-                <Card title={t("settings.runtimeKind")} hint={t("settings.runtimeKindHint")}>
+                <Card title={t('settings.runtimeKind')} hint={t('settings.runtimeKindHint')}>
                   <div className="inline-flex rounded-input border border-border bg-surface-2 p-0.5">
-                    {([
-                      { value: "opencode", label: "OpenCode" },
-                      { value: "claude-code", label: "Claude Code" },
-                    ] as const).map((opt) => (
+                    {(
+                      [
+                        { value: 'opencode', label: 'OpenCode' },
+                        { value: 'claude-code', label: 'Claude Code' },
+                      ] as const
+                    ).map((opt) => (
                       <button
                         key={opt.value}
                         onClick={() => setAgentRuntimeKind(opt.value as AgentRuntimeKind)}
                         className={cn(
-                          "rounded-[5px] px-4 py-1.5 text-[13px] transition-colors",
+                          'rounded-[5px] px-4 py-1.5 text-[13px] transition-colors',
                           agentRuntimeKind === opt.value
-                            ? "bg-surface text-text shadow-card"
-                            : "text-muted hover:text-text",
+                            ? 'bg-surface text-text shadow-card'
+                            : 'text-muted hover:text-text',
                         )}
                       >
                         {opt.label}
                       </button>
                     ))}
                   </div>
-                  {agentRuntimeKind === "claude-code" && (
+                  {agentRuntimeKind === 'claude-code' && (
                     <p className="mt-2.5 text-xs text-warn">
-                      Claude Code requires <span className="font-mono">@anthropic-ai/claude-agent-sdk</span> and an
+                      Claude Code requires{' '}
+                      <span className="font-mono">@anthropic-ai/claude-agent-sdk</span> and an
                       Anthropic API key. Reconnect after switching.
                     </p>
                   )}
                 </Card>
 
-                <Card title={t("settings.model")} hint={t("settings.modelHint")}>
+                <Card title={t('settings.model')} hint={t('settings.modelHint')}>
                   <select
-                    value={defaultModel ?? ""}
-                    onChange={(e) => { void setDefaultModel(e.target.value); }}
-                    className={inputCls("w-full")}
+                    value={defaultModel ?? ''}
+                    onChange={(e) => {
+                      void setDefaultModel(e.target.value);
+                    }}
+                    className={inputCls('w-full')}
                     disabled={!connected}
                   >
                     {providers.map((p) => (
@@ -315,40 +402,48 @@ export function SettingsPage() {
                       setRestartBusy(true);
                       try {
                         await restart();
-                        toast.success("运行时已重启");
+                        toast.success('运行时已重启');
                       } catch (err) {
-                        toast.error(`重启失败: ${err instanceof Error ? err.message : String(err)}`);
+                        toast.error(
+                          `重启失败: ${err instanceof Error ? err.message : String(err)}`,
+                        );
                       } finally {
                         setRestartBusy(false);
                       }
                     }}
-                    className={btnGhost("gap-1.5")}
+                    className={btnGhost('gap-1.5')}
                   >
-                    <RotateCw size={13} className={restartBusy ? "animate-spin" : ""} />
-                    {restartBusy ? "重启中…" : "重启运行时"}
+                    <RotateCw size={13} className={restartBusy ? 'animate-spin' : ''} />
+                    {restartBusy ? '重启中…' : '重启运行时'}
                   </button>
                 </Card>
               </>
             )}
 
-            {section === "workspace" && (
-              <Card title={t("settings.workspace")} hint={t("settings.workspaceHint")}>
+            {section === 'workspace' && (
+              <Card title={t('settings.workspace')} hint={t('settings.workspaceHint')}>
                 <div className="flex items-center gap-2">
                   <span
                     className={cn(
-                      inputCls("flex-1 truncate font-mono leading-9"),
-                      "select-all bg-surface-2 text-muted",
+                      inputCls('flex-1 truncate font-mono leading-9'),
+                      'select-all bg-surface-2 text-muted',
                     )}
                   >
-                    {wsPath ?? "available in the desktop app"}
+                    {wsPath ?? 'available in the desktop app'}
                   </span>
                   {wsPath && (
                     <>
-                      <button className={btnGhost("gap-1.5")} onClick={() => void changeWorkspaceBase()}>
-                        {t("settings.change")}
+                      <button
+                        className={btnGhost('gap-1.5')}
+                        onClick={() => void changeWorkspaceBase()}
+                      >
+                        {t('settings.change')}
                       </button>
-                      <button className={btnGhost("gap-1.5")} onClick={() => void openWorkspaceBase()}>
-                        <FolderOpen size={13} /> {t("settings.reveal")}
+                      <button
+                        className={btnGhost('gap-1.5')}
+                        onClick={() => void openWorkspaceBase()}
+                      >
+                        <FolderOpen size={13} /> {t('settings.reveal')}
                       </button>
                     </>
                   )}
@@ -356,24 +451,18 @@ export function SettingsPage() {
               </Card>
             )}
 
-            {section === "remote" && (
-              <RemoteCard />
-            )}
+            {section === 'remote' && <RemoteCard />}
 
-            {section === "privacy" && (
+            {section === 'privacy' && (
               <div className="mt-0">
-                <p className="mb-3 text-xs text-muted">{t("settings.privacyHint")}</p>
+                <p className="mb-3 text-xs text-muted">{t('settings.privacyHint')}</p>
                 <DataFlowCard model={defaultModel} workspace={wsPath} />
               </div>
             )}
 
-            {section === "about" && (
-              <AboutSection />
-            )}
+            {section === 'about' && <AboutSection />}
 
-            {section === "profile" && (
-              <ProfileSection />
-            )}
+            {section === 'profile' && <ProfileSection />}
           </div>
         </div>
       </div>
@@ -388,23 +477,26 @@ export function SettingsPage() {
  *  fence from the reply, and runs it through the main-process validator BEFORE
  *  touching the patch editor. The agent never writes anything directly. */
 function ConfigConversation({ onPatchGenerated }: { onPatchGenerated: (patch: string) => void }) {
-  const [input, setInput] = useState("");
+  const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
-  const [status, setStatus] = useState<"idle" | "waiting" | "validating" | "validated" | "rejected" | "none">("idle");
+  const [status, setStatus] = useState<
+    'idle' | 'waiting' | 'validating' | 'validated' | 'rejected' | 'none'
+  >('idle');
   const [detail, setDetail] = useState<string | null>(null);
-  const processedRef = useRef<string>("");
+  const processedRef = useRef<string>('');
   const onPatchRef = useRef(onPatchGenerated);
   onPatchRef.current = onPatchGenerated;
 
   const currentMarkdown = useRuntimeStore((s) => {
-    const id = s.currentId ?? "draft";
+    const id = s.currentId ?? 'draft';
     const t = s.threads[id];
-    if (!t) return "";
+    if (!t) return '';
     for (let i = t.blocks.length - 1; i >= 0; i--) {
       const b = t.blocks[i];
-      if (b && (b as { kind?: string }).kind === "agent") return (b as { markdown?: string }).markdown ?? "";
+      if (b && (b as { kind?: string }).kind === 'agent')
+        return (b as { markdown?: string }).markdown ?? '';
     }
-    return "";
+    return '';
   });
 
   // Watch the active session's latest agent reply for a config-patch fence.
@@ -414,40 +506,45 @@ function ConfigConversation({ onPatchGenerated }: { onPatchGenerated: (patch: st
     const fence = extractConfigPatch(currentMarkdown);
     if (fence) {
       setBusy(true);
-      setStatus("validating");
-      void profileValidatePatch(fence).then((res) => {
-        setBusy(false);
-        if (res.ok) {
-          setStatus("validated");
-          setDetail(`patch 合法（${res.ops} 个操作），已填入编辑器。`);
-          onPatchRef.current(fence);
-        } else {
-          setStatus("rejected");
-          const r = res.rejection;
-          const label =
-            r.kind === "permission" ? "权限仅可收紧" :
-            r.kind === "forbidden-path" ? "目标路径禁止修改" :
-            r.kind === "syntax" ? "patch 语法错误" :
-            "不符合约束";
-          setDetail(`${label}：${r.detail}`);
-        }
-      }).catch(() => setBusy(false));
+      setStatus('validating');
+      void profileValidatePatch(fence)
+        .then((res) => {
+          setBusy(false);
+          if (res.ok) {
+            setStatus('validated');
+            setDetail(`patch 合法（${res.ops} 个操作），已填入编辑器。`);
+            onPatchRef.current(fence);
+          } else {
+            setStatus('rejected');
+            const r = res.rejection;
+            const label =
+              r.kind === 'permission'
+                ? '权限仅可收紧'
+                : r.kind === 'forbidden-path'
+                  ? '目标路径禁止修改'
+                  : r.kind === 'syntax'
+                    ? 'patch 语法错误'
+                    : '不符合约束';
+            setDetail(`${label}：${r.detail}`);
+          }
+        })
+        .catch(() => setBusy(false));
     }
   }, [currentMarkdown]);
 
   const send = async () => {
     const text = input.trim();
     if (!text || busy) return;
-    setInput("");
+    setInput('');
     setBusy(true);
-    setStatus("waiting");
-    setDetail("agent 正在生成配置差异…");
-    processedRef.current = "";
+    setStatus('waiting');
+    setDetail('agent 正在生成配置差异…');
+    processedRef.current = '';
     const ok = await sendConfigPrompt(text);
     if (!ok) {
       setBusy(false);
-      setStatus("rejected");
-      setDetail("无法连接运行时，发送失败。");
+      setStatus('rejected');
+      setDetail('无法连接运行时，发送失败。');
     }
   };
 
@@ -460,22 +557,34 @@ function ConfigConversation({ onPatchGenerated }: { onPatchGenerated: (patch: st
         <textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void send(); } }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              void send();
+            }
+          }}
           placeholder="例如：把默认模型换成 ali/deepseek-r1"
           rows={2}
-          className={cn(inputCls(), "w-full resize-y p-3 text-[13px] leading-relaxed")}
+          className={cn(inputCls(), 'w-full resize-y p-3 text-[13px] leading-relaxed')}
         />
         <div className="flex items-center gap-3">
-          <button className={btnAccent("gap-1.5")} onClick={() => void send()} disabled={busy || !input.trim()}>
+          <button
+            className={btnAccent('gap-1.5')}
+            onClick={() => void send()}
+            disabled={busy || !input.trim()}
+          >
             {busy ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
-            {busy ? "生成中…" : "生成 patch"}
+            {busy ? '生成中…' : '生成 patch'}
           </button>
           {detail && (
-            <span className={cn("text-xs", status === "rejected" ? "text-danger" : "text-muted")}>{detail}</span>
+            <span className={cn('text-xs', status === 'rejected' ? 'text-danger' : 'text-muted')}>
+              {detail}
+            </span>
           )}
         </div>
         <p className="text-[11px] text-muted">
-          安全边界：agent 不能直接写文件；生成的 patch 会先由本机校验（模型 / MCP / 权限收紧），通过后才进入下方编辑器。
+          安全边界：agent 不能直接写文件；生成的 patch 会先由本机校验（模型 / MCP /
+          权限收紧），通过后才进入下方编辑器。
         </p>
       </div>
     </Card>
@@ -484,7 +593,7 @@ function ConfigConversation({ onPatchGenerated }: { onPatchGenerated: (patch: st
 
 function ProfileSection() {
   const [manifest, setManifest] = useState<DeployedManifest | null>(null);
-  const [raw, setRaw] = useState("");
+  const [raw, setRaw] = useState('');
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -500,9 +609,11 @@ function ProfileSection() {
       setManifest(m as DeployedManifest);
       setInteraction(itx as InteractionConfig);
       try {
-        const stored = await window.electronAPI?.storeGet("profile-patch-raw");
-        setRaw(typeof stored === "string" ? stored : "");
-      } catch { /* not editable in web build */ }
+        const stored = await window.electronAPI?.storeGet('profile-patch-raw');
+        setRaw(typeof stored === 'string' ? stored : '');
+      } catch {
+        /* not editable in web build */
+      }
     }
   }
 
@@ -511,15 +622,15 @@ function ProfileSection() {
     setMsg(null);
     const result = await profileWritePatch(raw);
     if (!result.ok) {
-      setMsg(result.error ?? "保存失败");
-      toast.error(result.error ?? "patch 格式有误");
+      setMsg(result.error ?? '保存失败');
+      toast.error(result.error ?? 'patch 格式有误');
       setBusy(false);
       return;
     }
-    await window.electronAPI?.storeSet("profile-patch-raw", raw);
+    await window.electronAPI?.storeSet('profile-patch-raw', raw);
     setDirty(false);
-    setMsg("已保存。重启运行时（设置 → 运行时 → 重启）后生效。");
-    toast.success("patch 已保存");
+    setMsg('已保存。重启运行时（设置 → 运行时 → 重启）后生效。');
+    toast.success('patch 已保存');
     setBusy(false);
   }
 
@@ -531,14 +642,23 @@ function ProfileSection() {
       >
         <dl className="space-y-2.5">
           <Row label="base 指纹" value={manifest?.base ?? null} />
-          <Row label="patch 指纹" value={manifest?.patch ?? "none"} />
+          <Row label="patch 指纹" value={manifest?.patch ?? 'none'} />
           <Row label="合并指纹" value={manifest?.merged ?? null} />
           <Row label="更新时间" value={manifest?.appliedAt ?? null} />
-          <Row label="文件覆盖" value={manifest?.fileOverrides?.length ? manifest.fileOverrides.join(", ") : "无"} />
+          <Row
+            label="文件覆盖"
+            value={manifest?.fileOverrides?.length ? manifest.fileOverrides.join(', ') : '无'}
+          />
         </dl>
       </Card>
 
-      <ConfigConversation onPatchGenerated={(p) => { setRaw(p); setDirty(true); setMsg("对话已生成 patch，已填入下方编辑器。点击「保存 patch」生效。"); }} />
+      <ConfigConversation
+        onPatchGenerated={(p) => {
+          setRaw(p);
+          setDirty(true);
+          setMsg('对话已生成 patch，已填入下方编辑器。点击「保存 patch」生效。');
+        }}
+      />
 
       <Card
         title="启用渲染器"
@@ -570,18 +690,34 @@ function ProfileSection() {
         )}
       </Card>
 
-      <Card title="patch.json" hint="RFC 6902 JSON Patch。示例：替换默认模型为 { &quot;op&quot;: &quot;replace&quot;, &quot;path&quot;: &quot;/model&quot;, &quot;value&quot;: &quot;ali/deepseek-r1&quot; }">
+      <Card
+        title="patch.json"
+        hint='RFC 6902 JSON Patch。示例：替换默认模型为 { "op": "replace", "path": "/model", "value": "ali/deepseek-r1" }'
+      >
         <div className="space-y-3">
           <textarea
             value={raw}
-            onChange={(e) => { setRaw(e.target.value); setDirty(true); setMsg(null); }}
+            onChange={(e) => {
+              setRaw(e.target.value);
+              setDirty(true);
+              setMsg(null);
+            }}
             spellCheck={false}
             rows={10}
-            placeholder={'{\n  "target": "opencode.json",\n  "patch": [\n    { "op": "replace", "path": "/model", "value": "ali/deepseek-r1" }\n  ]\n}'}
-            className={cn(inputCls(), "h-auto min-h-40 w-full resize-y p-3 font-mono text-xs leading-relaxed")}
+            placeholder={
+              '{\n  "target": "opencode.json",\n  "patch": [\n    { "op": "replace", "path": "/model", "value": "ali/deepseek-r1" }\n  ]\n}'
+            }
+            className={cn(
+              inputCls(),
+              'h-auto min-h-40 w-full resize-y p-3 font-mono text-xs leading-relaxed',
+            )}
           />
           <div className="flex items-center gap-3">
-            <button className={btnAccent("gap-1.5")} onClick={() => void onSave()} disabled={!dirty || busy}>
+            <button
+              className={btnAccent('gap-1.5')}
+              onClick={() => void onSave()}
+              disabled={!dirty || busy}
+            >
               <Check size={13} />
               保存 patch
             </button>
@@ -595,18 +731,18 @@ function ProfileSection() {
 
 // ── Models section: manage multiple provider configs ──
 
-function ModelsSection({ connected, restart }: { connected: boolean; restart: () => Promise<void> }) {
+function ModelsSection({ restart }: { restart: () => Promise<void> }) {
   const [configs, setConfigs] = useState<ProviderConfig[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   // Form state
-  const [fName, setFName] = useState("");
-  const [fBaseUrl, setFBaseUrl] = useState("");
-  const [fApiKey, setFApiKey] = useState("");
-  const [fModelId, setFModelId] = useState("");
-  const [fProviderName, setFProviderName] = useState("");
+  const [fName, setFName] = useState('');
+  const [fBaseUrl, setFBaseUrl] = useState('');
+  const [fApiKey, setFApiKey] = useState('');
+  const [fModelId, setFModelId] = useState('');
+  const [fProviderName, setFProviderName] = useState('');
   const [showApiKey, setShowApiKey] = useState(false);
 
   useEffect(() => {
@@ -614,27 +750,32 @@ function ModelsSection({ connected, restart }: { connected: boolean; restart: ()
   }, []);
 
   async function loadConfigs() {
-    const raw = await window.electronAPI?.storeGet("provider-configs");
+    const raw = await window.electronAPI?.storeGet('provider-configs');
     if (raw && Array.isArray(raw)) {
       setConfigs(raw as ProviderConfig[]);
     } else {
       // Migrate legacy single-config format
-      const legacy = await window.electronAPI?.storeGet("provider-config");
-      if (legacy && typeof legacy === "object") {
-        const c = legacy as { baseUrl?: string; apiKey?: string; modelId?: string; providerName?: string };
+      const legacy = await window.electronAPI?.storeGet('provider-config');
+      if (legacy && typeof legacy === 'object') {
+        const c = legacy as {
+          baseUrl?: string;
+          apiKey?: string;
+          modelId?: string;
+          providerName?: string;
+        };
         if (c.baseUrl || c.apiKey || c.modelId) {
           const migrated: ProviderConfig = {
             id: crypto.randomUUID(),
-            name: c.providerName || "默认配置",
-            baseUrl: c.baseUrl ?? "",
-            apiKey: c.apiKey ?? "",
-            modelId: c.modelId ?? "",
-            providerName: c.providerName ?? "custom",
+            name: c.providerName || '默认配置',
+            baseUrl: c.baseUrl ?? '',
+            apiKey: c.apiKey ?? '',
+            modelId: c.modelId ?? '',
+            providerName: c.providerName ?? 'custom',
             active: true,
           };
           setConfigs([migrated]);
-          await window.electronAPI.storeSet("provider-configs", [migrated]);
-          await window.electronAPI.storeDelete("provider-config");
+          await window.electronAPI.storeSet('provider-configs', [migrated]);
+          await window.electronAPI.storeDelete('provider-config');
         }
       }
     }
@@ -642,15 +783,15 @@ function ModelsSection({ connected, restart }: { connected: boolean; restart: ()
 
   async function persist(newConfigs: ProviderConfig[]) {
     setConfigs(newConfigs);
-    await window.electronAPI.storeSet("provider-configs", newConfigs);
+    await window.electronAPI.storeSet('provider-configs', newConfigs);
   }
 
   function resetForm() {
-    setFName("");
-    setFBaseUrl("");
-    setFApiKey("");
-    setFModelId("");
-    setFProviderName("");
+    setFName('');
+    setFBaseUrl('');
+    setFApiKey('');
+    setFModelId('');
+    setFProviderName('');
     setEditingId(null);
     setShowForm(false);
   }
@@ -667,24 +808,26 @@ function ModelsSection({ connected, restart }: { connected: boolean; restart: ()
 
   async function handleSave() {
     if (!fBaseUrl && !fApiKey && !fModelId) {
-      toast.error("请至少填写 Base URL / API Key / 模型 ID");
+      toast.error('请至少填写 Base URL / API Key / 模型 ID');
       return;
     }
     const cfg: ProviderConfig = {
       id: editingId ?? crypto.randomUUID(),
-      name: fName || fProviderName || "未命名配置",
+      name: fName || fProviderName || '未命名配置',
       baseUrl: fBaseUrl,
       apiKey: fApiKey,
       modelId: fModelId,
-      providerName: fProviderName || "custom",
-      active: editingId ? configs.find((c) => c.id === editingId)?.active ?? false : configs.length === 0,
+      providerName: fProviderName || 'custom',
+      active: editingId
+        ? (configs.find((c) => c.id === editingId)?.active ?? false)
+        : configs.length === 0,
     };
     const newConfigs = editingId
       ? configs.map((c) => (c.id === editingId ? cfg : c))
       : [...configs, cfg];
     await persist(newConfigs);
     resetForm();
-    toast.success(editingId ? "配置已更新" : "配置已添加");
+    toast.success(editingId ? '配置已更新' : '配置已添加');
   }
 
   async function handleActivate(id: string) {
@@ -692,9 +835,9 @@ function ModelsSection({ connected, restart }: { connected: boolean; restart: ()
     try {
       const newConfigs = configs.map((c) => ({ ...c, active: c.id === id }));
       await persist(newConfigs);
-      toast.success("正在重启运行时…");
+      toast.success('正在重启运行时…');
       await restart();
-      toast.success("已切换并重启");
+      toast.success('已切换并重启');
     } catch (err) {
       toast.error(`切换失败: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
@@ -712,18 +855,23 @@ function ModelsSection({ connected, restart }: { connected: boolean; restart: ()
     }
     await persist(newConfigs);
     if (wasActive) {
-      toast.success("已删除激活配置，重启后恢复默认");
+      toast.success('已删除激活配置，重启后恢复默认');
       try {
         await restart();
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     } else {
-      toast.success("已删除");
+      toast.success('已删除');
     }
   }
 
   return (
     <>
-      <Card title="已保存的配置" hint="管理多个 OpenAI 兼容接口配置。激活的配置会在 sidecar 启动时合并到 opencode.json。">
+      <Card
+        title="已保存的配置"
+        hint="管理多个 OpenAI 兼容接口配置。激活的配置会在 sidecar 启动时合并到 opencode.json。"
+      >
         {configs.length === 0 ? (
           <div className="py-6 text-center text-xs text-muted">
             暂无保存的配置，点击下方「新增配置」添加。
@@ -734,8 +882,8 @@ function ModelsSection({ connected, restart }: { connected: boolean; restart: ()
               <div
                 key={cfg.id}
                 className={cn(
-                  "flex items-center gap-3 rounded-input border p-3 transition-colors",
-                  cfg.active ? "border-accent/50 bg-accent-soft" : "border-border bg-surface-2",
+                  'flex items-center gap-3 rounded-input border p-3 transition-colors',
+                  cfg.active ? 'border-accent/50 bg-accent-soft' : 'border-border bg-surface-2',
                 )}
               >
                 <div className="min-w-0 flex-1">
@@ -748,7 +896,7 @@ function ModelsSection({ connected, restart }: { connected: boolean; restart: ()
                     )}
                   </div>
                   <div className="mt-0.5 truncate font-mono text-[11px] text-muted">
-                    {cfg.providerName}/{cfg.modelId} · {cfg.baseUrl || "—"}
+                    {cfg.providerName}/{cfg.modelId} · {cfg.baseUrl || '—'}
                   </div>
                 </div>
                 <div className="flex shrink-0 items-center gap-1.5">
@@ -790,7 +938,10 @@ function ModelsSection({ connected, restart }: { connected: boolean; restart: ()
       </Card>
 
       {showForm && (
-        <Card title={editingId ? "编辑配置" : "新增配置"} hint="OpenAI 兼容接口。保存后可点击「激活」切换使用。">
+        <Card
+          title={editingId ? '编辑配置' : '新增配置'}
+          hint="OpenAI 兼容接口。保存后可点击「激活」切换使用。"
+        >
           {/* Presets */}
           <div className="mb-3 flex flex-wrap gap-1.5">
             <span className="text-[11px] text-muted">快捷填充：</span>
@@ -817,7 +968,7 @@ function ModelsSection({ connected, restart }: { connected: boolean; restart: ()
                   value={fName}
                   onChange={(e) => setFName(e.target.value)}
                   placeholder="我的 OpenAI 配置"
-                  className={inputCls("w-full")}
+                  className={inputCls('w-full')}
                 />
               </label>
               <label className="block">
@@ -826,7 +977,7 @@ function ModelsSection({ connected, restart }: { connected: boolean; restart: ()
                   value={fProviderName}
                   onChange={(e) => setFProviderName(e.target.value)}
                   placeholder="custom"
-                  className={inputCls("w-full")}
+                  className={inputCls('w-full')}
                 />
               </label>
             </div>
@@ -836,18 +987,18 @@ function ModelsSection({ connected, restart }: { connected: boolean; restart: ()
                 value={fBaseUrl}
                 onChange={(e) => setFBaseUrl(e.target.value)}
                 placeholder="https://api.openai.com/v1"
-                className={inputCls("w-full font-mono")}
+                className={inputCls('w-full font-mono')}
               />
             </label>
             <label className="block">
               <span className="mb-1 block text-xs text-muted">API Key</span>
               <div className="relative">
                 <input
-                  type={showApiKey ? "text" : "password"}
+                  type={showApiKey ? 'text' : 'password'}
                   value={fApiKey}
                   onChange={(e) => setFApiKey(e.target.value)}
                   placeholder="sk-..."
-                  className={inputCls("w-full font-mono pr-9")}
+                  className={inputCls('w-full font-mono pr-9')}
                 />
                 <button
                   type="button"
@@ -864,12 +1015,12 @@ function ModelsSection({ connected, restart }: { connected: boolean; restart: ()
                 value={fModelId}
                 onChange={(e) => setFModelId(e.target.value)}
                 placeholder="gpt-4o"
-                className={inputCls("w-full font-mono")}
+                className={inputCls('w-full font-mono')}
               />
             </label>
             <div className="flex items-center gap-2 pt-1">
               <button onClick={() => void handleSave()} className={btnAccent()}>
-                {editingId ? "更新" : "保存"}
+                {editingId ? '更新' : '保存'}
               </button>
               <button onClick={resetForm} className={btnGhost()}>
                 取消
@@ -910,7 +1061,7 @@ function VoiceSection() {
       return;
     }
     setTesting(true);
-    speak("你好，这是语音测试。Hello, this is a voice test.", {
+    speak('你好，这是语音测试。Hello, this is a voice test.', {
       voiceURI: cfg?.voiceURI ?? undefined,
       rate: cfg?.rate,
       pitch: cfg?.pitch,
@@ -927,7 +1078,10 @@ function VoiceSection() {
 
   return (
     <>
-      <Card title="文字转语音 (TTS)" hint="使用系统内置语音引擎，离线运行。启用后 AI 回复消息可朗读。">
+      <Card
+        title="文字转语音 (TTS)"
+        hint="使用系统内置语音引擎，离线运行。启用后 AI 回复消息可朗读。"
+      >
         <div className="flex items-center justify-between gap-4">
           <div className="min-w-0">
             <div className="text-[13px] font-medium text-text">启用朗读</div>
@@ -938,14 +1092,14 @@ function VoiceSection() {
             aria-checked={cfg.ttsEnabled}
             onClick={() => update({ ttsEnabled: !cfg.ttsEnabled })}
             className={cn(
-              "relative h-5 w-9 shrink-0 rounded-full transition-colors",
-              cfg.ttsEnabled ? "bg-accent" : "bg-surface-2",
+              'relative h-5 w-9 shrink-0 rounded-full transition-colors',
+              cfg.ttsEnabled ? 'bg-accent' : 'bg-surface-2',
             )}
           >
             <span
               className={cn(
-                "absolute top-0.5 h-4 w-4 rounded-full bg-surface shadow transition-transform",
-                cfg.ttsEnabled ? "left-[18px]" : "left-0.5",
+                'absolute top-0.5 h-4 w-4 rounded-full bg-surface shadow transition-transform',
+                cfg.ttsEnabled ? 'left-[18px]' : 'left-0.5',
               )}
             />
           </button>
@@ -958,14 +1112,14 @@ function VoiceSection() {
                 <Volume2 size={12} /> 语音选择
               </span>
               <select
-                value={cfg.voiceURI ?? ""}
+                value={cfg.voiceURI ?? ''}
                 onChange={(e) => update({ voiceURI: e.target.value || null })}
-                className={inputCls("w-full")}
+                className={inputCls('w-full')}
               >
                 <option value="">系统默认</option>
                 {voices.map((v) => (
                   <option key={v.voiceURI} value={v.voiceURI}>
-                    {v.name} ({v.lang}){v.localService ? " [本地]" : ""}
+                    {v.name} ({v.lang}){v.localService ? ' [本地]' : ''}
                   </option>
                 ))}
               </select>
@@ -1003,18 +1157,18 @@ function VoiceSection() {
               />
             </div>
 
-            <button
-              onClick={testSpeak}
-              className={btnGhost("gap-1.5")}
-            >
-              <Volume2 size={13} className={testing ? "animate-pulse" : ""} />
-              {testing ? "停止测试" : "测试朗读"}
+            <button onClick={testSpeak} className={btnGhost('gap-1.5')}>
+              <Volume2 size={13} className={testing ? 'animate-pulse' : ''} />
+              {testing ? '停止测试' : '测试朗读'}
             </button>
           </div>
         )}
       </Card>
 
-      <Card title="语音转文字 (STT)" hint="使用 Whisper.cpp 本地模型转写，离线运行。启用后输入框显示麦克风按钮。">
+      <Card
+        title="语音转文字 (STT)"
+        hint="使用 Whisper.cpp 本地模型转写，离线运行。启用后输入框显示麦克风按钮。"
+      >
         <div className="flex items-center justify-between gap-4">
           <div className="min-w-0">
             <div className="flex items-center gap-1.5 text-[13px] font-medium text-text">
@@ -1023,8 +1177,8 @@ function VoiceSection() {
             </div>
             <div className="text-[12px] text-muted">
               {sttSupported
-                ? "点击麦克风开始录音，再次点击停止并自动转写为文字。使用 Whisper tiny 模型，全程离线。"
-                : "未检测到 whisper-cli 或模型文件。请运行 scripts/dev/fetch-whisper.sh 下载。"}
+                ? '点击麦克风开始录音，再次点击停止并自动转写为文字。使用 Whisper tiny 模型，全程离线。'
+                : '未检测到 whisper-cli 或模型文件。请运行 scripts/dev/fetch-whisper.sh 下载。'}
             </div>
           </div>
           <button
@@ -1033,14 +1187,14 @@ function VoiceSection() {
             disabled={!sttSupported}
             onClick={() => update({ sttEnabled: !cfg.sttEnabled })}
             className={cn(
-              "relative h-5 w-9 shrink-0 rounded-full transition-colors disabled:opacity-40",
-              cfg.sttEnabled ? "bg-accent" : "bg-surface-2",
+              'relative h-5 w-9 shrink-0 rounded-full transition-colors disabled:opacity-40',
+              cfg.sttEnabled ? 'bg-accent' : 'bg-surface-2',
             )}
           >
             <span
               className={cn(
-                "absolute top-0.5 h-4 w-4 rounded-full bg-surface shadow transition-transform",
-                cfg.sttEnabled ? "left-[18px]" : "left-0.5",
+                'absolute top-0.5 h-4 w-4 rounded-full bg-surface shadow transition-transform',
+                cfg.sttEnabled ? 'left-[18px]' : 'left-0.5',
               )}
             />
           </button>
@@ -1055,7 +1209,7 @@ function AboutSection() {
   const [name, setName] = useState<string | null>(null);
   const [id, setId] = useState<string | null>(null);
   const [version, setVersion] = useState<string | null>(null);
-  const [busy, setBusy] = useState<"updates" | "logs" | null>(null);
+  const [busy, setBusy] = useState<'updates' | 'logs' | null>(null);
 
   useEffect(() => {
     void channelName().then(setName);
@@ -1064,7 +1218,7 @@ function AboutSection() {
   }, []);
 
   const onCheckUpdates = async () => {
-    setBusy("updates");
+    setBusy('updates');
     try {
       await checkForUpdates(true);
     } catch (err) {
@@ -1075,11 +1229,11 @@ function AboutSection() {
   };
 
   const onExportLogs = async () => {
-    setBusy("logs");
+    setBusy('logs');
     try {
       const path = await exportLogs();
       if (path) toast.success(path);
-      else toast.error(t("settings.exportLogs"));
+      else toast.error(t('settings.exportLogs'));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : String(err));
     } finally {
@@ -1089,31 +1243,31 @@ function AboutSection() {
 
   return (
     <>
-      <Card title={t("settings.tabAbout")} hint={t("settings.aboutHint")}>
+      <Card title={t('settings.tabAbout')} hint={t('settings.aboutHint')}>
         <dl className="space-y-2.5">
-          <Row label={t("settings.channel")} value={name} />
-          <Row label={t("settings.appId")} value={id} />
-          <Row label={t("settings.version")} value={version} />
+          <Row label={t('settings.channel')} value={name} />
+          <Row label={t('settings.appId')} value={id} />
+          <Row label={t('settings.version')} value={version} />
         </dl>
       </Card>
 
-      <Card title={t("settings.exportLogs")} hint={t("settings.exportLogsHint")}>
+      <Card title={t('settings.exportLogs')} hint={t('settings.exportLogsHint')}>
         <div className="flex flex-wrap gap-2">
           <button
-            className={btnGhost("gap-1.5")}
+            className={btnGhost('gap-1.5')}
             onClick={() => void onCheckUpdates()}
-            disabled={busy === "updates"}
+            disabled={busy === 'updates'}
           >
-            <RefreshCw size={13} className={busy === "updates" ? "animate-spin" : ""} />
-            {t("settings.checkUpdates")}
+            <RefreshCw size={13} className={busy === 'updates' ? 'animate-spin' : ''} />
+            {t('settings.checkUpdates')}
           </button>
           <button
-            className={btnGhost("gap-1.5")}
+            className={btnGhost('gap-1.5')}
             onClick={() => void onExportLogs()}
-            disabled={busy === "logs"}
+            disabled={busy === 'logs'}
           >
             <Download size={13} />
-            {t("settings.exportLogs")}
+            {t('settings.exportLogs')}
           </button>
         </div>
       </Card>
@@ -1125,31 +1279,31 @@ function Row({ label, value }: { label: string; value: string | null }) {
   return (
     <div className="flex items-center justify-between gap-4 text-[13px]">
       <dt className="text-muted">{label}</dt>
-      <dd className="truncate font-mono text-text">{value ?? "—"}</dd>
+      <dd className="truncate font-mono text-text">{value ?? '—'}</dd>
     </div>
   );
 }
 
 /* ---- Shared bits: one look for every control on this page ---- */
 
-const inputCls = (extra = "") =>
+const inputCls = (extra = '') =>
   cn(
-    "h-9 rounded-input border border-border bg-surface px-3 text-[13px] text-text outline-none",
-    "placeholder:text-muted focus:border-accent/60",
+    'h-9 rounded-input border border-border bg-surface px-3 text-[13px] text-text outline-none',
+    'placeholder:text-muted focus:border-accent/60',
     extra,
   );
 
-const btnGhost = (extra = "") =>
+const btnGhost = (extra = '') =>
   cn(
-    "flex h-9 shrink-0 items-center gap-1 rounded-input border border-border bg-surface px-3.5",
-    "text-[13px] text-text transition-colors hover:bg-surface-2 disabled:opacity-50",
+    'flex h-9 shrink-0 items-center gap-1 rounded-input border border-border bg-surface px-3.5',
+    'text-[13px] text-text transition-colors hover:bg-surface-2 disabled:opacity-50',
     extra,
   );
 
-const btnAccent = (extra = "") =>
+const btnAccent = (extra = '') =>
   cn(
-    "flex h-9 shrink-0 items-center gap-1.5 rounded-input bg-accent px-3.5 text-[13px] font-medium",
-    "text-accent-fg transition-opacity hover:opacity-90 disabled:opacity-50",
+    'flex h-9 shrink-0 items-center gap-1.5 rounded-input bg-accent px-3.5 text-[13px] font-medium',
+    'text-accent-fg transition-opacity hover:opacity-90 disabled:opacity-50',
     extra,
   );
 

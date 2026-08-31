@@ -3,6 +3,7 @@
 ## 背景
 
 参考 [DeepSeek-Reasonix](https://github.com/esengine/DeepSeek-Reasonix) 桌面端的对话交互风格，对 Workbench 的聊天 UI 进行优化。重点改进：
+
 - 用户消息的气泡样式（右对齐 + 强调色背景）
 - 助手消息的层次感（reasoning 折叠、工具卡片）
 - Composer 的运行状态反馈
@@ -15,7 +16,8 @@
 在 `index.css` 中增加以下语义变量：
 
 **Dark 主题新增：**
-```
+
+```text
 --bg-elev:       提升表面（用于卡片、气泡）
 --fg-dim:        次要文字
 --fg-faint:      辅助文字
@@ -30,6 +32,7 @@
 ### 2. 用户消息 → 右对齐气泡
 
 `atoms.tsx` 的 `UserMessage` 改为：
+
 - 外层 `flex + justify-end`（右对齐）
 - 内层气泡：`bg` 使用 `--chat-user-bg`，圆角 14px，边框，柔和阴影
 - 文字 `font-weight: 450`，`line-height: 1.65`

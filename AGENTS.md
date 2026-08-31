@@ -33,7 +33,9 @@ API), local workspace + JSONL provenance.
 
 - `app-config/.opencode/` — the OpenCode profile the app bundles (packager-owned).
 - `apps/desktop/` — Electron + React desktop shell (`src/` frontend, `src/main/` main process).
-- `packages/` — `ui` (placeholder), `shared`, `sdk` (the `OpenCodeClient` wrapper).
+- `packages/` — `sdk` (the `OpenCodeClient` wrapper + agent-runtime abstraction),
+  `shared` (domain types + patch overlay), `browser-mcp` / `terminal` /
+  `scheduler` (Electron plugin packages), `ui` (placeholder).
 - `runtime/` — `kernel` (Python/R bridges), `manager`, `mcp`.
 - `scripts/` — release and dev scripts.
 - `relay/` — **standalone project**: relay server + admin UI (`admin/`), self-owned
@@ -54,6 +56,57 @@ over WS/HTTP only. Each owns a copy of the wire protocol contract
 - Keep the frontend, desktop shell, and agent runtime decoupled.
 - Skills, MCP servers, and model providers are pluggable through the `.opencode`
   profile — the app itself adds none at runtime.
+
+## Engineering conventions (工程规范)
+
+Quality gates live at the repo root (`pnpm format / lint / typecheck / test /
+md:check`) and are the single source of truth: CI
+(`.github/workflows/ci.yml`) calls the same scripts, never a separate
+definition. Config files carry their rationale inline — 配置即文档, modeled on
+openai/codex (see `.bazelrc`-style comments in `.prettierrc.toml`,
+`.markdownlint-cli2.yaml`, `eslint.config.mjs`).
+
+### Formatting (prettier + markdownlint + editorconfig)
+
+- All code (ts/tsx/js/mjs/json/css/yaml) is prettier-formatted; run
+  `pnpm format` after edits, `pnpm format:check` to verify.
+- Markdown is owned by markdownlint (`pnpm md:check`), not prettier —
+  Chinese docs keep long lines (MD013 relaxed to 240, tables exempt).
+- Exemptions (same list in `.prettierignore` / `.markdownlint-cli2.yaml`):
+  `docs/**/*.md` is prettier-ignored by design; build artifacts
+  (out/dist/release), `app-config/` and `.zcode/` are excluded from both.
+
+### Linting (eslint 9 flat)
+
+- One root config (`eslint.config.mjs`) covers the whole repo. relay/client
+  are separate workspaces but resolve the root config upward — always run
+  `pnpm lint` from the repo root.
+- Import order is enforced via simple-import-sort (`pnpm lint:fix`
+  autofixes). `react-refresh/only-export-components` is intentionally off:
+  mixed component/util exports are the existing style. `no-unused-vars` is a
+  warning with `^_` ignore patterns — keep new code warning-free; a stray
+  `require()` is only acceptable with a `eslint-disable-next-line` comment
+  stating why the lazy load matters.
+
+### Tests
+
+- `pnpm test` runs desktop (vitest + jsdom), relay (vitest) and
+  `packages/sdk` (vitest, node env). New core logic in sdk/shared should come
+  with tests — `packages/sdk/src/mockServer.ts` makes client tests
+  sidecar-free.
+- The jsdom test setup (`apps/desktop/src/renderer/test/setup.ts`) stubs the
+  Electron preload bridge (`window.electronAPI`) with a noop proxy (`on*`
+  returns an unsubscribe, other methods resolve undefined), so AppShell-level
+  tests can mount components that subscribe to IPC. Tests that need to assert
+  a specific call can overwrite the property or `vi.spyOn` it.
+
+### Versioning
+
+- Single version source: root `package.json` `version`; all workspace
+  packages stay in lockstep at the same number.
+- Bump patch for bugfixes, minor for UI/protocol changes. Update the
+  Unreleased section of `CHANGELOG.md` in the same commit; when releasing,
+  archive it under the version and tag `v<version>`.
 
 ## Safety defaults (non-negotiable for the desktop)
 

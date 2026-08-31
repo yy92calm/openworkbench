@@ -8,11 +8,12 @@
 // resets (lists, margins, img sizing) plus the theme's inherited font/colors
 // (light text in dark mode) wreck the layout. The shadow root blocks the
 // stylesheets; the base style below resets what still inherits.
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { Loader2 } from "lucide-react";
-import { cn } from "@/lib/cn";
-import { useScrollMemory } from "@/lib/scrollMemory";
-import type { SheetHtml } from "@/lib/xlsx";
+import { Loader2 } from 'lucide-react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+
+import { cn } from '@/lib/cn';
+import { useScrollMemory } from '@/lib/scrollMemory';
+import type { SheetHtml } from '@/lib/xlsx';
 
 /** Document-neutral canvas: black text, CJK-aware fonts, light gray backdrop. */
 const BASE_CSS = `
@@ -30,7 +31,7 @@ const BASE_CSS = `
 /** One shadow-isolated container the imperative renderers can append into.
  *  Callback ref, not useRef+useEffect: some views mount the host div late
  *  (after their data loads), and an effect keyed on css would never see it. */
-function useShadowPage(extraCss = "") {
+function useShadowPage(extraCss = '') {
   const [page, setPage] = useState<HTMLElement | null>(null);
   const hostRef = useCallback(
     (host: HTMLDivElement | null) => {
@@ -38,12 +39,12 @@ function useShadowPage(extraCss = "") {
         setPage(null);
         return;
       }
-      const shadow = host.shadowRoot ?? host.attachShadow({ mode: "open" });
+      const shadow = host.shadowRoot ?? host.attachShadow({ mode: 'open' });
       shadow.replaceChildren();
-      const style = document.createElement("style");
+      const style = document.createElement('style');
       style.textContent = BASE_CSS + extraCss;
-      const div = document.createElement("div");
-      div.className = "page";
+      const div = document.createElement('div');
+      div.className = 'page';
       shadow.append(style, div);
       setPage(div);
     },
@@ -84,8 +85,8 @@ export function DocxView({ bytes, scrollKey }: { bytes: ArrayBuffer; scrollKey: 
     // pane width (never up) via `zoom`, which shrinks the layout box too — so
     // there's no leftover scroll area. Re-fit when the pane resizes.
     const fit = () => {
-      const wrapper = page.querySelector<HTMLElement>(".docx-wrapper");
-      const section = wrapper?.querySelector<HTMLElement>("section");
+      const wrapper = page.querySelector<HTMLElement>('.docx-wrapper');
+      const section = wrapper?.querySelector<HTMLElement>('section');
       const avail = wrapRef.current?.clientWidth;
       if (!wrapper || !section || !avail) return;
       const pageWidth = section.offsetWidth + 40; // section + wrapper padding
@@ -94,7 +95,7 @@ export function DocxView({ bytes, scrollKey }: { bytes: ArrayBuffer; scrollKey: 
 
     (async () => {
       try {
-        const { renderAsync } = await import("docx-preview");
+        const { renderAsync } = await import('docx-preview');
         if (cancelled) return;
         // Styles go to the same shadow container, so the library's own page
         // chrome (white sheet on gray) applies untouched by app CSS.
@@ -151,7 +152,7 @@ export function XlsxView({ bytes, scrollKey }: { bytes: ArrayBuffer; scrollKey: 
     (async () => {
       try {
         // Dynamic import keeps ExcelJS in a lazy chunk, out of the main bundle.
-        const { workbookSheets } = await import("@/lib/xlsx");
+        const { workbookSheets } = await import('@/lib/xlsx');
         const parsed = await workbookSheets(bytes);
         if (cancelled) return;
         setSheets(parsed);
@@ -174,7 +175,8 @@ export function XlsxView({ bytes, scrollKey }: { bytes: ArrayBuffer; scrollKey: 
   const onScroll = useScrollMemory(wrapRef, scrollKey, !!(page && sheet));
 
   if (error || !sheets) return <RenderState error={error} loading={!sheets} />;
-  if (sheets.length === 0) return <div className="p-4 text-sm text-muted">This workbook has no sheets.</div>;
+  if (sheets.length === 0)
+    return <div className="p-4 text-sm text-muted">This workbook has no sheets.</div>;
   return (
     <div className="flex h-full flex-col">
       {sheets.length > 1 && (
@@ -184,8 +186,8 @@ export function XlsxView({ bytes, scrollKey }: { bytes: ArrayBuffer; scrollKey: 
               key={s.name}
               onClick={() => setActive(i)}
               className={cn(
-                "rounded px-2 py-1 text-xs",
-                i === active ? "bg-surface text-text shadow-sm" : "text-muted hover:text-text",
+                'rounded px-2 py-1 text-xs',
+                i === active ? 'bg-surface text-text shadow-sm' : 'text-muted hover:text-text',
               )}
             >
               {s.name}
@@ -197,7 +199,7 @@ export function XlsxView({ bytes, scrollKey }: { bytes: ArrayBuffer; scrollKey: 
         <div ref={hostRef} />
       </div>
       <div className="border-t border-border px-4 py-1.5 text-xs text-muted">
-        {sheet?.truncated ? "Truncated preview · " : ""}Embedded charts are not rendered.
+        {sheet?.truncated ? 'Truncated preview · ' : ''}Embedded charts are not rendered.
       </div>
     </div>
   );
@@ -226,8 +228,8 @@ export function PptxView({ bytes, scrollKey }: { bytes: ArrayBuffer; scrollKey: 
     (async () => {
       try {
         const [{ init }, { normalizePptxForPreview }] = await Promise.all([
-          import("pptx-preview"),
-          import("@/lib/pptx"),
+          import('pptx-preview'),
+          import('@/lib/pptx'),
         ]);
         if (cancelled) return;
         // Decks styled via paragraph-level defRPr render unstyled (tiny black
@@ -236,7 +238,7 @@ export function PptxView({ bytes, scrollKey }: { bytes: ArrayBuffer; scrollKey: 
         if (cancelled) return;
         // Fit slides to the pane, with a floor so a collapsed pane stays legible.
         const width = Math.max((wrapRef.current?.clientWidth ?? 0) - 32, 480);
-        previewer = init(page, { width, mode: "list" });
+        previewer = init(page, { width, mode: 'list' });
         await (previewer as ReturnType<typeof init>).preview(normalized);
       } catch (e) {
         if (!cancelled) setError(`Could not render this presentation: ${message(e)}`);

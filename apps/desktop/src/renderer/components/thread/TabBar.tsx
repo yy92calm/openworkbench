@@ -1,8 +1,9 @@
-import { useNavigate } from "react-router-dom";
-import { FileText, MessageSquare, X } from "lucide-react";
-import { useUiStore, type Tab } from "@/lib/store";
-import { useRuntimeStore } from "@/lib/runtime";
-import { cn } from "@/lib/cn";
+import { FileText, MessageSquare, X } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+
+import { cn } from '@/lib/cn';
+import { useRuntimeStore } from '@/lib/runtime';
+import { type Tab, useUiStore } from '@/lib/store';
 
 /**
  * Main-area tab bar. Session tabs switch the active conversation (the agent
@@ -23,15 +24,15 @@ export function TabBar() {
   // Session tab titles follow the live session title (renames update in
   // place); file tabs use the stored file name.
   const tabTitle = (t: Tab): string =>
-    t.kind === "session" && t.sessionId
+    t.kind === 'session' && t.sessionId
       ? (sessions.find((s) => s.id === t.sessionId)?.title ?? t.title)
       : t.title;
 
   const onActivate = (tab: Tab) => {
     activateTab(tab.id);
     // Session tabs drive the route so LiveSessionPage opens that conversation.
-    if (tab.kind === "session") {
-      navigate(tab.sessionId ? `/live/${tab.sessionId}` : "/live");
+    if (tab.kind === 'session') {
+      navigate(tab.sessionId ? `/live/${tab.sessionId}` : '/live');
     }
   };
 
@@ -47,8 +48,8 @@ export function TabBar() {
     if (wasActive) {
       const after = useUiStore.getState();
       const next = after.tabs.find((t) => t.id === after.activeTabId);
-      if (next?.kind === "session") {
-        navigate(next.sessionId ? `/live/${next.sessionId}` : "/live");
+      if (next?.kind === 'session') {
+        navigate(next.sessionId ? `/live/${next.sessionId}` : '/live');
       }
     }
   };
@@ -57,21 +58,30 @@ export function TabBar() {
     <div className="flex h-9 shrink-0 items-center gap-0.5 overflow-x-auto border-b border-border bg-surface px-2">
       {tabs.map((t) => {
         const active = t.id === activeTabId;
-        const running = t.kind === "session" && !!t.sessionId && !!runningSessions[t.sessionId];
+        const running = t.kind === 'session' && !!t.sessionId && !!runningSessions[t.sessionId];
         return (
           <div
             key={t.id}
             onClick={() => onActivate(t)}
             className={cn(
-              "group flex max-w-[200px] cursor-pointer items-center gap-1.5 rounded-t-md px-2.5 py-1.5 text-[12px] transition-colors",
-              active ? "bg-bg text-text" : "text-muted hover:bg-surface-2 hover:text-text",
+              'group flex max-w-[200px] cursor-pointer items-center gap-1.5 rounded-t-md px-2.5 py-1.5 text-[12px] transition-colors',
+              active ? 'bg-bg text-text' : 'text-muted hover:bg-surface-2 hover:text-text',
             )}
             title={tabTitle(t)}
           >
-            {t.kind === "file" ? <FileText size={12} className="shrink-0" /> : <MessageSquare size={12} className="shrink-0" />}
-            <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", running ? "bg-accent animate-pulse" : "bg-transparent")} />
+            {t.kind === 'file' ? (
+              <FileText size={12} className="shrink-0" />
+            ) : (
+              <MessageSquare size={12} className="shrink-0" />
+            )}
+            <span
+              className={cn(
+                'h-1.5 w-1.5 shrink-0 rounded-full',
+                running ? 'bg-accent animate-pulse' : 'bg-transparent',
+              )}
+            />
             <span className="truncate">{tabTitle(t)}</span>
-            {t.kind === "file" && (
+            {t.kind === 'file' && (
               <button
                 onClick={(e) => onClose(e, t)}
                 className="shrink-0 rounded p-0.5 opacity-0 transition-opacity hover:bg-surface-2 group-hover:opacity-100"

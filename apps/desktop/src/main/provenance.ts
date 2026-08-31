@@ -1,9 +1,10 @@
-import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
-import { workspaceDir } from "./server";
+import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
-const PROVENANCE_DIR = ".workbench";
-const PROVENANCE_FILE = "provenance.jsonl";
+import { workspaceDir } from './server';
+
+const PROVENANCE_DIR = '.workbench';
+const PROVENANCE_FILE = 'provenance.jsonl';
 
 function provenancePath(): string {
   const dir = join(workspaceDir(), PROVENANCE_DIR);
@@ -28,21 +29,23 @@ export function recordProvenance(
     model,
     timestamp: new Date().toISOString(),
   };
-  appendFileSync(provenancePath(), JSON.stringify(record) + "\n", "utf-8");
+  appendFileSync(provenancePath(), JSON.stringify(record) + '\n', 'utf-8');
 }
 
 export function listProvenance(path: string): unknown[] {
   const file = provenancePath();
   if (!existsSync(file)) return [];
   try {
-    const text = readFileSync(file, "utf-8");
+    const text = readFileSync(file, 'utf-8');
     const records: unknown[] = [];
-    for (const line of text.split("\n")) {
+    for (const line of text.split('\n')) {
       if (!line.trim()) continue;
       try {
         const r = JSON.parse(line);
         if (r.path === path || r.input?.path === path) records.push(r);
-      } catch { /* skip malformed */ }
+      } catch {
+        /* skip malformed */
+      }
     }
     return records;
   } catch {
@@ -51,8 +54,8 @@ export function listProvenance(path: string): unknown[] {
 }
 
 export function readEnvLockfile(hash: string): string {
-  const dir = join(workspaceDir(), PROVENANCE_DIR, "envs");
+  const dir = join(workspaceDir(), PROVENANCE_DIR, 'envs');
   const file = join(dir, `${hash}.txt`);
-  if (!existsSync(file)) return "";
-  return readFileSync(file, "utf-8");
+  if (!existsSync(file)) return '';
+  return readFileSync(file, 'utf-8');
 }

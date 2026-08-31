@@ -1,8 +1,9 @@
-import { useState, type MouseEvent } from "react";
-import * as Popover from "@radix-ui/react-popover";
-import { Download } from "lucide-react";
-import type { FigureAnnotation, FigureBlock as FigureBlockT } from "@workbench/shared";
-import { saveTextWithFeedback } from "@/lib/download";
+import * as Popover from '@radix-ui/react-popover';
+import type { FigureAnnotation, FigureBlock as FigureBlockT } from '@workbench/shared';
+import { Download } from 'lucide-react';
+import { type MouseEvent, useState } from 'react';
+
+import { saveTextWithFeedback } from '@/lib/download';
 
 /**
  * A figure the agent produced. Click anywhere on the image to drop a numbered
@@ -18,14 +19,14 @@ export function FigureBlock({
 }) {
   const [pins, setPins] = useState<FigureAnnotation[]>(block.annotations ?? []);
   const [draft, setDraft] = useState<{ x: number; y: number } | null>(null);
-  const [note, setNote] = useState("");
+  const [note, setNote] = useState('');
 
   const onImageClick = (e: MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
     const x = rect.width ? ((e.clientX - rect.left) / rect.width) * 100 : 50;
     const y = rect.height ? ((e.clientY - rect.top) / rect.height) * 100 : 50;
     setDraft({ x: clamp(x), y: clamp(y) });
-    setNote("");
+    setNote('');
   };
 
   const send = () => {
@@ -39,7 +40,7 @@ export function FigureBlock({
     setPins((p) => [...p, annotation]);
     onComment?.(annotation, block.title);
     setDraft(null);
-    setNote("");
+    setNote('');
   };
 
   return (
@@ -49,7 +50,9 @@ export function FigureBlock({
         <button
           className="ml-auto text-muted hover:text-text"
           aria-label="下载图片"
-          onClick={() => void saveTextWithFeedback(`${block.title}.svg`, imageToText(block.src), "image/svg+xml")}
+          onClick={() =>
+            void saveTextWithFeedback(`${block.title}.svg`, imageToText(block.src), 'image/svg+xml')
+          }
         >
           <Download size={15} />
         </button>
@@ -105,8 +108,8 @@ export function FigureBlock({
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") send();
-                  if (e.key === "Escape") setDraft(null);
+                  if (e.key === 'Enter') send();
+                  if (e.key === 'Escape') setDraft(null);
                 }}
                 placeholder="添加备注…"
                 className="w-44 bg-transparent text-sm text-text outline-none placeholder:text-muted"

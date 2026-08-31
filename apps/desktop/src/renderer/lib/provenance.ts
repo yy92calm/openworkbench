@@ -1,7 +1,8 @@
-import type { ToolUpdatedEvent } from "@workbench/sdk";
-import type { ProvenanceRecord } from "@workbench/shared";
-import { logDebug } from "./electron";
-import { deriveArtifact } from "./artifacts";
+import type { ToolUpdatedEvent } from '@workbench/sdk';
+import type { ProvenanceRecord } from '@workbench/shared';
+
+import { deriveArtifact } from './artifacts';
+import { logDebug } from './electron';
 
 export interface ProvenanceInput {
   path: string;
@@ -13,11 +14,11 @@ export interface ProvenanceInput {
 const JUPYTER_MUTATING = /insert|overwrite|delete|execute|write|edit|append|run/;
 
 export function provenanceInputFromEvent(event: ToolUpdatedEvent): ProvenanceInput | null {
-  if (event.status !== "success") return null;
+  if (event.status !== 'success') return null;
   const artifact = deriveArtifact(event);
   if (!artifact) return null;
-  const tool = (event.tool ?? "").toLowerCase();
-  if (tool.includes("jupyter") && !JUPYTER_MUTATING.test(tool)) return null;
+  const tool = (event.tool ?? '').toLowerCase();
+  if (tool.includes('jupyter') && !JUPYTER_MUTATING.test(tool)) return null;
   const title = event.title?.trim();
   const log =
     title && !title.endsWith(artifact.filename) ? title : `${event.tool} → ${artifact.path}`;
@@ -25,8 +26,8 @@ export function provenanceInputFromEvent(event: ToolUpdatedEvent): ProvenanceInp
 }
 
 function electronAPI() {
-  if (typeof window === "undefined" || !window.electronAPI)
-    throw new Error("not running in the desktop app");
+  if (typeof window === 'undefined' || !window.electronAPI)
+    throw new Error('not running in the desktop app');
   return window.electronAPI;
 }
 
@@ -37,7 +38,7 @@ export async function recordProvenance(
 ): Promise<void> {
   try {
     await electronAPI().recordProvenance(
-      sessionId ?? "",
+      sessionId ?? '',
       input.path,
       input.tool,
       { content: input.content ?? null, log: input.log },
@@ -46,13 +47,15 @@ export async function recordProvenance(
     );
     void logDebug(`provenance ✓ ${input.path}`);
   } catch (e) {
-    void logDebug(`provenance FAILED for ${input.path}: ${e instanceof Error ? e.message : String(e)}`);
+    void logDebug(
+      `provenance FAILED for ${input.path}: ${e instanceof Error ? e.message : String(e)}`,
+    );
   }
 }
 
 export async function listProvenance(path: string): Promise<ProvenanceRecord[]> {
   try {
-    return await electronAPI().listProvenance(path) as ProvenanceRecord[];
+    return (await electronAPI().listProvenance(path)) as ProvenanceRecord[];
   } catch {
     return [];
   }

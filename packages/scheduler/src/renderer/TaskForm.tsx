@@ -1,26 +1,27 @@
-import { useState, useEffect } from "react";
-import type { ScheduledTask, CreateTaskInput, UpdateTaskInput } from "@/lib/electron";
+import { useEffect, useState } from 'react';
+
+import type { CreateTaskInput, ScheduledTask, UpdateTaskInput } from '@/lib/electron';
 
 const CRON_PRESETS: { label: string; value: string }[] = [
-  { label: "每小时", value: "0 * * * *" },
-  { label: "每天早上8点", value: "0 8 * * *" },
-  { label: "工作日早上9点", value: "0 9 * * 1-5" },
-  { label: "每周一", value: "0 9 * * 1" },
-  { label: "每月1号", value: "0 8 1 * *" },
-  { label: "自定义", value: "" },
+  { label: '每小时', value: '0 * * * *' },
+  { label: '每天早上8点', value: '0 8 * * *' },
+  { label: '工作日早上9点', value: '0 9 * * 1-5' },
+  { label: '每周一', value: '0 9 * * 1' },
+  { label: '每月1号', value: '0 8 1 * *' },
+  { label: '自定义', value: '' },
 ];
 
 function humanCron(cron: string): string {
   const parts = cron.trim().split(/\s+/);
-  if (parts.length < 5) return "";
+  if (parts.length < 5) return '';
   const [min, hour, dom, , dow] = parts;
-  if (dom === "*" && dow === "*") return `每天 ${hour}:${min.padStart(2, "0")}`;
-  if (dom === "*" && dow !== "*") {
-    const days = ["日", "一", "二", "三", "四", "五", "六"];
-    const dows = dow.split(",").map((d: string) => days[Number(d)] ?? d);
-    return `每周${dows.join("、")} ${hour}:${min.padStart(2, "0")}`;
+  if (dom === '*' && dow === '*') return `每天 ${hour}:${min.padStart(2, '0')}`;
+  if (dom === '*' && dow !== '*') {
+    const days = ['日', '一', '二', '三', '四', '五', '六'];
+    const dows = dow.split(',').map((d: string) => days[Number(d)] ?? d);
+    return `每周${dows.join('、')} ${hour}:${min.padStart(2, '0')}`;
   }
-  if (dom !== "*" && dow === "*") return `每月${dom}号 ${hour}:${min.padStart(2, "0")}`;
+  if (dom !== '*' && dow === '*') return `每月${dom}号 ${hour}:${min.padStart(2, '0')}`;
   return cron;
 }
 
@@ -33,41 +34,41 @@ interface Props {
 }
 
 export function TaskForm({ task, agents, onSave, onUpdate, onCancel }: Props) {
-  const [name, setName] = useState(task?.name ?? "");
-  const [preset, setPreset] = useState("");
-  const [cron, setCron] = useState(task?.cron ?? "");
-  const [prompt, setPrompt] = useState(task?.prompt ?? "");
-  const [agent, setAgent] = useState(task?.agent ?? "");
-  const [model, setModel] = useState(task?.model ?? "");
-  const [tags, setTags] = useState(task?.tags?.join(", ") ?? "");
-  const [cronError, setCronError] = useState("");
+  const [name, setName] = useState(task?.name ?? '');
+  const [preset, setPreset] = useState('');
+  const [cron, setCron] = useState(task?.cron ?? '');
+  const [prompt, setPrompt] = useState(task?.prompt ?? '');
+  const [agent, setAgent] = useState(task?.agent ?? '');
+  const [model, setModel] = useState(task?.model ?? '');
+  const [tags, setTags] = useState(task?.tags?.join(', ') ?? '');
+  const [cronError, setCronError] = useState('');
 
   useEffect(() => {
     const match = CRON_PRESETS.find((p) => p.value === cron);
-    setPreset(match ? match.value : "");
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    setPreset(match ? match.value : '');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handlePreset = (value: string) => {
     setPreset(value);
     if (value) {
       setCron(value);
-      setCronError("");
+      setCronError('');
     }
   };
 
   const handleCron = (value: string) => {
     setCron(value);
-    setPreset("");
+    setPreset('');
     if (value.trim().split(/\s+/).length === 5) {
-      setCronError("");
+      setCronError('');
     }
   };
 
   const handleSubmit = () => {
     const parts = cron.trim().split(/\s+/);
     if (parts.length !== 5) {
-      setCronError("Cron 表达式需要 5 个字段（分 时 日 月 周）");
+      setCronError('Cron 表达式需要 5 个字段（分 时 日 月 周）');
       return;
     }
     if (!name.trim() || !prompt.trim()) return;
@@ -78,7 +79,12 @@ export function TaskForm({ task, agents, onSave, onUpdate, onCancel }: Props) {
       prompt: prompt.trim(),
       agent: agent.trim() || undefined,
       model: model.trim() || undefined,
-      tags: tags.trim() ? tags.split(",").map((t) => t.trim()).filter(Boolean) : undefined,
+      tags: tags.trim()
+        ? tags
+            .split(',')
+            .map((t) => t.trim())
+            .filter(Boolean)
+        : undefined,
     };
 
     if (task) {
@@ -98,9 +104,7 @@ export function TaskForm({ task, agents, onSave, onUpdate, onCancel }: Props) {
         className="w-[480px] rounded-card border border-border bg-surface p-5 shadow-card"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="font-serif text-lg text-text">
-          {task ? "编辑定时任务" : "新建定时任务"}
-        </h2>
+        <h2 className="font-serif text-lg text-text">{task ? '编辑定时任务' : '新建定时任务'}</h2>
 
         <div className="mt-4 space-y-3">
           <div>
@@ -122,7 +126,9 @@ export function TaskForm({ task, agents, onSave, onUpdate, onCancel }: Props) {
             >
               <option value="">选择预设或自定义</option>
               {CRON_PRESETS.map((p) => (
-                <option key={p.value || "__custom"} value={p.value}>{p.label}</option>
+                <option key={p.value || '__custom'} value={p.value}>
+                  {p.label}
+                </option>
               ))}
             </select>
             <input
@@ -132,7 +138,9 @@ export function TaskForm({ task, agents, onSave, onUpdate, onCancel }: Props) {
               placeholder="分 时 日 月 周（如 0 8 * * 1-5）"
             />
             {cronError && <div className="mt-1 text-xs text-error">{cronError}</div>}
-            {!cronError && cron && <div className="mt-1 text-xs text-muted">→ {humanCron(cron)}</div>}
+            {!cronError && cron && (
+              <div className="mt-1 text-xs text-muted">→ {humanCron(cron)}</div>
+            )}
           </div>
 
           <div>
@@ -156,7 +164,9 @@ export function TaskForm({ task, agents, onSave, onUpdate, onCancel }: Props) {
               >
                 <option value="">默认</option>
                 {agents.map((a) => (
-                  <option key={a} value={a}>{a}</option>
+                  <option key={a} value={a}>
+                    {a}
+                  </option>
                 ))}
               </select>
             </div>
@@ -172,7 +182,9 @@ export function TaskForm({ task, agents, onSave, onUpdate, onCancel }: Props) {
           </div>
 
           <div>
-            <label className="block text-xs font-medium text-muted mb-1">标签（可选，逗号分隔）</label>
+            <label className="block text-xs font-medium text-muted mb-1">
+              标签（可选，逗号分隔）
+            </label>
             <input
               className="w-full rounded-input border border-border bg-bg px-3 py-1.5 text-sm text-text placeholder:text-muted focus:outline-none focus:border-accent"
               value={tags}
@@ -193,7 +205,7 @@ export function TaskForm({ task, agents, onSave, onUpdate, onCancel }: Props) {
             className="rounded-input bg-accent px-3 py-1.5 text-sm font-medium text-accent-fg hover:opacity-90"
             onClick={handleSubmit}
           >
-            {task ? "保存" : "创建"}
+            {task ? '保存' : '创建'}
           </button>
         </div>
       </div>

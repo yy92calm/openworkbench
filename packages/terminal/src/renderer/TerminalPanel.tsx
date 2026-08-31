@@ -1,29 +1,30 @@
-import { useEffect, useRef, useCallback, useState } from "react";
-import { Terminal } from "@xterm/xterm";
-import { FitAddon } from "@xterm/addon-fit";
-import { WebLinksAddon } from "@xterm/addon-web-links";
-import "@xterm/xterm/css/xterm.css";
-import { ChevronDown, X } from "lucide-react";
+import '@xterm/xterm/css/xterm.css';
+
+import { FitAddon } from '@xterm/addon-fit';
+import { WebLinksAddon } from '@xterm/addon-web-links';
+import { Terminal } from '@xterm/xterm';
+import { ChevronDown, X } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 // Inline cn utility for self-containment
-const cn = (...classes: (string | false | undefined)[]) => classes.filter(Boolean).join(" ");
+const cn = (...classes: (string | false | undefined)[]) => classes.filter(Boolean).join(' ');
 
 interface TerminalPanelProps {
   id: string;
   onClose: () => void;
 }
 
-const isWindows = navigator.userAgent.includes("Windows");
+const isWindows = navigator.userAgent.includes('Windows');
 
 const SHELLS = isWindows
   ? [
-      { value: "powershell", label: "PowerShell" },
-      { value: "pwsh7", label: "PowerShell 7" },
-      { value: "cmd", label: "CMD" },
+      { value: 'powershell', label: 'PowerShell' },
+      { value: 'pwsh7', label: 'PowerShell 7' },
+      { value: 'cmd', label: 'CMD' },
     ]
   : [
-      { value: "bash", label: "Bash" },
-      { value: "zsh", label: "Zsh" },
+      { value: 'bash', label: 'Bash' },
+      { value: 'zsh', label: 'Zsh' },
     ];
 
 /**
@@ -41,28 +42,28 @@ export function TerminalPanel({ id, onClose }: TerminalPanelProps) {
   // Read CSS variables for terminal theme
   const getTerminalTheme = useCallback(() => {
     const cs = getComputedStyle(document.documentElement);
-    const v = (name: string) => cs.getPropertyValue(name).trim() || "#000";
+    const v = (name: string) => cs.getPropertyValue(name).trim() || '#000';
     return {
-      background: v("--surface"),
-      foreground: v("--text"),
-      cursor: v("--accent"),
-      selectionBackground: v("--accent-soft") || "rgba(193,95,60,0.3)",
-      black: v("--bg"),
-      red: v("--error"),
-      green: v("--ok"),
-      yellow: v("--warn"),
-      blue: v("--accent"),
-      magenta: "#c08ae0",
-      cyan: "#5fc8c8",
-      white: v("--text-dim"),
-      brightBlack: v("--border"),
-      brightRed: v("--error"),
-      brightGreen: v("--ok"),
-      brightYellow: v("--warn"),
-      brightBlue: v("--accent-strong"),
-      brightMagenta: "#d4a8f0",
-      brightCyan: "#7dd8d8",
-      brightWhite: v("--text"),
+      background: v('--surface'),
+      foreground: v('--text'),
+      cursor: v('--accent'),
+      selectionBackground: v('--accent-soft') || 'rgba(193,95,60,0.3)',
+      black: v('--bg'),
+      red: v('--error'),
+      green: v('--ok'),
+      yellow: v('--warn'),
+      blue: v('--accent'),
+      magenta: '#c08ae0',
+      cyan: '#5fc8c8',
+      white: v('--text-dim'),
+      brightBlack: v('--border'),
+      brightRed: v('--error'),
+      brightGreen: v('--ok'),
+      brightYellow: v('--warn'),
+      brightBlue: v('--accent-strong'),
+      brightMagenta: '#d4a8f0',
+      brightCyan: '#7dd8d8',
+      brightWhite: v('--text'),
     };
   }, []);
 
@@ -70,11 +71,16 @@ export function TerminalPanel({ id, onClose }: TerminalPanelProps) {
   useEffect(() => {
     const term = terminalRef.current;
     if (!term) return;
-    const applyTheme = () => { term.options.theme = getTerminalTheme(); };
+    const applyTheme = () => {
+      term.options.theme = getTerminalTheme();
+    };
     applyTheme();
     // Watch for data-theme changes on <html>
     const observer = new MutationObserver(applyTheme);
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['data-theme'],
+    });
     return () => observer.disconnect();
   }, [getTerminalTheme]);
 
@@ -89,7 +95,7 @@ export function TerminalPanel({ id, onClose }: TerminalPanelProps) {
       fontSize: 13,
       fontFamily: "'JetBrains Mono', 'SF Mono', 'Cascadia Code', monospace",
       cursorBlink: true,
-      cursorStyle: "block",
+      cursorStyle: 'block',
       theme: getTerminalTheme(),
       allowProposedApi: true,
     });
@@ -106,15 +112,17 @@ export function TerminalPanel({ id, onClose }: TerminalPanelProps) {
     terminalRef.current = term;
 
     // Create terminal session in main process
-    window.electronAPI.invoke("terminal:create", id, "local", shell).then(() => {
+    window.electronAPI.invoke('terminal:create', id, 'local', shell).then(() => {
       setConnected(true);
       term.focus();
     });
 
     // Listen for terminal data from main process
-    const removeData = window.electronAPI.on(`terminal:data:${id}`, (data: unknown) => writeToTerminal(data as string));
+    const removeData = window.electronAPI.on(`terminal:data:${id}`, (data: unknown) =>
+      writeToTerminal(data as string),
+    );
     const removeExit = window.electronAPI.on(`terminal:exit:${id}`, (code: unknown) => {
-      term.write(`\r\n\x1b[31m进程已退出 (code: ${code ?? "unknown"})\x1b[0m\r\n`);
+      term.write(`\r\n\x1b[31m进程已退出 (code: ${code ?? 'unknown'})\x1b[0m\r\n`);
       setConnected(false);
     });
     const removeError = window.electronAPI.on(`terminal:error:${id}`, (msg: unknown) => {
@@ -123,7 +131,7 @@ export function TerminalPanel({ id, onClose }: TerminalPanelProps) {
 
     // Handle user input
     const onData = (data: string) => {
-      window.electronAPI.invoke("terminal:write", id, data);
+      window.electronAPI.invoke('terminal:write', id, data);
     };
     term.onData(onData);
 
@@ -131,17 +139,17 @@ export function TerminalPanel({ id, onClose }: TerminalPanelProps) {
       fitAddon.fit();
       const dims = fitAddon.proposeDimensions();
       if (dims) {
-        window.electronAPI.invoke("terminal:resize", id, dims.cols, dims.rows);
+        window.electronAPI.invoke('terminal:resize', id, dims.cols, dims.rows);
       }
     };
-    window.addEventListener("resize", onResize);
+    window.addEventListener('resize', onResize);
 
     // Observe container size changes (sidebar drag, tab switch)
     const resizeObserver = new ResizeObserver(() => {
       fitAddon.fit();
       const dims = fitAddon.proposeDimensions();
       if (dims) {
-        window.electronAPI.invoke("terminal:resize", id, dims.cols, dims.rows);
+        window.electronAPI.invoke('terminal:resize', id, dims.cols, dims.rows);
       }
     });
     if (containerRef.current) {
@@ -152,14 +160,14 @@ export function TerminalPanel({ id, onClose }: TerminalPanelProps) {
 
     return () => {
       resizeObserver.disconnect();
-      window.electronAPI.invoke("terminal:close", id);
+      window.electronAPI.invoke('terminal:close', id);
       removeData();
       removeExit();
       removeError();
-      window.removeEventListener("resize", onResize);
+      window.removeEventListener('resize', onResize);
       term.dispose();
     };
-  }, [id, shell, writeToTerminal]);
+  }, [id, shell, writeToTerminal, getTerminalTheme]);
 
   return (
     <div className="flex h-full flex-col bg-surface">
@@ -178,10 +186,13 @@ export function TerminalPanel({ id, onClose }: TerminalPanelProps) {
               {SHELLS.map((s) => (
                 <button
                   key={s.value}
-                  onClick={() => { setShell(s.value); setShowShellMenu(false); }}
+                  onClick={() => {
+                    setShell(s.value);
+                    setShowShellMenu(false);
+                  }}
                   className={cn(
-                    "flex w-full items-center px-3 py-1.5 text-left text-[11px] transition-colors hover:bg-surface-2",
-                    shell === s.value ? "text-accent" : "text-text",
+                    'flex w-full items-center px-3 py-1.5 text-left text-[11px] transition-colors hover:bg-surface-2',
+                    shell === s.value ? 'text-accent' : 'text-text',
                   )}
                 >
                   {s.label}

@@ -5,40 +5,41 @@ import {
   cpSync,
   existsSync,
   mkdirSync,
-  readFileSync,
   readdirSync,
+  readFileSync,
   statSync,
   writeFileSync,
-} from "node:fs";
-import { join } from "node:path";
-import { app } from "electron";
+} from 'node:fs';
+import { join } from 'node:path';
+
 import {
   applyProfilePatch,
   contentHash,
+  type DeployedManifest,
   humanizePatchError,
+  type InteractionConfig,
   parseRenderersJson,
   parseUiDefaultsJson,
   PatchPolicyError,
-  type DeployedManifest,
-  type InteractionConfig,
   type PatchRejection,
   validateProfilePatch,
-} from "@workbench/shared";
+} from '@workbench/shared';
+import { app } from 'electron';
 
-const PATCH_FILE = "patch.json";
-const MANIFEST_FILE = "deployed-manifest.json";
+const PATCH_FILE = 'patch.json';
+const MANIFEST_FILE = 'deployed-manifest.json';
 /** Files that belong to overlay bookkeeping, never mirrored as overrides. */
 const RESERVED = new Set([PATCH_FILE, MANIFEST_FILE]);
 
 /** The app-private dir holding the user overlay. Never inside the target. */
 export function userPatchDir(): string {
-  return join(app.getPath("userData"), "opencode-user");
+  return join(app.getPath('userData'), 'opencode-user');
 }
 
 function readJson<T>(file: string): T | null {
   if (!existsSync(file)) return null;
   try {
-    return JSON.parse(readFileSync(file, "utf-8")) as T;
+    return JSON.parse(readFileSync(file, 'utf-8')) as T;
   } catch {
     return null;
   }
@@ -65,20 +66,20 @@ export function applyUserOverlay(target: string): DeployedManifest {
   }
 
   const patchPath = join(dir, PATCH_FILE);
-  const opencodePath = join(target, "opencode.json");
-  const base = existsSync(opencodePath) ? readFileSync(opencodePath, "utf-8") : "{}";
+  const opencodePath = join(target, 'opencode.json');
+  const base = existsSync(opencodePath) ? readFileSync(opencodePath, 'utf-8') : '{}';
   const baseFingerprint = contentHash(base);
 
-  let patchHash = "none";
+  let patchHash = 'none';
   if (existsSync(patchPath)) {
-    const raw = readFileSync(patchPath, "utf-8");
+    const raw = readFileSync(patchPath, 'utf-8');
     patchHash = contentHash(raw);
     const spec = validateProfilePatch(base, raw); // dry-run: throws on invalid / unsafe
-    const merged = applyProfilePatch(base, { target: "opencode.json", patch: spec });
+    const merged = applyProfilePatch(base, { target: 'opencode.json', patch: spec });
     writeFileSync(opencodePath, merged);
   }
 
-  const merged = existsSync(opencodePath) ? readFileSync(opencodePath, "utf-8") : "{}";
+  const merged = existsSync(opencodePath) ? readFileSync(opencodePath, 'utf-8') : '{}';
   const manifest: DeployedManifest = {
     base: baseFingerprint,
     merged: contentHash(merged),
@@ -101,8 +102,8 @@ export function readDeployedManifest(): DeployedManifest | null {
  *  at the next `applyUserOverlay`. Throws PatchPolicyError on invalid input. */
 export function writeUserPatch(raw: string): void {
   const spec = JSON.parse(raw) as { target?: string; patch?: unknown };
-  if (typeof spec.target !== "string") throw new PatchPolicyError("target is required");
-  if (!Array.isArray(spec.patch)) throw new PatchPolicyError("patch array is required");
+  if (typeof spec.target !== 'string') throw new PatchPolicyError('target is required');
+  if (!Array.isArray(spec.patch)) throw new PatchPolicyError('patch array is required');
 
   const dir = userPatchDir();
   mkdirSync(dir, { recursive: true });
@@ -113,18 +114,16 @@ export function writeUserPatch(raw: string): void {
  *  OpenCode config dir. Missing/invalid files degrade to empty defaults. */
 export function readInteractionConfig(target: string): InteractionConfig {
   const read = (name: string): string | undefined => {
-    const file = join(target, "interaction", name);
-    return existsSync(file) ? readFileSync(file, "utf-8") : undefined;
+    const file = join(target, 'interaction', name);
+    return existsSync(file) ? readFileSync(file, 'utf-8') : undefined;
   };
   return {
-    renderers: parseRenderersJson(read("renderers.json")),
-    ui: parseUiDefaultsJson(read("ui.json")),
+    renderers: parseRenderersJson(read('renderers.json')),
+    ui: parseUiDefaultsJson(read('ui.json')),
   };
 }
 
-export type ValidateResult =
-  | { ok: true; ops: number }
-  | { ok: false; rejection: PatchRejection };
+export type ValidateResult = { ok: true; ops: number } | { ok: false; rejection: PatchRejection };
 
 /** Dry-run a patch against the deployed opencode.json. Never writes; returns
  *  the operation count on success, or a user-facing rejection on failure. */

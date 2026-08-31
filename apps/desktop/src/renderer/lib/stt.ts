@@ -30,22 +30,22 @@ function encodeWav(samples: Float32Array, sampleRate: number): ArrayBuffer {
   };
 
   // RIFF header
-  writeString(0, "RIFF");
+  writeString(0, 'RIFF');
   view.setUint32(4, 36 + samples.length * 2, true);
-  writeString(8, "WAVE");
+  writeString(8, 'WAVE');
 
   // fmt chunk
-  writeString(12, "fmt ");
-  view.setUint32(16, 16, true);    // chunk size
-  view.setUint16(20, 1, true);     // audio format = PCM
-  view.setUint16(22, 1, true);    // mono
+  writeString(12, 'fmt ');
+  view.setUint32(16, 16, true); // chunk size
+  view.setUint16(20, 1, true); // audio format = PCM
+  view.setUint16(22, 1, true); // mono
   view.setUint32(24, sampleRate, true);
   view.setUint32(28, sampleRate * 2, true); // byte rate
-  view.setUint16(32, 2, true);     // block align
-  view.setUint16(34, 16, true);    // bits per sample
+  view.setUint16(32, 2, true); // block align
+  view.setUint16(34, 16, true); // bits per sample
 
   // data chunk
-  writeString(36, "data");
+  writeString(36, 'data');
   view.setUint32(40, samples.length * 2, true);
 
   // Write 16-bit PCM samples
@@ -100,7 +100,7 @@ async function startRecording(): Promise<void> {
 /** Stop recording, return the WAV-encoded audio buffer. */
 function stopRecording(): ArrayBuffer {
   if (!processor || !audioContext || !mediaStream) {
-    throw new Error("not recording");
+    throw new Error('not recording');
   }
   recording = false;
   processor.disconnect();
@@ -138,7 +138,7 @@ export async function startListening(): Promise<void> {
 export async function stopAndTranscribe(
   onResult: SttResultCallback,
   onError: SttErrorCallback,
-  lang = "zh",
+  lang = 'zh',
 ): Promise<void> {
   try {
     const wavBuffer = stopRecording();

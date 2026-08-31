@@ -20,13 +20,17 @@ export function ActionSheet({ title, options, onCancel }: Props) {
         {options.map((opt, i) => (
           <button
             key={i}
-            className={`action-sheet-option ${opt.danger ? "danger" : ""}`}
-            onClick={() => { opt.onClick(); }}
+            className={`action-sheet-option ${opt.danger ? 'danger' : ''}`}
+            onClick={() => {
+              opt.onClick();
+            }}
           >
             {opt.label}
           </button>
         ))}
-        <button className="action-sheet-cancel" onClick={onCancel}>取消</button>
+        <button className="action-sheet-cancel" onClick={onCancel}>
+          取消
+        </button>
       </div>
     </div>
   );

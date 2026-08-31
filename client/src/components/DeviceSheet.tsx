@@ -1,11 +1,7 @@
-import { useEffect, useState } from "react";
-import { RadioTower, RefreshCw, X } from "lucide-react";
-import {
-  connect,
-  listDevices,
-  loadConfig,
-  type RelayDeviceInfo,
-} from "@/lib/connection";
+import { RadioTower, RefreshCw, X } from 'lucide-react';
+import { useEffect, useState } from 'react';
+
+import { connect, listDevices, loadConfig, type RelayDeviceInfo } from '@/lib/connection';
 
 interface Props {
   open: boolean;
@@ -18,35 +14,35 @@ interface Props {
  *  used to live inside SessionsPage. */
 export function DeviceSheet({ open, onClose, onConnected }: Props) {
   const [devices, setDevices] = useState<RelayDeviceInfo[] | null>(null);
-  const [chosen, setChosen] = useState("");
+  const [chosen, setChosen] = useState('');
   const [busy, setBusy] = useState(false);
   const [connecting, setConnecting] = useState(false);
-  const [error, setError] = useState("");
+  const [error, setError] = useState('');
   const cfg = loadConfig();
 
   useEffect(() => {
     if (!open) return;
     setDevices(null);
-    setChosen("");
-    setError("");
+    setChosen('');
+    setError('');
     void refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   const refresh = async () => {
     if (!cfg) {
-      setError("未登录");
+      setError('未登录');
       return;
     }
     setBusy(true);
-    setError("");
+    setError('');
     try {
       const list = await listDevices(cfg.relayUrl, cfg.token);
       setDevices(list);
       const online = list.filter((d) => d.online);
       // Auto-select only when there is exactly one online device — never
       // silently pick an offline one.
-      setChosen(list.length === 1 && online.length === 1 ? list[0].device : "");
+      setChosen(list.length === 1 && online.length === 1 ? list[0].device : '');
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -57,7 +53,7 @@ export function DeviceSheet({ open, onClose, onConnected }: Props) {
   const apply = async () => {
     if (!chosen || !cfg) return;
     setConnecting(true);
-    setError("");
+    setError('');
     try {
       await connect({ relayUrl: cfg.relayUrl, deviceId: chosen, token: cfg.token });
       onConnected?.();
@@ -71,9 +67,7 @@ export function DeviceSheet({ open, onClose, onConnected }: Props) {
 
   if (!open) return null;
 
-  const onlineFirst = [...(devices ?? [])].sort(
-    (a, b) => Number(b.online) - Number(a.online),
-  );
+  const onlineFirst = [...(devices ?? [])].sort((a, b) => Number(b.online) - Number(a.online));
 
   return (
     <>
@@ -81,7 +75,7 @@ export function DeviceSheet({ open, onClose, onConnected }: Props) {
       <div className="device-sheet" role="dialog" aria-label="选择设备">
         <div className="sheet-handle" aria-hidden />
         <div className="sheet-header">
-          <RadioTower size={16} style={{ color: "var(--accent)" }} />
+          <RadioTower size={16} style={{ color: 'var(--accent)' }} />
           <h2 className="sheet-title">选择设备</h2>
           <button onClick={onClose} aria-label="关闭" className="icon-btn">
             <X size={16} />
@@ -93,21 +87,23 @@ export function DeviceSheet({ open, onClose, onConnected }: Props) {
         {devices === null ? (
           <p className="sheet-empty">加载中…</p>
         ) : devices.length === 0 ? (
-          <p className="sheet-empty">该账号还没有注册任何设备——请先在桌面端设置 → 远程访问 中开启连接。</p>
+          <p className="sheet-empty">
+            该账号还没有注册任何设备——请先在桌面端设置 → 远程访问 中开启连接。
+          </p>
         ) : (
           <div className="sheet-list">
             {onlineFirst.map((d) => (
               <button
                 key={d.device}
                 onClick={() => setChosen(d.device)}
-                className={`sheet-item ${chosen === d.device ? "selected" : ""} ${d.online ? "" : "offline"}`}
+                className={`sheet-item ${chosen === d.device ? 'selected' : ''} ${d.online ? '' : 'offline'}`}
               >
                 <span
                   className="sheet-item-dot"
-                  style={{ background: d.online ? "var(--ok)" : "var(--muted)" }}
+                  style={{ background: d.online ? 'var(--ok)' : 'var(--muted)' }}
                 />
                 <span className="sheet-item-id">{d.device}</span>
-                <span className="sheet-item-status">{d.online ? "在线" : "离线"}</span>
+                <span className="sheet-item-status">{d.online ? '在线' : '离线'}</span>
               </button>
             ))}
           </div>
@@ -128,7 +124,7 @@ export function DeviceSheet({ open, onClose, onConnected }: Props) {
             onClick={() => void apply()}
             disabled={!chosen || connecting}
           >
-            {connecting ? "连接中…" : "连接"}
+            {connecting ? '连接中…' : '连接'}
           </button>
         </div>
       </div>

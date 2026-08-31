@@ -24,7 +24,7 @@ import type {
   PermissionMode,
   PermissionReply,
   RuntimeStatus,
-} from "./types";
+} from './types';
 
 type EventListener = (event: AgentRuntimeEvent) => void;
 type StatusListener = (status: RuntimeStatus) => void;
@@ -114,10 +114,12 @@ export interface AgentRuntime {
 }
 
 /** Convenience: extract the interactive-request events from a list. */
-export function isQuestionAsked(e: AgentRuntimeEvent): e is Extract<AgentRuntimeEvent, { type: "question.asked" }> {
-  return e.type === "question.asked";
+export function isQuestionAsked(
+  e: AgentRuntimeEvent,
+): e is Extract<AgentRuntimeEvent, { type: 'question.asked' }> {
+  return e.type === 'question.asked';
 }
 
 export function isPermissionAsked(e: AgentRuntimeEvent): e is PermissionAskedEvent {
-  return e.type === "permission.asked";
+  return e.type === 'permission.asked';
 }

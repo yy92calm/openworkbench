@@ -15,7 +15,7 @@
 
 ### 架构
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────────────┐
 │  Electron 主进程                                                     │
 │                                                                     │
@@ -115,6 +115,7 @@ interface ExecutionRecord {
 - 应用退出时：`stop()` 所有 croner。
 
 依赖：
+
 - `croner`（npm）—— `import { Cron } from "croner"`
 - `electron-store`（项目已有）—— scope 为 `"workbench.scheduler"`
 - `@workbench/sdk` —— `OpenCodeClient` 用于触发 Agent 会话
@@ -162,17 +163,20 @@ onSchedulerEvent: (callback: (event: SchedulerEvent) => void) => {
 替换占位页面，实现完整管理界面：
 
 **布局：**
+
 - 头部：标题 + 「新建任务」按钮
 - 任务列表：卡片展示名称、cron（人类可读）、下次执行、上次执行状态、启用开关
 - 点击卡片 → 展开详情（prompt、agent、model、执行历史）
 - 「新建任务」按钮 → 弹窗/抽屉表单
 
 **Cron 构建器：**
+
 - 预设下拉：每小时、每天早上8点、工作日早上9点、每周一、每月1号、自定义
 - 自定义模式：可视化 cron 表达式构建器（5 个字段：分、时、日、月、周）
 - 表达式下方显示人类可读预览
 
 **表单字段：**
+
 - 名称（文本输入）
 - Cron 表达式（预设选择器 + 自定义构建器）
 - 提示词（文本域，必填）
@@ -181,6 +185,7 @@ onSchedulerEvent: (callback: (event: SchedulerEvent) => void) => {
 - 标签（可选，逗号分隔）
 
 **执行历史：**
+
 - 每个任务的历史表格：触发时间、状态徽章、耗时、会话链接
 - 全局历史视图（所有任务）
 
@@ -194,7 +199,7 @@ onSchedulerEvent: (callback: (event: SchedulerEvent) => void) => {
 
 **架构：**
 
-```
+```text
 Agent (OpenCode sidecar)
   │ MCP protocol (stdio)
   ▼
@@ -231,10 +236,12 @@ CronEngine (croner + electron-store)
 ### 6. 界面状态
 
 ### 空状态
+
 无任务时，显示当前占位内容，附带引导：「创建你的第一个定时任务」。
 
 ### 列表视图
-```
+
+```text
 ┌──────────────────────────────────────────────────────────────┐
 │  定时任务                                      [+ 新建任务]   │
 │                                                              │
@@ -257,7 +264,8 @@ CronEngine (croner + electron-store)
 ```
 
 ### 新建/编辑弹窗
-```
+
+```text
 ┌─────────────────────────────────────────────┐
 │  新建定时任务                           [X]  │
 │                                              │
@@ -280,7 +288,8 @@ CronEngine (croner + electron-store)
 ```
 
 ### 执行历史
-```
+
+```text
 ┌──────────────────────────────────────────────────────────────┐
 │  执行历史 — 每日市场简报                                     │
 │                                                              │

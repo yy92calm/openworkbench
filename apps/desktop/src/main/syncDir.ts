@@ -1,5 +1,5 @@
-import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs';
+import { join } from 'node:path';
 
 /** Mirror a source directory into a target, copying only files that changed
  *  (mtime/size) and deleting target files/dirs that no longer exist in the

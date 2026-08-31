@@ -7,5 +7,5 @@
  * MCP server:     @fafawork/browser-mcp/mcp-server
  */
 
-export { createBrowserMcp } from "./main/index";
-export type { BrowserMcpOptions, BrowserMcpPlugin } from "./main/index";
+export type { BrowserMcpOptions, BrowserMcpPlugin } from './main/index';
+export { createBrowserMcp } from './main/index';

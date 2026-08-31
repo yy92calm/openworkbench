@@ -1,7 +1,8 @@
-import { useState } from "react";
-import { ChevronRight } from "lucide-react";
-import { useRuntimeStore } from "@/lib/runtime";
-import { cn } from "@/lib/cn";
+import { ChevronRight } from 'lucide-react';
+import { useState } from 'react';
+
+import { cn } from '@/lib/cn';
+import { useRuntimeStore } from '@/lib/runtime';
 
 /**
  * Read-only list of the `.opencode/` profile's always-injected context: the
@@ -52,7 +53,7 @@ export function AutoContext() {
             <Row
               key={m.name}
               name={m.name}
-              tone={m.status === "connected" ? "ok" : m.status === "failed" ? "error" : "muted"}
+              tone={m.status === 'connected' ? 'ok' : m.status === 'failed' ? 'error' : 'muted'}
               hint={m.status}
             />
           ))}
@@ -73,7 +74,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
       >
         <ChevronRight
           size={13}
-          className={cn("shrink-0 text-muted transition-transform", open && "rotate-90")}
+          className={cn('shrink-0 text-muted transition-transform', open && 'rotate-90')}
         />
         <span className="flex-1 text-[11px] text-text-dim">{title}</span>
       </button>
@@ -85,16 +86,16 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 function Row({
   name,
   hint,
-  tone = "muted",
+  tone = 'muted',
 }: {
   name: string;
   hint?: string;
-  tone?: "ok" | "error" | "muted";
+  tone?: 'ok' | 'error' | 'muted';
 }) {
-  const dot = tone === "ok" ? "bg-ok" : tone === "error" ? "bg-error" : "bg-muted";
+  const dot = tone === 'ok' ? 'bg-ok' : tone === 'error' ? 'bg-error' : 'bg-muted';
   return (
     <div className="flex items-center gap-1.5 rounded-input px-1 py-0.5">
-      <span className={cn("h-1 w-1 shrink-0 rounded-full", dot)} />
+      <span className={cn('h-1 w-1 shrink-0 rounded-full', dot)} />
       <span className="min-w-0 flex-1 truncate text-[12px] text-text" title={name}>
         {name}
       </span>

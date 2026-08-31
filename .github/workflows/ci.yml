@@ -1,0 +1,156 @@
+# CI 合并门 —— 聚合所有质量检查（仿 openai/codex 的 blocking-ci 思路）。
+#
+# 策略（配置即文档）：
+# - 路径感知：dorny/paths-filter 检测 desktop / relay / client 的变更，只跑相关
+#   typecheck / test job；repo-checks（markdownlint + prettier + actionlint）与
+#   lint（eslint 全仓）成本低，任何变更都跑。
+# - root 配置变更（package.json、eslint.config.mjs、.github/** 等）触发全部 job。
+# - fail-fast: false + 每个 job 显式 timeout：一个 job 失败不取消其他，
+#   避免偶发超时或环境问题掩盖真实失败。
+# - CI 与本地命令同源：直接调用根 package.json 的聚合脚本
+#   （format:check / lint / md:check / typecheck / test），不重复定义检查逻辑。
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ── 变更检测：输出各子系统的变更标志 ────────────────────────────────
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      root: ${{ steps.filter.outputs.root }}
+      desktop: ${{ steps.filter.outputs.desktop }}
+      relay: ${{ steps.filter.outputs.relay }}
+      client: ${{ steps.filter.outputs.client }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            root:
+              - 'package.json'
+              - 'pnpm-workspace.yaml'
+              - 'pnpm-lock.yaml'
+              - 'eslint.config.mjs'
+              - '.prettierrc.toml'
+              - '.prettierignore'
+              - '.editorconfig'
+              - '.markdownlint-cli2.yaml'
+              - 'AGENTS.md'
+              - '.github/**'
+            desktop:
+              - 'apps/**'
+              - 'packages/**'
+            relay:
+              - 'relay/**'
+            client:
+              - 'client/**'
+
+  # ── 全仓快速检查：格式、markdown、workflow 语法 ──────────────────────
+  repo-checks:
+    needs: changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+        with:
+          workspace: root
+      - name: Prettier check
+        run: pnpm format:check
+      - name: Markdownlint
+        run: pnpm md:check
+      - name: Validate workflows (actionlint)
+        uses: docker://rhysd/actionlint:latest
+        with:
+          args: -color
+
+  # ── ESLint 全仓（含 relay / client 源码，配置从根生效）───────────────
+  lint:
+    needs: changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+        with:
+          workspace: root
+      - name: ESLint
+        run: pnpm lint
+
+  # ── 类型检查：按变更路径分 job ──────────────────────────────────────
+  typecheck-desktop:
+    needs: changes
+    if: needs.changes.outputs.root == 'true' || needs.changes.outputs.desktop == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+        with:
+          workspace: root
+      - name: Typecheck (desktop + packages)
+        run: pnpm -r typecheck
+
+  typecheck-relay:
+    needs: changes
+    if: needs.changes.outputs.root == 'true' || needs.changes.outputs.relay == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+        with:
+          workspace: relay
+      - name: Typecheck (relay)
+        run: pnpm --dir relay typecheck
+
+  typecheck-client:
+    needs: changes
+    if: needs.changes.outputs.root == 'true' || needs.changes.outputs.client == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+        with:
+          workspace: client
+      - name: Typecheck (client)
+        run: pnpm --dir client typecheck
+
+  # ── 测试：按变更路径分 job ──────────────────────────────────────────
+  test-desktop:
+    needs: changes
+    if: needs.changes.outputs.root == 'true' || needs.changes.outputs.desktop == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+        with:
+          workspace: root
+      - name: Test (desktop + packages)
+        run: pnpm -r test
+
+  test-relay:
+    needs: changes
+    if: needs.changes.outputs.root == 'true' || needs.changes.outputs.relay == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+        with:
+          workspace: relay
+      - name: Test (relay)
+        run: pnpm --dir relay test

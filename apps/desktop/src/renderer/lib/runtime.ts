@@ -1,13 +1,12 @@
-import { create } from "zustand";
 import {
-  OpenCodeClient,
-  DEFAULT_OPENCODE_URL,
+  type AgentInfo,
   type AgentRuntime,
   type AgentRuntimeKind,
-  type AgentInfo,
   type CommandInfo,
+  DEFAULT_OPENCODE_URL,
   type HistoryMessage,
   type McpServer,
+  OpenCodeClient,
   type OpenCodeEvent,
   type PermissionAskedEvent,
   type PermissionMode,
@@ -17,8 +16,14 @@ import {
   type SessionMeta,
   type SkillInfo,
   type ToolCallStatus,
-} from "@workbench/sdk";
-import type { ArtifactBlock, RuntimeStatus, ThreadBlock } from "@workbench/shared";
+} from '@workbench/sdk';
+import type { ArtifactBlock, RuntimeStatus, ThreadBlock } from '@workbench/shared';
+import { create } from 'zustand';
+
+import { deriveArtifact } from './artifacts';
+import { kernelReset } from './kernel';
+import { provenanceInputFromEvent, recordProvenance } from './provenance';
+import { moveScrollMemory } from './scrollMemory';
 import {
   detectTools as probeTools,
   isTauri,
@@ -27,29 +32,25 @@ import {
   runtimePassword,
   setWorkspace,
   startRuntime,
-  workspacePath,
   type ToolStatus,
-} from "./tauri";
-import { kernelReset } from "./kernel";
-import { moveScrollMemory } from "./scrollMemory";
-import { deriveArtifact } from "./artifacts";
-import { provenanceInputFromEvent, recordProvenance } from "./provenance";
+  workspacePath,
+} from './tauri';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-const URL_KEY = "workbench.opencodeUrl";
-const HIDDEN_KEY = "workbench.hiddenExamples";
+const URL_KEY = 'workbench.opencodeUrl';
+const HIDDEN_KEY = 'workbench.hiddenExamples';
 
 function initialUrl(): string {
-  if (typeof window === "undefined") return "";
+  if (typeof window === 'undefined') return '';
   // Bundled mode: always wait for bootstrap() to provide the dynamic port.
   // Don't fall back to DEFAULT_OPENCODE_URL — the sidecar uses a random port.
-  if (isTauri) return "";
+  if (isTauri) return '';
   return window.localStorage.getItem(URL_KEY) ?? DEFAULT_OPENCODE_URL;
 }
 function initialHidden(): string[] {
-  if (typeof window === "undefined") return [];
+  if (typeof window === 'undefined') return [];
   try {
-    return JSON.parse(window.localStorage.getItem(HIDDEN_KEY) ?? "[]");
+    return JSON.parse(window.localStorage.getItem(HIDDEN_KEY) ?? '[]');
   } catch {
     return [];
   }
@@ -175,7 +176,7 @@ let client: AgentRuntime | null = null;
 const emptyThread = (): Thread => ({ blocks: [], index: {}, consecutiveTools: 0, loaded: false });
 /** Threads key for the draft conversation — its blocks move to the real
  *  session id once the session exists, so the page never visibly resets. */
-export const DRAFT_KEY = "draft";
+export const DRAFT_KEY = 'draft';
 /** One bounded retry for the first POSTs after a sidecar restart — the old
  *  connection occasionally dies mid-handshake ("Load failed"). */
 async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
@@ -199,7 +200,7 @@ const interruptedSessions = new Set<string>();
  *  USER message means a turn was accepted but not yet answered — still running. */
 export function turnIsOver(messages: HistoryMessage[]): boolean {
   const last = messages[messages.length - 1];
-  return !!last && last.role === "assistant" && !!last.completed;
+  return !!last && last.role === 'assistant' && !!last.completed;
 }
 
 /** Last SSE arrival per session (monotonic sequence, not wall time). Lets a
@@ -267,7 +268,7 @@ async function performTurn(
   shell = false,
 ): Promise<string | null> {
   if (!client) {
-    set({ error: "Not connected to the agent runtime." });
+    set({ error: 'Not connected to the agent runtime.' });
     return null;
   }
   if (get().sending) return null; // one send at a time
@@ -277,8 +278,8 @@ async function performTurn(
     const cur = s.threads[echoKey] ?? emptyThread();
     const newBlocks = [
       ...cur.blocks,
-      { kind: "turn-divider" as const },
-      { kind: "user" as const, text: echo, timestamp: now },
+      { kind: 'turn-divider' as const },
+      { kind: 'user' as const, text: echo, timestamp: now },
     ];
     return {
       sending: true,
@@ -304,8 +305,8 @@ async function performTurn(
         } finally {
           set({ switching: false });
         }
-        if (get().status !== "ready" || !client) {
-          throw new Error("Runtime did not reconnect after creating the session folder.");
+        if (get().status !== 'ready' || !client) {
+          throw new Error('Runtime did not reconnect after creating the session folder.');
         }
       }
       id = await withRetry(() => client!.createSession());
@@ -367,7 +368,7 @@ async function performTurn(
       await post(sid);
       set((s) => ({ runningSessions: { ...s.runningSessions, [sid]: true } }));
     }
-    void logDebug("turn OK");
+    void logDebug('turn OK');
     return sid;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -383,7 +384,10 @@ async function performTurn(
           [key]: {
             ...cur,
             loaded: true,
-            blocks: [...cur.blocks, { kind: "status-line", text: `Send failed: ${msg}`, tone: "error" }],
+            blocks: [
+              ...cur.blocks,
+              { kind: 'status-line', text: `Send failed: ${msg}`, tone: 'error' },
+            ],
           },
         },
       };
@@ -422,7 +426,7 @@ export function sendConfigPrompt(text: string): Promise<string | null> {
 }
 
 export const useRuntimeStore = create<RuntimeState>((set, get) => ({
-  status: "offline",
+  status: 'offline',
   serverUrl: initialUrl(),
   sessions: [],
   remoteSessionIds: [],
@@ -447,44 +451,129 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
   sending: false,
   runningSessions: {},
   shellTurns: {},
-  permissionMode: "auto",
+  permissionMode: 'auto',
 
   // All three write the CURRENT session's pane (DRAFT_KEY on a draft), keeping
   // the artifact inspector and the Files browser mutually exclusive.
   openArtifact: (artifact) =>
     set((s) => ({
-      panes: { ...s.panes, [s.currentId ?? DRAFT_KEY]: { artifact, showFiles: false, browserUrl: "", showTerminal: false, showFileBrowser: false } },
+      panes: {
+        ...s.panes,
+        [s.currentId ?? DRAFT_KEY]: {
+          artifact,
+          showFiles: false,
+          browserUrl: '',
+          showTerminal: false,
+          showFileBrowser: false,
+        },
+      },
     })),
   closeArtifact: () =>
     set((s) => {
       const key = s.currentId ?? DRAFT_KEY;
-      const prev = s.panes[key] ?? { artifact: null, showFiles: false, browserUrl: "", showTerminal: false, showFileBrowser: false };
+      const prev = s.panes[key] ?? {
+        artifact: null,
+        showFiles: false,
+        browserUrl: '',
+        showTerminal: false,
+        showFileBrowser: false,
+      };
       return { panes: { ...s.panes, [key]: { ...prev, artifact: null, showFiles: true } } };
     }),
   setShowFiles: (show) =>
     set((s) => {
       const key = s.currentId ?? DRAFT_KEY;
-      const prev = s.panes[key] ?? { artifact: null, showFiles: false, browserUrl: "", showTerminal: false, showFileBrowser: false };
+      const prev = s.panes[key] ?? {
+        artifact: null,
+        showFiles: false,
+        browserUrl: '',
+        showTerminal: false,
+        showFileBrowser: false,
+      };
       const artifact = show ? null : prev.artifact;
-      return { panes: { ...s.panes, [key]: { ...prev, artifact, showFiles: show, browserUrl: show ? "" : prev.browserUrl, showTerminal: show ? false : prev.showTerminal, showFileBrowser: show ? false : prev.showFileBrowser } } };
+      return {
+        panes: {
+          ...s.panes,
+          [key]: {
+            ...prev,
+            artifact,
+            showFiles: show,
+            browserUrl: show ? '' : prev.browserUrl,
+            showTerminal: show ? false : prev.showTerminal,
+            showFileBrowser: show ? false : prev.showFileBrowser,
+          },
+        },
+      };
     }),
   setBrowserUrl: (url) =>
     set((s) => {
       const key = s.currentId ?? DRAFT_KEY;
-      const prev = s.panes[key] ?? { artifact: null, showFiles: false, browserUrl: "", showTerminal: false };
-      return { panes: { ...s.panes, [key]: { ...prev, showFiles: false, artifact: null, showTerminal: false, browserUrl: url } } };
+      const prev = s.panes[key] ?? {
+        artifact: null,
+        showFiles: false,
+        browserUrl: '',
+        showTerminal: false,
+      };
+      return {
+        panes: {
+          ...s.panes,
+          [key]: {
+            ...prev,
+            showFiles: false,
+            artifact: null,
+            showTerminal: false,
+            browserUrl: url,
+          },
+        },
+      };
     }),
   setShowTerminal: (show) =>
     set((s) => {
       const key = s.currentId ?? DRAFT_KEY;
-      const prev = s.panes[key] ?? { artifact: null, showFiles: false, browserUrl: "", showTerminal: false, showFileBrowser: false };
-      return { panes: { ...s.panes, [key]: { ...prev, artifact: null, showFiles: false, browserUrl: "", showFileBrowser: false, showTerminal: show } } };
+      const prev = s.panes[key] ?? {
+        artifact: null,
+        showFiles: false,
+        browserUrl: '',
+        showTerminal: false,
+        showFileBrowser: false,
+      };
+      return {
+        panes: {
+          ...s.panes,
+          [key]: {
+            ...prev,
+            artifact: null,
+            showFiles: false,
+            browserUrl: '',
+            showFileBrowser: false,
+            showTerminal: show,
+          },
+        },
+      };
     }),
   setShowFileBrowser: (show) =>
     set((s) => {
       const key = s.currentId ?? DRAFT_KEY;
-      const prev = s.panes[key] ?? { artifact: null, showFiles: false, browserUrl: "", showTerminal: false, showFileBrowser: false };
-      return { panes: { ...s.panes, [key]: { ...prev, artifact: null, showFiles: false, browserUrl: "", showTerminal: false, showFileBrowser: show } } };
+      const prev = s.panes[key] ?? {
+        artifact: null,
+        showFiles: false,
+        browserUrl: '',
+        showTerminal: false,
+        showFileBrowser: false,
+      };
+      return {
+        panes: {
+          ...s.panes,
+          [key]: {
+            ...prev,
+            artifact: null,
+            showFiles: false,
+            browserUrl: '',
+            showTerminal: false,
+            showFileBrowser: show,
+          },
+        },
+      };
     }),
 
   answerQuestion: async (requestId, answers) => {
@@ -513,8 +602,7 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
     // Identical pending asks (same session, action and resources — e.g. three
     // parallel reads into one folder) are ONE question to the user: answer
     // them all with one click instead of re-asking for each tool call.
-    const sig = (x: PermissionAskedEvent) =>
-      `${x.sessionId}|${x.action}|${x.resources.join("|")}`;
+    const sig = (x: PermissionAskedEvent) => `${x.sessionId}|${x.action}|${x.resources.join('|')}`;
     const batch = get().permissions.filter((x) => sig(x) === sig(p));
     set((s) => ({ permissions: s.permissions.filter((x) => sig(x) !== sig(p)) }));
     try {
@@ -535,7 +623,7 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
   },
 
   setServerUrl: (serverUrl) => {
-    if (typeof window !== "undefined") window.localStorage.setItem(URL_KEY, serverUrl);
+    if (typeof window !== 'undefined') window.localStorage.setItem(URL_KEY, serverUrl);
     set({ serverUrl });
   },
 
@@ -627,7 +715,7 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
     // for bootstrap() to provide the dynamic port).
     const url = get().serverUrl;
     if (!url) {
-      set({ status: "offline" });
+      set({ status: 'offline' });
       return;
     }
     // Scope skill discovery to the sidecar's workspace (null in browser dev).
@@ -661,7 +749,7 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
     let lastStreamFlush = 0;
     const flushStream = () => {
       if (streamRaf !== null) {
-        if (typeof cancelAnimationFrame === "function") cancelAnimationFrame(streamRaf);
+        if (typeof cancelAnimationFrame === 'function') cancelAnimationFrame(streamRaf);
         streamRaf = null;
       }
       if (streamPending.size === 0) return;
@@ -683,7 +771,7 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
         }
         flushStream();
       };
-      if (typeof requestAnimationFrame === "function") streamRaf = requestAnimationFrame(run);
+      if (typeof requestAnimationFrame === 'function') streamRaf = requestAnimationFrame(run);
       else setTimeout(run, 50); // node/jsdom fallback ≈ 20 fps
     };
 
@@ -718,7 +806,7 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
     };
 
     const applyEvent = (event: OpenCodeEvent) => {
-      if (event.type === "error") {
+      if (event.type === 'error') {
         // A session-scoped error belongs IN the conversation (a red status
         // line where the user is looking), and it ends that session's turn so
         // the composer unlocks. Errors without a session keep the banner.
@@ -738,7 +826,10 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
                 [sid]: {
                   ...cur,
                   loaded: true,
-                  blocks: [...cur.blocks, { kind: "status-line", text: event.message, tone: "error" }],
+                  blocks: [
+                    ...cur.blocks,
+                    { kind: 'status-line', text: event.message, tone: 'error' },
+                  ],
                 },
               },
             };
@@ -748,13 +839,13 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
         }
         return;
       }
-      if (event.type === "session.status" && event.status.type === "retry") {
+      if (event.type === 'session.status' && event.status.type === 'retry') {
         // The turn is stuck (e.g. model quota exhausted) — surface it in the
         // thread as a red status line and unlock the composer, instead of
         // showing "Working…" forever.
         const sid = event.sessionId;
         const st = event.status;
-        const msg = `模型调用失败：${st.message ?? "请重试"}${st.next ? `（${new Date(st.next).toLocaleString()} 后可用）` : ""}`;
+        const msg = `模型调用失败：${st.message ?? '请重试'}${st.next ? `（${new Date(st.next).toLocaleString()} 后可用）` : ''}`;
         set((s) => {
           const cur = s.threads[sid] ?? emptyThread();
           const runningSessions = { ...s.runningSessions };
@@ -763,7 +854,11 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
             runningSessions,
             threads: {
               ...s.threads,
-              [sid]: { ...cur, loaded: true, blocks: [...cur.blocks, { kind: "status-line", text: msg, tone: "error" }] },
+              [sid]: {
+                ...cur,
+                loaded: true,
+                blocks: [...cur.blocks, { kind: 'status-line', text: msg, tone: 'error' }],
+              },
             },
           };
         });
@@ -771,26 +866,25 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
       }
       // Interactive requests live outside the thread blocks (transient UI).
       switch (event.type) {
-        case "question.asked":
+        case 'question.asked':
           set((s) => ({
             questions: [...s.questions.filter((q) => q.requestId !== event.requestId), event],
           }));
           return;
-        case "question.resolved":
+        case 'question.resolved':
           set((s) => ({ questions: s.questions.filter((q) => q.requestId !== event.requestId) }));
           return;
-        case "permission.asked":
+        case 'permission.asked':
           set((s) => ({
-            permissions: [
-              ...s.permissions.filter((p) => p.requestId !== event.requestId),
-              event,
-            ],
+            permissions: [...s.permissions.filter((p) => p.requestId !== event.requestId), event],
           }));
           return;
-        case "permission.resolved":
-          set((s) => ({ permissions: s.permissions.filter((p) => p.requestId !== event.requestId) }));
+        case 'permission.resolved':
+          set((s) => ({
+            permissions: s.permissions.filter((p) => p.requestId !== event.requestId),
+          }));
           return;
-        case "session.updated":
+        case 'session.updated':
           // Real-time token/cost update from the server (fires mid-turn).
           set((s) => ({
             sessions: s.sessions.map((m) =>
@@ -813,7 +907,7 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
       if (!sid) return;
       // The idle after a user interrupt: the thread already ends with
       // "Interrupted" — consume the guard, keep the locks clear, skip the fold.
-      if (event.type === "session.idle" && interruptedSessions.delete(sid)) {
+      if (event.type === 'session.idle' && interruptedSessions.delete(sid)) {
         set((s) => {
           const runningSessions = { ...s.runningSessions };
           const shellTurns = { ...s.shellTurns };
@@ -828,7 +922,7 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
       // parent link so the child's permission/question asks surface in THIS
       // conversation, and refresh the list so the child's title is known.
       if (
-        event.type === "tool.updated" &&
+        event.type === 'tool.updated' &&
         event.childSessionId &&
         get().sessionParents[event.childSessionId] !== sid
       ) {
@@ -838,17 +932,15 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
       }
       set((s) => {
         const cur = s.threads[sid] ?? emptyThread();
-        const folded = foldEvent(
-          { blocks: cur.blocks, index: cur.index },
-          event,
-          { shellTurn: !!s.shellTurns[sid] },
-        );
+        const folded = foldEvent({ blocks: cur.blocks, index: cur.index }, event, {
+          shellTurn: !!s.shellTurns[sid],
+        });
         // The turn is over — unlock the composer and drop the "Working…" row.
         // The shell flag clears HERE (not when the POST settles): within the
         // SSE stream the bash-output event always precedes session.idle.
         const runningSessions = { ...s.runningSessions };
         const shellTurns = { ...s.shellTurns };
-        if (event.type === "session.idle") {
+        if (event.type === 'session.idle') {
           delete runningSessions[sid];
           delete shellTurns[sid];
         }
@@ -859,27 +951,27 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
         };
       });
       // A completed live write becomes a provenance version (once per call).
-      if (event.type === "tool.updated" && !recordedProvenance.has(event.callId)) {
+      if (event.type === 'tool.updated' && !recordedProvenance.has(event.callId)) {
         const input = provenanceInputFromEvent(event);
         if (input) {
           recordedProvenance.add(event.callId);
           void recordProvenance(input, sid, get().defaultModel);
         }
       }
-      if (event.type === "session.idle") void get().refreshSessions();
+      if (event.type === 'session.idle') void get().refreshSessions();
     };
     // Route every normalized event into the coalescing layers above. Streaming
     // text/reasoning updates ride the animation frame; token/cost heartbeats
     // ride a 1 Hz timer; everything else flushes pending text first so ordering
     // holds (idle after the final token, tool rows after text, etc.).
     c.onEvent((event) => {
-      if ("sessionId" in event && event.sessionId) sseLast.set(event.sessionId, ++sseSeq);
-      if (event.type === "text.updated" || event.type === "reasoning.updated") {
+      if ('sessionId' in event && event.sessionId) sseLast.set(event.sessionId, ++sseSeq);
+      if (event.type === 'text.updated' || event.type === 'reasoning.updated') {
         streamPending.set(`${event.type}:${event.partId}`, event);
         scheduleStream();
         return;
       }
-      if (event.type === "session.updated") {
+      if (event.type === 'session.updated') {
         enqueueSessionUpdate(event);
         return;
       }
@@ -889,7 +981,7 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
     try {
       void logDebug(`connect → ${get().serverUrl}`);
       await c.connect();
-      void logDebug("connect OK");
+      void logDebug('connect OK');
       set({ error: null });
       await get().refreshSessions();
       void get().refreshRemoteSessions();
@@ -897,7 +989,10 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
       // switch must not wait on it to show the conversation.
       void get().loadCatalog();
       // Load the current permission mode from the server.
-      client.getPermissionMode().then((mode) => set({ permissionMode: mode })).catch(() => {});
+      client
+        .getPermissionMode()
+        .then((mode) => set({ permissionMode: mode }))
+        .catch(() => {});
       // Every reconnect is a window where session.idle can have been missed
       // (the event stream is directory-scoped and torn down on purpose) —
       // check any session still holding a running lock against the server.
@@ -905,7 +1000,7 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       void logDebug(`connect FAILED: ${msg}`);
-      set({ error: msg, status: "error" });
+      set({ error: msg, status: 'error' });
     }
   },
 
@@ -918,29 +1013,29 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
   // event stream" at the user mid-switch reads as breakage. The last error is
   // surfaced only if the whole retry window is exhausted.
   connectRetry: async (tries = 120) => {
-    set({ status: "connecting" });
+    set({ status: 'connecting' });
     let lastError: string | null = null;
     for (let i = 0; i < tries; i++) {
       await get().connect();
-      if (get().status === "ready") return;
+      if (get().status === 'ready') return;
       lastError = get().error ?? lastError;
-      set({ status: "connecting", error: null });
+      set({ status: 'connecting', error: null });
       // Quick retries first — the server is usually up within a second (a
       // reconnect finds it already listening); back off to 1 s for the long
       // tail (first boot blocked on macOS TCC can take minutes).
       await sleep(i < 8 ? 250 : 1000);
     }
-    set({ status: "error", error: lastError });
+    set({ status: 'error', error: lastError });
   },
 
   bootstrap: async () => {
     void get().detectTools();
     // Load the profile-declared interaction config (renderers + UI defaults).
     // Left floating so the runtime start is never blocked on it.
-    void import("./store").then(({ initInteraction }) => initInteraction());
+    void import('./store').then(({ initInteraction }) => initInteraction());
     if (!isTauri) return;
     // Read the user's runtime engine choice from the UI store.
-    const { useUiStore } = await import("./store");
+    const { useUiStore } = await import('./store');
     const kind: AgentRuntimeKind = useUiStore.getState().agentRuntimeKind;
     console.error(`[bootstrap] starting bundled runtime (${kind})`);
     void logDebug(`bootstrap: starting bundled runtime (${kind})`);
@@ -952,21 +1047,24 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
         // Persist the dynamic port so it's available immediately on next restart.
         // (The port changes each run, but this avoids any race where code tries
         // to connect before bootstrap() completes.)
-        if (typeof window !== "undefined") window.localStorage.setItem(URL_KEY, url);
+        if (typeof window !== 'undefined') window.localStorage.setItem(URL_KEY, url);
         set({ serverUrl: url });
-      } else if (kind === "claude-code") {
+      } else if (kind === 'claude-code') {
         // Claude Code has no HTTP sidecar; the adapter runs in-process via the
         // Agent SDK (main process). Set a sentinel so connect() knows to use
         // the claude-code path instead of HTTP.
-        set({ serverUrl: "", status: "offline" });
-        void logDebug("bootstrap: claude-code mode (no sidecar URL)");
+        set({ serverUrl: '', status: 'offline' });
+        void logDebug('bootstrap: claude-code mode (no sidecar URL)');
         // TODO: start claude-bridge HTTP server in main process and connect
         // to it transparently. For now, show an informational message.
-        set({ error: "Claude Code runtime selected. Connect manually after configuring ANTHROPIC_API_KEY." });
+        set({
+          error:
+            'Claude Code runtime selected. Connect manually after configuring ANTHROPIC_API_KEY.',
+        });
         return;
       } else {
-        console.error("[bootstrap] startRuntime returned null");
-        set({ error: "Failed to start the agent runtime." });
+        console.error('[bootstrap] startRuntime returned null');
+        set({ error: 'Failed to start the agent runtime.' });
         return;
       }
     } catch (err) {
@@ -982,26 +1080,26 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
   disconnect: () => {
     client?.close();
     client = null;
-    set({ status: "offline" });
+    set({ status: 'offline' });
   },
 
   restart: async () => {
     get().disconnect();
-    set({ status: "connecting", error: null });
+    set({ status: 'connecting', error: null });
     try {
-      const { restartRuntime } = await import("./tauri");
-      const { useUiStore } = await import("./store");
+      const { restartRuntime } = await import('./tauri');
+      const { useUiStore } = await import('./store');
       const kind: AgentRuntimeKind = useUiStore.getState().agentRuntimeKind;
       const url = await restartRuntime(kind);
       if (url) {
-        if (typeof window !== "undefined") window.localStorage.setItem(URL_KEY, url);
+        if (typeof window !== 'undefined') window.localStorage.setItem(URL_KEY, url);
         set({ serverUrl: url });
         await get().connectRetry();
       } else {
-        set({ status: "error", error: "Failed to restart runtime." });
+        set({ status: 'error', error: 'Failed to restart runtime.' });
       }
     } catch (err) {
-      set({ status: "error", error: err instanceof Error ? err.message : String(err) });
+      set({ status: 'error', error: err instanceof Error ? err.message : String(err) });
     }
   },
 
@@ -1015,8 +1113,7 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
         // each refresh. Token/cost deltas arrive via session.updated instead.
         const cur = s.sessions;
         const unchanged =
-          cur.length === sessions.length &&
-          cur.every((m, i) => sessionsEqual(m, sessions[i]));
+          cur.length === sessions.length && cur.every((m, i) => sessionsEqual(m, sessions[i]));
         if (unchanged) return {};
         // The list also names each subagent session's parent — the recovery
         // path for parent links after a reload (no live task event to learn from).
@@ -1053,7 +1150,7 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
   switchWorkspace: async (target) => {
     set({ switching: true });
     try {
-      if ("dated" in target) await newDatedWorkspace(target.dated);
+      if ('dated' in target) await newDatedWorkspace(target.dated);
       else await setWorkspace(target.path);
       // Reset the local kernel so it respawns in the new folder, then reconnect
       // the event stream scoped to it (connect() re-reads the active folder —
@@ -1135,16 +1232,20 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
   // The send lifecycle (new → input → send → response) is shared by plain
   // prompts, "!" shell commands and "/" slash commands — see performTurn.
   sendPrompt: (text) => {
-    const browserUrl = get().panes[get().currentId ?? DRAFT_KEY]?.browserUrl ?? "";
-    const enriched = browserUrl
-      ? `[当前浏览器页面: ${browserUrl}]\n\n${text}`
-      : text;
-    return performTurn(set, get, enriched, (sid) => withRetry(() => client!.sendPrompt(sid, enriched)), false);
+    const browserUrl = get().panes[get().currentId ?? DRAFT_KEY]?.browserUrl ?? '';
+    const enriched = browserUrl ? `[当前浏览器页面: ${browserUrl}]\n\n${text}` : text;
+    return performTurn(
+      set,
+      get,
+      enriched,
+      (sid) => withRetry(() => client!.sendPrompt(sid, enriched)),
+      false,
+    );
   },
 
   // No retry for shell/command: re-POSTing would run the command twice.
   runShell: (command) => {
-    const agent = get().agents.find((a) => a.mode === "primary")?.name ?? "build";
+    const agent = get().agents.find((a) => a.mode === 'primary')?.name ?? 'build';
     return performTurn(
       set,
       get,
@@ -1188,7 +1289,7 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
           [sid]: {
             ...cur,
             loaded: true,
-            blocks: [...cur.blocks, { kind: "status-line", text: "Interrupted", tone: "error" }],
+            blocks: [...cur.blocks, { kind: 'status-line', text: 'Interrupted', tone: 'error' }],
           },
         },
       };
@@ -1254,14 +1355,15 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
 
   hideExample: (id) => {
     const next = Array.from(new Set([...get().hiddenExamples, id]));
-    if (typeof window !== "undefined") window.localStorage.setItem(HIDDEN_KEY, JSON.stringify(next));
+    if (typeof window !== 'undefined')
+      window.localStorage.setItem(HIDDEN_KEY, JSON.stringify(next));
     set({ hiddenExamples: next });
   },
 }));
 
 /** Dated folder name like `2026-07-04-1615` for a fresh per-session workspace. */
 export function datedWorkspaceName(now = new Date()): string {
-  const p = (n: number) => String(n).padStart(2, "0");
+  const p = (n: number) => String(n).padStart(2, '0');
   return `${now.getFullYear()}-${p(now.getMonth() + 1)}-${p(now.getDate())}-${p(now.getHours())}${p(now.getMinutes())}`;
 }
 
@@ -1275,70 +1377,78 @@ export interface FoldState {
 
 function extractInputSummary(tool: string, input?: Record<string, unknown>): string | undefined {
   if (!input) return undefined;
-  if (tool === "bash" || tool === "shell") {
-    const cmd = typeof input.command === "string" ? input.command : "";
-    return cmd ? `$ ${cmd.length > 80 ? cmd.slice(0, 77) + "..." : cmd}` : undefined;
+  if (tool === 'bash' || tool === 'shell') {
+    const cmd = typeof input.command === 'string' ? input.command : '';
+    return cmd ? `$ ${cmd.length > 80 ? cmd.slice(0, 77) + '...' : cmd}` : undefined;
   }
-  if (tool === "write" || tool === "edit" || tool === "read") {
-    const fp = typeof input.filePath === "string" ? input.filePath : "";
+  if (tool === 'write' || tool === 'edit' || tool === 'read') {
+    const fp = typeof input.filePath === 'string' ? input.filePath : '';
     return fp || undefined;
   }
-  if (tool === "task") {
-    const desc = typeof input.description === "string" ? input.description : "";
-    const subagent = typeof input.subagent_type === "string" ? input.subagent_type : "";
-    return desc ? `${subagent}: ${desc.length > 60 ? desc.slice(0, 57) + "..." : desc}` : undefined;
+  if (tool === 'task') {
+    const desc = typeof input.description === 'string' ? input.description : '';
+    const subagent = typeof input.subagent_type === 'string' ? input.subagent_type : '';
+    return desc ? `${subagent}: ${desc.length > 60 ? desc.slice(0, 57) + '...' : desc}` : undefined;
   }
   return undefined;
 }
 
-function extractOutputSummary(tool: string, output?: string, input?: Record<string, unknown>): string | undefined {
+function extractOutputSummary(
+  tool: string,
+  output?: string,
+  input?: Record<string, unknown>,
+): string | undefined {
   if (!output) return undefined;
   const trimmed = output.trim();
   if (!trimmed) return undefined;
-  if (tool === "write" || tool === "edit") {
-    const lines = trimmed.split("\n").length;
-    const content = typeof input?.content === "string" ? input.content : "";
-    const contentLines = content ? content.split("\n").length : lines;
+  if (tool === 'write' || tool === 'edit') {
+    const lines = trimmed.split('\n').length;
+    const content = typeof input?.content === 'string' ? input.content : '';
+    const contentLines = content ? content.split('\n').length : lines;
     return `${contentLines} 行写入`;
   }
-  if (tool === "read") {
-    const lines = trimmed.split("\n").length;
+  if (tool === 'read') {
+    const lines = trimmed.split('\n').length;
     return `${lines} 行读取`;
   }
-  if (tool === "bash" || tool === "shell") {
-    const firstLine = trimmed.split("\n")[0];
-    return firstLine.length > 120 ? firstLine.slice(0, 117) + "..." : firstLine;
+  if (tool === 'bash' || tool === 'shell') {
+    const firstLine = trimmed.split('\n')[0];
+    return firstLine.length > 120 ? firstLine.slice(0, 117) + '...' : firstLine;
   }
-  if (tool === "task") {
-    return trimmed.length > 80 ? trimmed.slice(0, 77) + "..." : trimmed;
+  if (tool === 'task') {
+    return trimmed.length > 80 ? trimmed.slice(0, 77) + '...' : trimmed;
   }
-  const firstLine = trimmed.split("\n")[0];
-  return firstLine.length > 80 ? firstLine.slice(0, 77) + "..." : firstLine;
+  const firstLine = trimmed.split('\n')[0];
+  return firstLine.length > 80 ? firstLine.slice(0, 77) + '...' : firstLine;
 }
 
-function extractMeta(tool: string, output?: string, input?: Record<string, unknown>): string | undefined {
+function extractMeta(
+  tool: string,
+  output?: string,
+  input?: Record<string, unknown>,
+): string | undefined {
   const parts: string[] = [];
-  if (tool === "write" || tool === "edit") {
-    const content = typeof input?.content === "string" ? input.content : (output ?? "");
+  if (tool === 'write' || tool === 'edit') {
+    const content = typeof input?.content === 'string' ? input.content : (output ?? '');
     const bytes = new Blob([content]).size;
     if (bytes >= 1024) parts.push(`${(bytes / 1024).toFixed(0)}KB`);
     else parts.push(`${bytes}B`);
   }
-  if (tool === "bash" || tool === "shell" || tool === "read") {
+  if (tool === 'bash' || tool === 'shell' || tool === 'read') {
     if (output) {
-      const lines = output.split("\n").length;
+      const lines = output.split('\n').length;
       parts.push(`${lines} 行`);
     }
   }
-  return parts.length > 0 ? parts.join(" · ") : undefined;
+  return parts.length > 0 ? parts.join(' · ') : undefined;
 }
 
 function errorSummary(output?: string): string | undefined {
   if (!output) return undefined;
   const trimmed = output.trim();
   if (!trimmed) return undefined;
-  const firstLine = trimmed.split("\n")[0];
-  return firstLine.length > 120 ? firstLine.slice(0, 117) + "..." : firstLine;
+  const firstLine = trimmed.split('\n')[0];
+  return firstLine.length > 120 ? firstLine.slice(0, 117) + '...' : firstLine;
 }
 /**
  * Tidy a tool-call title for the conversation: show workspace files by their
@@ -1349,7 +1459,7 @@ function errorSummary(output?: string): string | undefined {
  * (OpenCode's write-tool titles drop it).
  */
 export function tidyToolTitle(title: string): string {
-  return title.replace(/[^\s]*Workbench\//g, "").trim() || title;
+  return title.replace(/[^\s]*Workbench\//g, '').trim() || title;
 }
 
 export function foldEvent(
@@ -1360,26 +1470,26 @@ export function foldEvent(
   const blocks = [...state.blocks];
   const index = { ...state.index };
   switch (event.type) {
-    case "text.updated": {
+    case 'text.updated': {
       const key = `text:${event.partId}`;
-      if (key in index) blocks[index[key]] = { kind: "agent", markdown: event.text };
+      if (key in index) blocks[index[key]] = { kind: 'agent', markdown: event.text };
       else {
-        blocks.push({ kind: "agent", markdown: event.text });
+        blocks.push({ kind: 'agent', markdown: event.text });
         index[key] = blocks.length - 1;
       }
       return { blocks, index, consecutiveTools: 0 };
     }
-    case "reasoning.updated": {
+    case 'reasoning.updated': {
       const key = `reasoning:${event.partId}`;
       if (key in index) {
-        blocks[index[key]] = { kind: "reasoning", text: event.text, streaming: event.streaming };
+        blocks[index[key]] = { kind: 'reasoning', text: event.text, streaming: event.streaming };
       } else {
-        blocks.push({ kind: "reasoning", text: event.text, streaming: event.streaming });
+        blocks.push({ kind: 'reasoning', text: event.text, streaming: event.streaming });
         index[key] = blocks.length - 1;
       }
       return { blocks, index, consecutiveTools: state.consecutiveTools };
     }
-    case "tool.updated": {
+    case 'tool.updated': {
       // The interactive `question`/`permission` tools render as their own
       // answerable card (InteractionPrompt), not as a blank thread row. `todo*`
       // tools only report an opaque "N todos" count with no useful content —
@@ -1390,26 +1500,25 @@ export function foldEvent(
       // file tools (write/edit/read) only get a title on completion. Fall back
       // to the bash command line, then the file path from the tool's input,
       // then the tool name; never render a blank row.
-      const command = typeof event.input?.command === "string" ? event.input.command : "";
-      const filePath = typeof event.input?.filePath === "string" ? event.input.filePath : "";
+      const command = typeof event.input?.command === 'string' ? event.input.command : '';
+      const filePath = typeof event.input?.filePath === 'string' ? event.input.filePath : '';
       // A task tool names its subagent session once — later updates may omit
       // it, so carry the link over from the previous version of the block.
       const prev = key in index ? blocks[index[key]] : undefined;
       const childSessionId =
-        event.childSessionId ??
-        (prev?.kind === "tool-call" ? prev.childSessionId : undefined);
-      const isFailed = event.status === "error" || event.status === "failed";
-      const isShell = event.tool === "bash" || event.tool === "shell";
+        event.childSessionId ?? (prev?.kind === 'tool-call' ? prev.childSessionId : undefined);
+      const isFailed = event.status === 'error' || event.status === 'failed';
+      const isShell = event.tool === 'bash' || event.tool === 'shell';
       const block: ThreadBlock = {
-        kind: "tool-call",
-        title: tidyToolTitle(event.title?.trim() || command || filePath || event.tool || "tool"),
+        kind: 'tool-call',
+        title: tidyToolTitle(event.title?.trim() || command || filePath || event.tool || 'tool'),
         status: event.status,
         meta: extractMeta(event.tool, event.output, event.input),
         inputSummary: extractInputSummary(event.tool, event.input),
         outputSummary: isFailed
           ? errorSummary(event.output)
           : opts?.shellTurn && isShell
-            ? event.output?.replace(/\s+$/, "")
+            ? event.output?.replace(/\s+$/, '')
             : extractOutputSummary(event.tool, event.output, event.input),
         ...(childSessionId ? { childSessionId } : {}),
         ...(isShell && command ? { shellCommand: command } : {}),
@@ -1432,14 +1541,14 @@ export function foldEvent(
       }
       return { blocks, index, consecutiveTools: 0 };
     }
-    case "session.idle":
-      blocks.push({ kind: "status-line", text: "done", tone: "done" });
+    case 'session.idle':
+      blocks.push({ kind: 'status-line', text: 'done', tone: 'done' });
       return { blocks, index, consecutiveTools: 0 };
-    case "session.compacted":
+    case 'session.compacted':
       // Context was summarized/pruned — a cache-reset point. Mark it inline so
       // the user can see when automatic compaction happened (cache-reads that
       // follow will be near zero until the new prefix rebuilds).
-      blocks.push({ kind: "status-line", text: "上下文已压缩（cache 已重置）", tone: "done" });
+      blocks.push({ kind: 'status-line', text: '上下文已压缩（cache 已重置）', tone: 'done' });
       return { blocks, index, consecutiveTools: 0 };
     default:
       return state;
@@ -1454,22 +1563,22 @@ export function foldEvent(
 export function subagentActivity(blocks?: ThreadBlock[]): string {
   for (let i = (blocks?.length ?? 0) - 1; i >= 0; i--) {
     const b = blocks![i];
-    if (b.kind === "tool-call") return b.title;
-    if (b.kind === "agent") return "Writing…";
+    if (b.kind === 'tool-call') return b.title;
+    if (b.kind === 'agent') return 'Writing…';
   }
-  return "Working…";
+  return 'Working…';
 }
 
 function mapToolStatus(status?: string): ToolCallStatus {
   switch (status) {
-    case "running":
-      return "running";
-    case "completed":
-      return "success";
-    case "error":
-      return "failed";
+    case 'running':
+      return 'running';
+    case 'completed':
+      return 'success';
+    case 'error':
+      return 'failed';
     default:
-      return "pending";
+      return 'pending';
   }
 }
 
@@ -1499,62 +1608,82 @@ export function historyToThread(messages: HistoryMessage[], commands?: CommandIn
   // the "! cmd" echo and the output inline — never the synthetic marker text.
   let shellTurn = false;
   for (const m of messages) {
-    if (m.role === "user") {
-      shellTurn = m.parts.some((p) => p.type === "text" && p.synthetic);
+    if (m.role === 'user') {
+      shellTurn = m.parts.some((p) => p.type === 'text' && p.synthetic);
       if (shellTurn) continue;
       const text = m.parts
-        .filter((p) => p.type === "text")
-        .map((p) => p.text ?? "")
-        .join("")
+        .filter((p) => p.type === 'text')
+        .map((p) => p.text ?? '')
+        .join('')
         .trim();
       const command = asTypedCommand(text);
       const ts = m.completed;
       // A message sent from the remote relay client carries
       // metadata.source === "remote" on its text part — surface it so the
       // desktop thread shows where the message came from.
-      const remote = m.parts.some((p) => p.type === "text" && (p as { metadata?: Record<string, unknown> }).metadata?.source === "remote");
-      blocks.push({ kind: "turn-divider" });
-      if (command) blocks.push({ kind: "user", text: command, ...(ts ? { timestamp: ts } : {}), ...(remote ? { remote: true } : {}) });
-      else if (text) blocks.push({ kind: "user", text, ...(ts ? { timestamp: ts } : {}), ...(remote ? { remote: true } : {}) });
+      const remote = m.parts.some(
+        (p) =>
+          p.type === 'text' &&
+          (p as { metadata?: Record<string, unknown> }).metadata?.source === 'remote',
+      );
+      blocks.push({ kind: 'turn-divider' });
+      if (command)
+        blocks.push({
+          kind: 'user',
+          text: command,
+          ...(ts ? { timestamp: ts } : {}),
+          ...(remote ? { remote: true } : {}),
+        });
+      else if (text)
+        blocks.push({
+          kind: 'user',
+          text,
+          ...(ts ? { timestamp: ts } : {}),
+          ...(remote ? { remote: true } : {}),
+        });
     } else {
       for (const p of m.parts) {
-        if (p.type === "text" && p.text?.trim()) {
-          blocks.push({ kind: "agent", markdown: p.text, ...(m.completed ? { timestamp: m.completed } : {}) });
-        }
-        else if (p.type === "reasoning" && p.text?.trim()) {
-          blocks.push({ kind: "reasoning", text: p.text, streaming: false });
-        }
-        else if (p.type === "tool") {
+        if (p.type === 'text' && p.text?.trim()) {
+          blocks.push({
+            kind: 'agent',
+            markdown: p.text,
+            ...(m.completed ? { timestamp: m.completed } : {}),
+          });
+        } else if (p.type === 'reasoning' && p.text?.trim()) {
+          blocks.push({ kind: 'reasoning', text: p.text, streaming: false });
+        } else if (p.type === 'tool') {
           // Interactive tools are surfaced by InteractionPrompt, not the thread;
           // `todo*` tools are opaque "N todos" noise — skip both.
-          if (/question|permission|^ask$|todo/i.test(p.tool ?? "")) continue;
+          if (/question|permission|^ask$|todo/i.test(p.tool ?? '')) continue;
           const status = mapToolStatus(p.state?.status);
-          const frozen = status === "running" || status === "pending";
+          const frozen = status === 'running' || status === 'pending';
           if (frozen) interrupted = true;
-          const command =
-            typeof p.state?.input?.command === "string" ? p.state.input.command : "";
+          const command = typeof p.state?.input?.command === 'string' ? p.state.input.command : '';
           const filePath =
-            typeof p.state?.input?.filePath === "string" ? p.state.input.filePath : "";
-          const userShell = shellTurn && p.tool === "bash";
-          const isShell = p.tool === "bash" || p.tool === "shell";
-          if (userShell) blocks.push({ kind: "user", text: `! ${command}` });
-          const toolInput = userShell ? undefined : extractInputSummary(p.tool ?? "", p.state?.input);
-          const toolOutput = userShell && p.state?.output?.trim()
-            ? p.state.output.replace(/\s+$/, "")
-            : extractOutputSummary(p.tool ?? "", p.state?.output, p.state?.input);
+            typeof p.state?.input?.filePath === 'string' ? p.state.input.filePath : '';
+          const userShell = shellTurn && p.tool === 'bash';
+          const isShell = p.tool === 'bash' || p.tool === 'shell';
+          if (userShell) blocks.push({ kind: 'user', text: `! ${command}` });
+          const toolInput = userShell
+            ? undefined
+            : extractInputSummary(p.tool ?? '', p.state?.input);
+          const toolOutput =
+            userShell && p.state?.output?.trim()
+              ? p.state.output.replace(/\s+$/, '')
+              : extractOutputSummary(p.tool ?? '', p.state?.output, p.state?.input);
           blocks.push({
-            kind: "tool-call",
-            title: tidyToolTitle(p.state?.title?.trim() || command || filePath || p.tool || "tool"),
-            status: frozen ? "pending" : status,
+            kind: 'tool-call',
+            title: tidyToolTitle(p.state?.title?.trim() || command || filePath || p.tool || 'tool'),
+            status: frozen ? 'pending' : status,
             ...(toolInput ? { inputSummary: toolInput } : {}),
             ...(toolOutput ? { outputSummary: toolOutput } : {}),
             ...(isShell && command ? { shellCommand: command } : {}),
           });
           const artifact = deriveArtifact({
-            type: "tool.updated",
-            sessionId: "",
-            callId: "",
-            tool: p.tool ?? "",
+            type: 'tool.updated',
+            sessionId: '',
+            callId: '',
+            tool: p.tool ?? '',
             status,
             input: p.state?.input,
             output: p.state?.output,
@@ -1567,9 +1696,9 @@ export function historyToThread(messages: HistoryMessage[], commands?: CommandIn
   }
   if (interrupted) {
     blocks.push({
-      kind: "status-line",
-      text: "Interrupted — this turn did not finish. Send a new message to continue.",
-      tone: "error",
+      kind: 'status-line',
+      text: 'Interrupted — this turn did not finish. Send a new message to continue.',
+      tone: 'error',
     });
   }
   return { blocks, index: {}, consecutiveTools: 0 };

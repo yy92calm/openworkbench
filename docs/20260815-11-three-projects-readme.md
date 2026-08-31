@@ -6,7 +6,7 @@
 
 ## 1. 总体架构
 
-```
+```text
 ┌────────────────────────┐      ┌─────────────────┐      ┌─────────────────┐
 │  桌面端 Workbench (host) │      │  relay 中继服务   │      │  client 远端客户端 │
 │  apps/desktop/         │      │  relay/          │      │  client/         │
@@ -64,12 +64,14 @@
 ## 4. 关键机制
 
 ### 4.1 设备注册与登录
+
 - host 以 `role=host` 连接时，`token|device` 自动注册（幂等）；同 key 新
   连接顶掉旧连接。
 - guest 先以无 device 的控制连接 `list-devices` 拉设备列表（在线优先），
   选择后配对。
 
 ### 4.2 会话与流式
+
 - 会话列表：`GET /experimental/session`（全工作区）；历史消息：
   `GET /session/:id/message`。
 - 运行状态：`GET /session/status`（`busy` / `idle` / `retry`），客户端
@@ -82,6 +84,7 @@
   徽标。
 
 ### 4.3 文件传输
+
 - 客户端上传：`POST /__relay/write-file`（host 内置端点，base64 → 写入
   host 工作区），返回绝对路径。
 - 消息引用：SDK `sendPromptWithFiles` 以 opencode `FilePartInput` 引用
@@ -91,6 +94,7 @@
   显示「远端客户端」标签。
 
 ### 4.4 连接稳定（三层防护）
+
 1. **relay 心跳**：30s ping/pong，超时 terminate 并 `cancel` 通知 host。
 2. **client transport 重连**：relay WS 断线指数退避重连（1s→30s），重建
    transport + client + SSE，成功后通知 UI 刷新。
@@ -100,6 +104,7 @@
 ## 5. 部署与运行
 
 ### relay（中继服务）
+
 ```bash
 cd relay && pnpm install          # 独立 workspace
 pnpm test                         # 22 单测
@@ -107,21 +112,26 @@ pnpm --filter @workbench/admin build   # 或 cd admin && pnpm build（产物 →
 RELAY_AUTH_TOKEN=xxx RELAY_PORT=8080 RELAY_ADMIN_PASSWORD=test@123 \
 RELAY_DATA_DIR=/data RELAY_ADMIN_STATIC_DIR=relay/admin-web pnpm serve
 ```
+
 - 生产部署：`RELAY_AUTH_TOKEN=xxx ./scripts/deploy-relay.sh user@host`
 - 管理界面：`http://<host>:<port>/relayadmin`（默认密码 `test@123`）
 - 本地示例：`ws://127.0.0.1:12960`，令牌 `relay-master-secret`
 
 ### client（远端客户端）
+
 ```bash
 cd client && pnpm install && pnpm dev    # 开发（默认 5173）
 pnpm build                               # 生产构建
 ```
+
 浏览器打开后填中继地址 + 账号令牌 → 选设备 → 看会话/发消息/传附件。
 
 ### 桌面端 Workbench（host）
+
 ```bash
 bash apps/desktop/scripts/package-mac.sh   # typecheck + build + electron-builder --mac
 ```
+
 - sidecar 指纹用 `opencode --version`（仅版本升级才清会话库）。
 - 打包版在「设置 → 远程访问」填 relay 地址 + 设备 ID + 账号令牌。
 

@@ -1,28 +1,29 @@
-import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
-import type { ExecutionRecord } from "@/lib/electron";
-import { schedulerHistory } from "@/lib/electron";
-import { cn } from "@/lib/cn";
+import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+
+import { cn } from '@/lib/cn';
+import type { ExecutionRecord } from '@/lib/electron';
+import { schedulerHistory } from '@/lib/electron';
 
 const STATUS_MAP: Record<string, { label: string; className: string }> = {
-  running: { label: "运行中", className: "text-ok" },
-  completed: { label: "已完成", className: "text-ok" },
-  failed: { label: "失败", className: "text-error" },
-  timeout: { label: "超时", className: "text-warn" },
+  running: { label: '运行中', className: 'text-ok' },
+  completed: { label: '已完成', className: 'text-ok' },
+  failed: { label: '失败', className: 'text-error' },
+  timeout: { label: '超时', className: 'text-warn' },
 };
 
 function formatDuration(ms: number | undefined): string {
-  if (ms === undefined) return "—";
+  if (ms === undefined) return '—';
   if (ms < 1000) return `${ms}ms`;
   return `${(ms / 1000).toFixed(0)}秒`;
 }
 
 function formatTime(iso: string): string {
-  return new Date(iso).toLocaleString("zh-CN", {
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
+  return new Date(iso).toLocaleString('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
   });
 }
 
@@ -55,13 +56,17 @@ export function ExecutionHistory({ taskId }: Props) {
         </thead>
         <tbody>
           {records.map((r) => {
-            const status = STATUS_MAP[r.status] ?? { label: r.status, className: "" };
+            const status = STATUS_MAP[r.status] ?? { label: r.status, className: '' };
             return (
               <tr key={r.id} className="border-b border-border/50">
                 <td className="py-2 pr-3 text-text">{formatTime(r.triggeredAt)}</td>
                 <td className="py-2 pr-3">
-                  <span className={cn("font-medium", status.className)}>{status.label}</span>
-                  {r.error && <span className="ml-1 text-error" title={r.error}>⚠</span>}
+                  <span className={cn('font-medium', status.className)}>{status.label}</span>
+                  {r.error && (
+                    <span className="ml-1 text-error" title={r.error}>
+                      ⚠
+                    </span>
+                  )}
                 </td>
                 <td className="py-2 pr-3 text-muted">{formatDuration(r.durationMs)}</td>
                 {!taskId && <td className="py-2 pr-3 text-text">{r.taskName}</td>}

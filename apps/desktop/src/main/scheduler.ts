@@ -1,12 +1,14 @@
-import { randomUUID } from "node:crypto";
-import { createServer, type Server } from "node:http";
-import { mkdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
-import { Cron } from "croner";
-import { getStore } from "./store";
-import { getLogger } from "./logging";
+import { randomUUID } from 'node:crypto';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { createServer, type Server } from 'node:http';
+import { join } from 'node:path';
 
-const STORE_SCOPE = "workbench.scheduler";
+import { Cron } from 'croner';
+
+import { getLogger } from './logging';
+import { getStore } from './store';
+
+const STORE_SCOPE = 'workbench.scheduler';
 
 export interface ScheduledTask {
   id: string;
@@ -46,7 +48,7 @@ export interface ExecutionRecord {
   taskId: string;
   taskName: string;
   triggeredAt: string;
-  status: "running" | "completed" | "failed" | "timeout";
+  status: 'running' | 'completed' | 'failed' | 'timeout';
   sessionId?: string;
   error?: string;
   durationMs?: number;
@@ -116,25 +118,27 @@ export function deploySchedulerProfile(
   mcpScriptPath: string,
   apiInfo: SchedulerApiInfo,
 ): void {
-  const opencodeDir = join(xdgConfigHome, "opencode");
-  const skillsDir = join(opencodeDir, "skills", "scheduler");
-  const commandsDir = join(opencodeDir, "commands");
+  const opencodeDir = join(xdgConfigHome, 'opencode');
+  const skillsDir = join(opencodeDir, 'skills', 'scheduler');
+  const commandsDir = join(opencodeDir, 'commands');
   mkdirSync(skillsDir, { recursive: true });
   mkdirSync(commandsDir, { recursive: true });
-  writeFileSync(join(skillsDir, "SKILL.md"), SCHEDULER_SKILL);
-  writeFileSync(join(commandsDir, "scheduler.md"), SCHEDULER_COMMAND);
+  writeFileSync(join(skillsDir, 'SKILL.md'), SCHEDULER_SKILL);
+  writeFileSync(join(commandsDir, 'scheduler.md'), SCHEDULER_COMMAND);
 
   // Write MCP server config into opencode.json (merge with existing)
-  const configPath = join(opencodeDir, "opencode.json");
+  const configPath = join(opencodeDir, 'opencode.json');
   let config: Record<string, unknown> = {};
   try {
-    config = JSON.parse(require("node:fs").readFileSync(configPath, "utf-8"));
-  } catch { /* start fresh if missing */ }
+    config = JSON.parse(readFileSync(configPath, 'utf-8'));
+  } catch {
+    /* start fresh if missing */
+  }
 
   const mcpSection = (config.mcp ?? {}) as Record<string, unknown>;
-  mcpSection["scheduler"] = {
-    type: "local",
-    command: ["node", mcpScriptPath],
+  mcpSection['scheduler'] = {
+    type: 'local',
+    command: ['node', mcpScriptPath],
     enabled: true,
     environment: {
       SCHEDULER_API_URL: apiInfo.url,
@@ -197,7 +201,9 @@ export class CronEngine {
       task.nextRunAt = next?.toISOString() ?? undefined;
       cron.stop(); // don't keep this instance — scheduleOne creates the real one
     } catch (err) {
-      log.error(`[scheduler] invalid cron expression "${input.cron}": ${err instanceof Error ? err.message : String(err)}`);
+      log.error(
+        `[scheduler] invalid cron expression "${input.cron}": ${err instanceof Error ? err.message : String(err)}`,
+      );
       throw new Error(`Invalid cron expression: ${input.cron}`);
     }
 
@@ -283,14 +289,14 @@ export class CronEngine {
 
   listTasks(): ScheduledTask[] {
     const store = getStore(STORE_SCOPE);
-    const raw = store.get("tasks");
+    const raw = store.get('tasks');
     if (!Array.isArray(raw)) return [];
     return raw as ScheduledTask[];
   }
 
   getHistory(taskId?: string, limit = 50): ExecutionRecord[] {
     const store = getStore(STORE_SCOPE);
-    const raw = store.get("executions");
+    const raw = store.get('executions');
     if (!Array.isArray(raw)) return [];
     let records = raw as ExecutionRecord[];
     if (taskId) records = records.filter((r) => r.taskId === taskId);
@@ -299,43 +305,49 @@ export class CronEngine {
 
   deleteExecution(id: string): void {
     const store = getStore(STORE_SCOPE);
-    const raw = store.get("executions");
+    const raw = store.get('executions');
     const records: ExecutionRecord[] = Array.isArray(raw) ? raw : [];
-    store.set("executions", records.filter((r) => r.id !== id));
+    store.set(
+      'executions',
+      records.filter((r) => r.id !== id),
+    );
   }
 
   clearHistory(taskId?: string): void {
     const store = getStore(STORE_SCOPE);
     if (taskId) {
-      const raw = store.get("executions");
+      const raw = store.get('executions');
       const records: ExecutionRecord[] = Array.isArray(raw) ? raw : [];
-      store.set("executions", records.filter((r) => r.taskId !== taskId));
+      store.set(
+        'executions',
+        records.filter((r) => r.taskId !== taskId),
+      );
     } else {
-      store.set("executions", []);
+      store.set('executions', []);
     }
   }
 
   private saveTasks(tasks: ScheduledTask[]): void {
     const store = getStore(STORE_SCOPE);
-    store.set("tasks", tasks);
+    store.set('tasks', tasks);
   }
 
   private saveExecution(record: ExecutionRecord): void {
     const store = getStore(STORE_SCOPE);
-    const raw = store.get("executions");
+    const raw = store.get('executions');
     const records: ExecutionRecord[] = Array.isArray(raw) ? raw : [];
     records.unshift(record);
     if (records.length > 200) records.length = 200;
-    store.set("executions", records);
+    store.set('executions', records);
   }
 
   private updateExecution(id: string, patch: Partial<ExecutionRecord>): void {
     const store = getStore(STORE_SCOPE);
-    const raw = store.get("executions");
+    const raw = store.get('executions');
     const records: ExecutionRecord[] = Array.isArray(raw) ? raw : [];
     const idx = records.findIndex((r) => r.id === id);
     if (idx !== -1) Object.assign(records[idx], patch);
-    store.set("executions", records);
+    store.set('executions', records);
   }
 
   private scheduleOne(task: ScheduledTask): void {
@@ -370,7 +382,7 @@ export class CronEngine {
       taskId: task.id,
       taskName: task.name,
       triggeredAt: new Date().toISOString(),
-      status: "running",
+      status: 'running',
     };
     this.saveExecution(record);
 
@@ -378,9 +390,9 @@ export class CronEngine {
     try {
       const sessionId = await this.onFire?.(task);
       if (sessionId) record.sessionId = sessionId;
-      record.status = "completed";
+      record.status = 'completed';
     } catch (err) {
-      record.status = "failed";
+      record.status = 'failed';
       record.error = err instanceof Error ? err.message : String(err);
     }
     record.durationMs = Date.now() - startedAt;
@@ -394,7 +406,9 @@ export class CronEngine {
       try {
         const next = new Cron(task.cron).nextRun();
         tasks[idx].nextRunAt = next?.toISOString() ?? undefined;
-      } catch { /* keep existing */ }
+      } catch {
+        /* keep existing */
+      }
       this.saveTasks(tasks);
     }
 
@@ -409,20 +423,23 @@ export const cronEngine = new CronEngine();
 let schedulerApiServer: Server | null = null;
 let schedulerApiInfo: SchedulerApiInfo | null = null;
 
-function parseBody(req: import("node:http").IncomingMessage): Promise<unknown> {
+function parseBody(req: import('node:http').IncomingMessage): Promise<unknown> {
   return new Promise((resolve, reject) => {
-    let data = "";
-    req.on("data", (c: Buffer) => (data += c.toString()));
-    req.on("end", () => {
-      try { resolve(data ? JSON.parse(data) : undefined); }
-      catch { reject(new Error("invalid JSON")); }
+    let data = '';
+    req.on('data', (c: Buffer) => (data += c.toString()));
+    req.on('end', () => {
+      try {
+        resolve(data ? JSON.parse(data) : undefined);
+      } catch {
+        reject(new Error('invalid JSON'));
+      }
     });
-    req.on("error", reject);
+    req.on('error', reject);
   });
 }
 
-function json(res: import("node:http").ServerResponse, status: number, body: unknown): void {
-  res.writeHead(status, { "Content-Type": "application/json" });
+function json(res: import('node:http').ServerResponse, status: number, body: unknown): void {
+  res.writeHead(status, { 'Content-Type': 'application/json' });
   res.end(JSON.stringify(body));
 }
 
@@ -432,24 +449,27 @@ export async function startSchedulerApi(password: string): Promise<SchedulerApiI
 
   const server = createServer(async (req, res) => {
     // Auth check
-    const auth = req.headers.authorization ?? "";
-    const expected = "Basic " + Buffer.from(`user:${password}`).toString("base64");
-    if (auth !== expected) { json(res, 401, { error: "unauthorized" }); return; }
+    const auth = req.headers.authorization ?? '';
+    const expected = 'Basic ' + Buffer.from(`user:${password}`).toString('base64');
+    if (auth !== expected) {
+      json(res, 401, { error: 'unauthorized' });
+      return;
+    }
 
-    const url = new URL(req.url ?? "/", "http://localhost");
+    const url = new URL(req.url ?? '/', 'http://localhost');
     const path = url.pathname;
     const log = getLogger();
 
     try {
       // GET /api/scheduler/tasks
-      if (req.method === "GET" && path === "/api/scheduler/tasks") {
+      if (req.method === 'GET' && path === '/api/scheduler/tasks') {
         json(res, 200, cronEngine.listTasks());
         return;
       }
 
       // POST /api/scheduler/tasks
-      if (req.method === "POST" && path === "/api/scheduler/tasks") {
-        const body = await parseBody(req) as CreateTaskInput;
+      if (req.method === 'POST' && path === '/api/scheduler/tasks') {
+        const body = (await parseBody(req)) as CreateTaskInput;
         log.info(`[scheduler-api] POST create task: ${JSON.stringify(body)}`);
         const task = cronEngine.addTask(body);
         log.info(`[scheduler-api] created task: ${task.name} (${task.id})`);
@@ -458,9 +478,9 @@ export async function startSchedulerApi(password: string): Promise<SchedulerApiI
       }
 
       // GET /api/scheduler/history
-      if (req.method === "GET" && path === "/api/scheduler/history") {
-        const taskId = url.searchParams.get("taskId") ?? undefined;
-        const limit = Number(url.searchParams.get("limit") ?? 50);
+      if (req.method === 'GET' && path === '/api/scheduler/history') {
+        const taskId = url.searchParams.get('taskId') ?? undefined;
+        const limit = Number(url.searchParams.get('limit') ?? 50);
         json(res, 200, cronEngine.getHistory(taskId, limit));
         return;
       }
@@ -471,8 +491,8 @@ export async function startSchedulerApi(password: string): Promise<SchedulerApiI
         const id = taskMatch[1];
         const isFire = !!taskMatch[2];
 
-        if (req.method === "PATCH" && !isFire) {
-          const body = await parseBody(req) as UpdateTaskInput & { enabled?: boolean };
+        if (req.method === 'PATCH' && !isFire) {
+          const body = (await parseBody(req)) as UpdateTaskInput & { enabled?: boolean };
           const { enabled, ...patch } = body;
           let result;
           if (enabled !== undefined) {
@@ -481,26 +501,32 @@ export async function startSchedulerApi(password: string): Promise<SchedulerApiI
           if (Object.keys(patch).length > 0) {
             result = cronEngine.updateTask(id, patch);
           }
-          if (!result) { json(res, 404, { error: "task not found" }); return; }
+          if (!result) {
+            json(res, 404, { error: 'task not found' });
+            return;
+          }
           json(res, 200, result);
           return;
         }
 
-        if (req.method === "DELETE" && !isFire) {
+        if (req.method === 'DELETE' && !isFire) {
           cronEngine.removeTask(id);
           json(res, 200, { ok: true });
           return;
         }
 
-        if (req.method === "POST" && isFire) {
+        if (req.method === 'POST' && isFire) {
           const record = await cronEngine.fireNow(id);
-          if (!record) { json(res, 404, { error: "task not found" }); return; }
+          if (!record) {
+            json(res, 404, { error: 'task not found' });
+            return;
+          }
           json(res, 200, record);
           return;
         }
       }
 
-      json(res, 404, { error: "not found" });
+      json(res, 404, { error: 'not found' });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       log.error(`[scheduler-api] error: ${msg}`);
@@ -509,10 +535,14 @@ export async function startSchedulerApi(password: string): Promise<SchedulerApiI
   });
 
   return new Promise((resolve, reject) => {
-    server.on("error", reject);
-    server.listen(0, "127.0.0.1", () => {
+    server.on('error', reject);
+    server.listen(0, '127.0.0.1', () => {
       const addr = server.address();
-      if (typeof addr !== "object" || !addr) { server.close(); reject(new Error("failed to bind")); return; }
+      if (typeof addr !== 'object' || !addr) {
+        server.close();
+        reject(new Error('failed to bind'));
+        return;
+      }
       const url = `http://127.0.0.1:${addr.port}`;
       schedulerApiServer = server;
       schedulerApiInfo = { url, password };

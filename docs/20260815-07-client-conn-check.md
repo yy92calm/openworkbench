@@ -10,6 +10,7 @@ desktop 端 RelayHost 注册、relay 服务端注册/校验、remote 端 transpo
 ### P1 · 桌面端自动连接会生成一次性随机 deviceId（设备分身）
 
 `apps/desktop/src/main/index.ts` 启动自动连接：
+
 ```ts
 deviceId: relayCfg.deviceId ?? randomUUID(),
 token: relayCfg.token ?? randomUUID(),
@@ -27,11 +28,13 @@ token: relayCfg.token ?? randomUUID(),
 ### P2 · RelayHttpTransport.connect() 缓存已连设备的参数
 
 `RelayHttpTransport.connect()`:
+
 ```ts
 connect(relayUrl, deviceId, token) {
   if (this.opened) return this.opened;  // 无视新参数
 }
 ```
+
 同一实例复用且换 device/token 时，会连到旧参数。当前 remote 每次新建实例，
 线上未触发，但属防御性隐患。
 

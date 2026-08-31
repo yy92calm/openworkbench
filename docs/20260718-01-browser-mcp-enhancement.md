@@ -24,6 +24,7 @@
 ### 目标
 
 让 AI Agent 能通过 MCP 工具完整操作右侧边栏的内嵌浏览器，包括：
+
 - 自动打开/关闭浏览器面板
 - 导航、前进、后退、刷新
 - 获取 webview 实际渲染的页面内容
@@ -33,7 +34,7 @@
 
 ### 架构
 
-```
+```text
 Agent → MCP Server (stdio JSON-RPC)
   → HTTP API (127.0.0.1:43921, 请求-响应模式)
     → Main Process
@@ -90,7 +91,7 @@ Agent → MCP Server (stdio JSON-RPC)
 
 ### 数据流示例：browser_click
 
-```
+```text
 1. Agent 调用 browser_click({ selector: "#submit-btn" })
 2. MCP Server → POST /browser/click { requestId, selector }
 3. Main Process 创建 pending entry，发送 IPC → Renderer

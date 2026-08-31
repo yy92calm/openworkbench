@@ -1,35 +1,36 @@
-import { useEffect, useState, useRef, useCallback } from "react";
-import { ArrowLeft, Lock, Plus, Radio, Paperclip, Mic, Trash2 } from "lucide-react";
-import { cn } from "@/lib/cn";
+import { ArrowLeft, Lock, Mic, Paperclip, Plus, Radio, Trash2 } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+
+import { MarkdownViewer } from '@/components/markdown-viewer/MarkdownViewer';
+import { cn } from '@/lib/cn';
 import {
+  onRoomEvent,
   roomCreate,
+  roomDownloadFile,
+  type RoomEvent,
   roomJoin,
   roomLeave,
-  roomSend,
-  roomPickFile,
-  roomUploadFile,
-  roomUploadBlob,
-  roomSendFile,
-  roomDownloadFile,
-  roomViewed,
-  roomSetViewOnce,
-  roomSendSessionShare,
-  onRoomEvent,
-  type RoomStatus,
   type RoomMember,
-  type RoomEvent,
   type RoomMessageMeta,
-} from "@/lib/electron";
-import { getClient } from "@/lib/runtime";
-import { compressSession } from "@/lib/roomShare";
-import { MarkdownViewer } from "@/components/markdown-viewer/MarkdownViewer";
+  roomPickFile,
+  roomSend,
+  roomSendFile,
+  roomSendSessionShare,
+  roomSetViewOnce,
+  type RoomStatus,
+  roomUploadBlob,
+  roomUploadFile,
+  roomViewed,
+} from '@/lib/electron';
+import { compressSession } from '@/lib/roomShare';
+import { getClient } from '@/lib/runtime';
 
 // ── Recent rooms (local-only history for the "recent rooms" list) ──────────
 // Mirrors the client-side helper. Same localStorage key on both sides; since
 // desktop and web client run in separate processes their storage is isolated
 // in practice, but the key is identical so a future sync layer can reuse it.
 
-const RECENT_ROOMS_KEY = "workbench.rooms.recent";
+const RECENT_ROOMS_KEY = 'workbench.rooms.recent';
 const RECENT_ROOMS_MAX = 20;
 
 interface RecentRoom {
@@ -84,19 +85,19 @@ function removeRecentRoom(inviteCode: string): void {
 
 function formatRelativeTime(ts: number): string {
   const diff = Date.now() - ts;
-  if (diff < 60_000) return "刚刚";
+  if (diff < 60_000) return '刚刚';
   if (diff < 3_600_000) return `${Math.floor(diff / 60_000)} 分钟前`;
   if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)} 小时前`;
   return `${Math.floor(diff / 86_400_000)} 天前`;
 }
 
-type Phase = "list" | "joining" | "in-room";
+type Phase = 'list' | 'joining' | 'in-room';
 type ChatMessage = {
   messageId: string;
   from: string;
   fromMe: boolean;
   text: string;
-  kind: "text" | "audio" | "file" | "session-share";
+  kind: 'text' | 'audio' | 'file' | 'session-share';
   fileId?: string;
   meta?: RoomMessageMeta;
   at: number;
@@ -108,11 +109,13 @@ type ChatMessage = {
 };
 
 export function RoomsPage() {
-  const [phase, setPhase] = useState<Phase>("list");
-  const [inviteCode, setInviteCode] = useState("");
-  const [error, setError] = useState("");
+  const [phase, setPhase] = useState<Phase>('list');
+  const [inviteCode, setInviteCode] = useState('');
+  const [error, setError] = useState('');
   const [creatorInitEnforce, setCreatorInitEnforce] = useState<boolean | undefined>(undefined);
-  const [nickname, setNickname] = useState(() => localStorage.getItem("workbench.host.nickname") ?? "Host");
+  const [nickname, setNickname] = useState(
+    () => localStorage.getItem('workbench.host.nickname') ?? 'Host',
+  );
   const [nicknameOpen, setNicknameOpen] = useState(false);
   // Recent rooms: kept in React state, sourced from localStorage so the list
   // re-renders after create/join/delete.
@@ -120,18 +123,18 @@ export function RoomsPage() {
 
   const saveNickname = (v: string) => {
     setNickname(v);
-    localStorage.setItem("workbench.host.nickname", v);
+    localStorage.setItem('workbench.host.nickname', v);
   };
 
   const enterRoom = (code: string, opts?: { enforceViewOnce?: boolean }) => {
     setInviteCode(code);
-    setError("");
+    setError('');
     setCreatorInitEnforce(opts?.enforceViewOnce);
-    setPhase("in-room");
+    setPhase('in-room');
   };
 
   const handleCreate = async () => {
-    setError("");
+    setError('');
     try {
       const { inviteCode: code } = await roomCreate();
       recordRecentRoom(code, nickname);
@@ -140,15 +143,15 @@ export function RoomsPage() {
       // by default — creator can flip the switch inside the room.
       enterRoom(code, { enforceViewOnce: false });
     } catch (e) {
-      setError(e instanceof Error ? e.message : "创建失败");
+      setError(e instanceof Error ? e.message : '创建失败');
     }
   };
 
   const handleJoin = () => {
-    setError("");
+    setError('');
     const code = inviteCode.trim().toUpperCase();
     if (!code) {
-      setError("请输入邀请码");
+      setError('请输入邀请码');
       return;
     }
     // No pre-validation: the relay will reject the join with `room.error` if
@@ -157,7 +160,7 @@ export function RoomsPage() {
   };
 
   const handlePickRecent = (code: string) => {
-    setError("");
+    setError('');
     enterRoom(code);
   };
 
@@ -166,15 +169,15 @@ export function RoomsPage() {
     setRecent(loadRecentRooms());
   };
 
-  if (phase === "in-room") {
+  if (phase === 'in-room') {
     return (
       <RoomChat
         inviteCode={inviteCode}
-        nickname={nickname || "Host"}
+        nickname={nickname || 'Host'}
         creatorInitEnforce={creatorInitEnforce}
         onLeave={(errorMessage) => {
-          setPhase("list");
-          setInviteCode("");
+          setPhase('list');
+          setInviteCode('');
           setCreatorInitEnforce(undefined);
           setRecent(loadRecentRooms());
           if (errorMessage) setError(errorMessage);
@@ -194,20 +197,24 @@ export function RoomsPage() {
             title="修改昵称"
             className="max-w-[160px] truncate rounded-full border border-border bg-surface-2 px-2.5 py-0.5 text-xs text-muted hover:text-text"
           >
-            {nickname || "匿名用户"}
+            {nickname || '匿名用户'}
           </button>
         </div>
-        {phase === "joining" ? (
+        {phase === 'joining' ? (
           <button
             className="rounded-input border border-border px-3 py-1.5 text-xs text-muted hover:text-text"
-            onClick={() => { setPhase("list"); setError(""); setInviteCode(""); }}
+            onClick={() => {
+              setPhase('list');
+              setError('');
+              setInviteCode('');
+            }}
           >
             返回
           </button>
         ) : (
           <button
             className="flex items-center gap-1 rounded-input border border-border px-3 py-1.5 text-xs font-medium text-accent hover:bg-surface-2"
-            onClick={() => setPhase("joining")}
+            onClick={() => setPhase('joining')}
           >
             <Radio size={13} />
             加入会话
@@ -227,9 +234,11 @@ export function RoomsPage() {
         </div>
       )}
 
-      {phase === "joining" && (
+      {phase === 'joining' && (
         <div className="border-b border-border bg-surface px-6 py-4">
-          <label className="block text-xs font-medium uppercase tracking-wider text-muted">邀请码</label>
+          <label className="block text-xs font-medium uppercase tracking-wider text-muted">
+            邀请码
+          </label>
           <input
             value={inviteCode}
             onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
@@ -237,7 +246,11 @@ export function RoomsPage() {
             maxLength={6}
             className="mt-2 w-full max-w-xs rounded-input border border-border-soft bg-bg px-3 py-2 text-center font-mono text-base tracking-[0.3em] text-text outline-none focus:border-accent/40"
           />
-          {error && <div className="mt-2 rounded-input bg-red-500/10 px-3 py-2 text-sm text-red-500">{error}</div>}
+          {error && (
+            <div className="mt-2 rounded-input bg-red-500/10 px-3 py-2 text-sm text-red-500">
+              {error}
+            </div>
+          )}
           <button
             className="mt-3 rounded-input bg-accent px-4 py-2 text-sm font-medium text-accent-fg hover:opacity-90"
             onClick={handleJoin}
@@ -304,7 +317,7 @@ export function RoomsPage() {
           </button>
           <button
             className="flex flex-1 items-center justify-center gap-1.5 rounded-input border border-border bg-surface px-3 py-2.5 text-sm font-medium text-text hover:bg-surface-2"
-            onClick={() => setPhase("joining")}
+            onClick={() => setPhase('joining')}
           >
             <Radio size={16} />
             加入会话
@@ -312,7 +325,7 @@ export function RoomsPage() {
         </div>
       </div>
 
-      {error && phase === "list" && (
+      {error && phase === 'list' && (
         <div className="mx-auto max-w-2xl px-6 pb-3">
           <div className="rounded-input bg-red-500/10 px-3 py-2 text-sm text-red-500">{error}</div>
         </div>
@@ -323,7 +336,12 @@ export function RoomsPage() {
 
 // ── Room Chat ────────────────────────────────────────────────────────────
 
-function RoomChat({ inviteCode, nickname, creatorInitEnforce, onLeave }: {
+function RoomChat({
+  inviteCode,
+  nickname,
+  creatorInitEnforce,
+  onLeave,
+}: {
   inviteCode: string;
   nickname: string;
   creatorInitEnforce?: boolean;
@@ -332,21 +350,21 @@ function RoomChat({ inviteCode, nickname, creatorInitEnforce, onLeave }: {
       the auto-return path, so the list can surface the reason. */
   onLeave: (errorMessage?: string) => void;
 }) {
-  const [status, setStatus] = useState<RoomStatus>("connecting");
+  const [status, setStatus] = useState<RoomStatus>('connecting');
   const [members, setMembers] = useState<RoomMember[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [input, setInput] = useState("");
+  const [input, setInput] = useState('');
   const [viewOnceMode, setViewOnceMode] = useState(false);
   const [viewingMessage, setViewingMessage] = useState<ChatMessage | null>(null);
-  const [myMemberId, setMyMemberId] = useState("");
-  const [error, setError] = useState("");
+  const [myMemberId, setMyMemberId] = useState('');
+  const [error, setError] = useState('');
   const [busy, setBusy] = useState(false); // uploading or sending file
   const [recording, setRecording] = useState(false);
   const [recordSeconds, setRecordSeconds] = useState(0);
   // "/" session-share picker state.
   const [shareOpen, setShareOpen] = useState(false);
   const [shareBusy, setShareBusy] = useState(false);
-  const [shareError, setShareError] = useState("");
+  const [shareError, setShareError] = useState('');
   // Room-level viewOnce flag (creator-controlled). When true, all outgoing
   // messages are forced viewOnce, and the per-message 🔒 toggle is hidden.
   const [enforceViewOnce, setEnforceViewOnce] = useState(false);
@@ -369,14 +387,27 @@ function RoomChat({ inviteCode, nickname, creatorInitEnforce, onLeave }: {
   const recordedChunksRef = useRef<Blob[]>([]);
   const recordStartRef = useRef<number>(0);
   const recordTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const myMemberIdRef = useRef("");
+  const myMemberIdRef = useRef('');
 
   // Keep a ref of myMemberId so the event handler closure sees the latest value.
-  useEffect(() => { myMemberIdRef.current = myMemberId; }, [myMemberId]);
+  useEffect(() => {
+    myMemberIdRef.current = myMemberId;
+  }, [myMemberId]);
+
+  // onLeave is an inline prop (new identity each render); the event-subscription
+  // effect below must not re-subscribe on every render, so it reads the ref.
+  const onLeaveRef = useRef(onLeave);
+  useEffect(() => {
+    onLeaveRef.current = onLeave;
+  }, [onLeave]);
 
   // Join the room on mount.
   useEffect(() => {
-    void roomJoin(inviteCode, nickname, creatorInitEnforce !== undefined ? { enforceViewOnce: creatorInitEnforce } : undefined);
+    void roomJoin(
+      inviteCode,
+      nickname,
+      creatorInitEnforce !== undefined ? { enforceViewOnce: creatorInitEnforce } : undefined,
+    );
     return () => {
       void roomLeave();
     };
@@ -386,16 +417,17 @@ function RoomChat({ inviteCode, nickname, creatorInitEnforce, onLeave }: {
   useEffect(() => {
     const unsub = onRoomEvent((e: RoomEvent) => {
       switch (e.type) {
-        case "status":
+        case 'status':
           setStatus(e.status);
-          setError(e.status === "error" ? "连接异常，正在重连…" : "");
+          setError(e.status === 'error' ? '连接异常，正在重连…' : '');
           break;
-        case "joined":
+        case 'joined':
           joinedRef.current = true;
           setMembers(e.members);
           setMyMemberId(
             e.members.find((m) => m.nickname === nickname)?.id ??
-            e.members[e.members.length - 1]?.id ?? "",
+              e.members[e.members.length - 1]?.id ??
+              '',
           );
           // Sync room-level viewOnce flag and creator status from the relay.
           setEnforceViewOnce(e.enforceViewOnce === true);
@@ -405,15 +437,15 @@ function RoomChat({ inviteCode, nickname, creatorInitEnforce, onLeave }: {
           // our join (so the list reflects only rooms that still exist).
           recordRecentRoom(inviteCode, nickname);
           break;
-        case "member-joined":
+        case 'member-joined':
           setMembers((cur) => [...cur, e.member]);
           break;
-        case "member-left":
+        case 'member-left':
           setMembers((cur) => cur.filter((m) => m.id !== e.memberId));
           break;
-        case "message": {
-          const kind = (e.msg.kind ?? "text") as "text" | "audio" | "file" | "session-share";
-          const text = kind === "text" || kind === "session-share" ? decodeMessage(e.msg.ct) : "";
+        case 'message': {
+          const kind = (e.msg.kind ?? 'text') as 'text' | 'audio' | 'file' | 'session-share';
+          const text = kind === 'text' || kind === 'session-share' ? decodeMessage(e.msg.ct) : '';
           const viewOnce = e.msg.viewOnce === true;
           setMessages((cur) => [
             ...cur,
@@ -440,25 +472,25 @@ function RoomChat({ inviteCode, nickname, creatorInitEnforce, onLeave }: {
           }
           break;
         }
-        case "message-viewed":
+        case 'message-viewed':
           setMessages((cur) =>
             cur.map((m) => (m.messageId === e.messageId ? { ...m, viewed: true, read: true } : m)),
           );
           break;
-        case "view-once-changed":
+        case 'view-once-changed':
           setEnforceViewOnce(e.enforce);
           // Reset per-message toggle so the room flag takes precedence.
           setViewOnceMode(false);
           break;
-        case "destroy-countdown":
+        case 'destroy-countdown':
           setDestroyExpiresAt(e.expiresAt);
           break;
-        case "destroyed":
+        case 'destroyed':
           // The room is gone — return to the list (same path as a fatal
           // join error), surfaced via the list-level error line.
-          onLeave("房间已销毁");
+          onLeaveRef.current('房间已销毁');
           break;
-        case "error":
+        case 'error':
           setError(e.message);
           // A join-time error means the room is gone (destroyed). Show the
           // error briefly, then auto-return to the room list. Errors after a
@@ -466,7 +498,7 @@ function RoomChat({ inviteCode, nickname, creatorInitEnforce, onLeave }: {
           if (!joinedRef.current && !returnTimerRef.current) {
             returnTimerRef.current = setTimeout(() => {
               returnTimerRef.current = null;
-              onLeave(e.message);
+              onLeaveRef.current(e.message);
             }, 1500);
           }
           break;
@@ -479,10 +511,10 @@ function RoomChat({ inviteCode, nickname, creatorInitEnforce, onLeave }: {
         returnTimerRef.current = null;
       }
     };
-  }, [nickname]);
+  }, [nickname, inviteCode]);
 
   useEffect(() => {
-    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages]);
 
   // While a destruction countdown is active, tick once per second so the
@@ -495,7 +527,7 @@ function RoomChat({ inviteCode, nickname, creatorInitEnforce, onLeave }: {
 
   const handleSend = useCallback(async () => {
     const text = input.trim();
-    if (!text || status !== "joined") return;
+    if (!text || status !== 'joined') return;
     const willViewOnce = enforceViewOnce || viewOnceMode;
     try {
       const messageId = await roomSend(text, willViewOnce);
@@ -506,64 +538,67 @@ function RoomChat({ inviteCode, nickname, creatorInitEnforce, onLeave }: {
           from: myMemberId,
           fromMe: true,
           text,
-          kind: "text",
+          kind: 'text',
           at: Date.now(),
           viewOnce: willViewOnce,
         },
       ]);
-      setInput("");
+      setInput('');
       if (!enforceViewOnce) setViewOnceMode(false);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "发送失败");
+      setError(e instanceof Error ? e.message : '发送失败');
     }
   }, [input, status, viewOnceMode, enforceViewOnce, myMemberId]);
 
   // ── Session share ("/") ───────────────────────────────────────────────
-  const handleShareSession = useCallback(async (session: { id: string; title: string }) => {
-    const client = getClient();
-    if (!client) {
-      setShareError("请先选择设备");
-      return;
-    }
-    setShareBusy(true);
-    setShareError("");
-    const willViewOnce = enforceViewOnce || viewOnceMode;
-    try {
-      const messages = await client.getMessages(session.id);
-      const payload = compressSession(session.title, session.id, messages);
-      const messageId = await roomSendSessionShare(payload, willViewOnce);
-      setMessages((cur) => [
-        ...cur,
-        {
-          messageId,
-          from: myMemberId,
-          fromMe: true,
-          text: payload.summary,
-          kind: "session-share",
-          meta: { sessionTitle: payload.title, sessionId: payload.sessionId },
-          at: Date.now(),
-          viewOnce: willViewOnce,
-        },
-      ]);
-      setInput("");
-      setShareOpen(false);
-      if (!enforceViewOnce) setViewOnceMode(false);
-    } catch (err) {
-      setShareError(err instanceof Error ? err.message : "分享失败");
-    } finally {
-      setShareBusy(false);
-    }
-  }, [enforceViewOnce, viewOnceMode, myMemberId]);
+  const handleShareSession = useCallback(
+    async (session: { id: string; title: string }) => {
+      const client = getClient();
+      if (!client) {
+        setShareError('请先选择设备');
+        return;
+      }
+      setShareBusy(true);
+      setShareError('');
+      const willViewOnce = enforceViewOnce || viewOnceMode;
+      try {
+        const messages = await client.getMessages(session.id);
+        const payload = compressSession(session.title, session.id, messages);
+        const messageId = await roomSendSessionShare(payload, willViewOnce);
+        setMessages((cur) => [
+          ...cur,
+          {
+            messageId,
+            from: myMemberId,
+            fromMe: true,
+            text: payload.summary,
+            kind: 'session-share',
+            meta: { sessionTitle: payload.title, sessionId: payload.sessionId },
+            at: Date.now(),
+            viewOnce: willViewOnce,
+          },
+        ]);
+        setInput('');
+        setShareOpen(false);
+        if (!enforceViewOnce) setViewOnceMode(false);
+      } catch (err) {
+        setShareError(err instanceof Error ? err.message : '分享失败');
+      } finally {
+        setShareBusy(false);
+      }
+    },
+    [enforceViewOnce, viewOnceMode, myMemberId],
+  );
 
   // ── File attachment ─────────────────────────────────────────────────────
   const handlePickFile = useCallback(async () => {
-    if (status !== "joined" || busy) return;
+    if (status !== 'joined' || busy) return;
     const willViewOnce = enforceViewOnce || viewOnceMode;
     try {
       const picked = await roomPickFile();
       if (!picked) return;
       setBusy(true);
-      setError("");
+      setError('');
       const { fileId } = await roomUploadFile(picked.path, {
         filename: picked.name,
         mime: picked.mime,
@@ -573,15 +608,15 @@ function RoomChat({ inviteCode, nickname, creatorInitEnforce, onLeave }: {
         size: picked.size,
         mime: picked.mime,
       };
-      const messageId = await roomSendFile(fileId, "file", meta, willViewOnce);
+      const messageId = await roomSendFile(fileId, 'file', meta, willViewOnce);
       setMessages((cur) => [
         ...cur,
         {
           messageId,
           from: myMemberId,
           fromMe: true,
-          text: "",
-          kind: "file",
+          text: '',
+          kind: 'file',
           fileId,
           meta,
           at: Date.now(),
@@ -590,7 +625,7 @@ function RoomChat({ inviteCode, nickname, creatorInitEnforce, onLeave }: {
       ]);
       if (!enforceViewOnce) setViewOnceMode(false);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "文件发送失败");
+      setError(e instanceof Error ? e.message : '文件发送失败');
     } finally {
       setBusy(false);
     }
@@ -598,10 +633,10 @@ function RoomChat({ inviteCode, nickname, creatorInitEnforce, onLeave }: {
 
   // ── Voice recording (Electron renderer supports MediaRecorder) ─────────
   const startRecording = useCallback(async () => {
-    if (status !== "joined" || busy) return;
+    if (status !== 'joined' || busy) return;
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const mime = MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "audio/mp4";
+      const mime = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/mp4';
       const recorder = new MediaRecorder(stream, { mimeType: mime });
       recordedChunksRef.current = [];
       recorder.ondataavailable = (ev) => {
@@ -622,23 +657,26 @@ function RoomChat({ inviteCode, nickname, creatorInitEnforce, onLeave }: {
           // which uploads it to the relay.
           const buf = await blob.arrayBuffer();
           const bytes = new Uint8Array(buf);
-          let binary = "";
+          let binary = '';
           const chunkSize = 0x8000;
           for (let i = 0; i < bytes.length; i += chunkSize) {
-            binary += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + chunkSize)) as unknown as number[]);
+            binary += String.fromCharCode.apply(
+              null,
+              Array.from(bytes.subarray(i, i + chunkSize)) as unknown as number[],
+            );
           }
           const base64 = btoa(binary);
           const { fileId } = await roomUploadBlob(base64, { mime, duration });
           const meta: RoomMessageMeta = { mime, size: blob.size, duration };
-          const messageId = await roomSendFile(fileId, "audio", meta, willViewOnce);
+          const messageId = await roomSendFile(fileId, 'audio', meta, willViewOnce);
           setMessages((cur) => [
             ...cur,
             {
               messageId,
               from: myMemberId,
               fromMe: true,
-              text: "",
-              kind: "audio",
+              text: '',
+              kind: 'audio',
               fileId,
               meta,
               at: Date.now(),
@@ -647,7 +685,7 @@ function RoomChat({ inviteCode, nickname, creatorInitEnforce, onLeave }: {
           ]);
           if (!enforceViewOnce) setViewOnceMode(false);
         } catch (e) {
-          setError(e instanceof Error ? e.message : "语音上传失败");
+          setError(e instanceof Error ? e.message : '语音上传失败');
         } finally {
           setBusy(false);
         }
@@ -661,12 +699,12 @@ function RoomChat({ inviteCode, nickname, creatorInitEnforce, onLeave }: {
         setRecordSeconds((s) => s + 1);
       }, 1000);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "无法访问麦克风");
+      setError(e instanceof Error ? e.message : '无法访问麦克风');
     }
   }, [status, busy, viewOnceMode, enforceViewOnce, myMemberId]);
 
   const stopRecording = useCallback(() => {
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       mediaRecorderRef.current.stop();
     }
     setRecording(false);
@@ -707,7 +745,7 @@ function RoomChat({ inviteCode, nickname, creatorInitEnforce, onLeave }: {
 
   const formatTime = (ts: number) => {
     const d = new Date(ts);
-    return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+    return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
   };
 
   /** Format the remaining time until `expiresAt` as HH:MM:SS. */
@@ -717,10 +755,10 @@ function RoomChat({ inviteCode, nickname, creatorInitEnforce, onLeave }: {
     const h = Math.floor(totalSec / 3600);
     const m = Math.floor((totalSec % 3600) / 60);
     const s = totalSec % 60;
-    return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
   };
 
-  const online = status === "joined";
+  const online = status === 'joined';
 
   return (
     <div className="flex h-full flex-col">
@@ -736,22 +774,22 @@ function RoomChat({ inviteCode, nickname, creatorInitEnforce, onLeave }: {
         <div className="flex-1">
           <div className="text-sm font-semibold text-text">会话 {inviteCode}</div>
           <div className="text-xs text-muted">
-            {online ? `${members.length} 人在线` : status === "connecting" ? "连接中…" : "未连接"}
+            {online ? `${members.length} 人在线` : status === 'connecting' ? '连接中…' : '未连接'}
           </div>
         </div>
         {isCreator && (
           <button
             onClick={() => void roomSetViewOnce(!enforceViewOnce)}
             disabled={!online}
-            title={enforceViewOnce ? "已开启房间阅后即焚" : "开启房间阅后即焚"}
+            title={enforceViewOnce ? '已开启房间阅后即焚' : '开启房间阅后即焚'}
             className={cn(
-              "rounded-input border px-2.5 py-1 text-xs font-medium disabled:opacity-40",
+              'rounded-input border px-2.5 py-1 text-xs font-medium disabled:opacity-40',
               enforceViewOnce
-                ? "border-accent bg-accent text-accent-fg"
-                : "border-border bg-surface-2 text-muted hover:text-text",
+                ? 'border-accent bg-accent text-accent-fg'
+                : 'border-border bg-surface-2 text-muted hover:text-text',
             )}
           >
-            {enforceViewOnce ? "🔒 强制阅后即焚" : "🔓 默认模式"}
+            {enforceViewOnce ? '🔒 强制阅后即焚' : '🔓 默认模式'}
           </button>
         )}
         <button
@@ -783,9 +821,12 @@ function RoomChat({ inviteCode, nickname, creatorInitEnforce, onLeave }: {
             </div>
           )}
           {messages.map((m) => (
-            <div key={m.messageId} className={cn("flex flex-col", m.fromMe ? "items-end" : "items-start")}>
+            <div
+              key={m.messageId}
+              className={cn('flex flex-col', m.fromMe ? 'items-end' : 'items-start')}
+            >
               <div className="mb-0.5 px-1 text-xs text-muted">
-                {members.find((x) => x.id === m.from)?.nickname ?? "未知"}
+                {members.find((x) => x.id === m.from)?.nickname ?? '未知'}
               </div>
               {m.viewOnce && !m.fromMe ? (
                 <button
@@ -796,11 +837,13 @@ function RoomChat({ inviteCode, nickname, creatorInitEnforce, onLeave }: {
                   阅后即焚消息 — 点击查看
                 </button>
               ) : m.viewOnce && m.fromMe ? (
-                <div className={cn(
-                  "rounded-2xl px-3 py-2 text-xs italic",
-                  m.viewed ? "bg-surface-2/50 text-muted" : "bg-accent/30 text-accent",
-                )}>
-                  {m.viewed ? "✓ 已查看" : "🔒 等待查看…"}
+                <div
+                  className={cn(
+                    'rounded-2xl px-3 py-2 text-xs italic',
+                    m.viewed ? 'bg-surface-2/50 text-muted' : 'bg-accent/30 text-accent',
+                  )}
+                >
+                  {m.viewed ? '✓ 已查看' : '🔒 等待查看…'}
                 </div>
               ) : (
                 <MessageContent msg={m} fromMe={m.fromMe} />
@@ -821,76 +864,89 @@ function RoomChat({ inviteCode, nickname, creatorInitEnforce, onLeave }: {
             busy={shareBusy}
             error={shareError}
             onPick={(s) => void handleShareSession(s)}
-            onClose={() => { setShareOpen(false); setShareError(""); }}
+            onClose={() => {
+              setShareOpen(false);
+              setShareError('');
+            }}
           />
         )}
         <div className="px-4 py-3">
           <div className="mx-auto flex max-w-3xl items-center gap-2">
-          {!enforceViewOnce && (
+            {!enforceViewOnce && (
+              <button
+                onClick={() => setViewOnceMode(!viewOnceMode)}
+                disabled={recording || busy}
+                className={cn(
+                  'flex h-9 w-9 shrink-0 items-center justify-center rounded-full border',
+                  viewOnceMode
+                    ? 'border-accent bg-accent text-accent-fg'
+                    : 'border-border bg-surface-2 text-muted hover:text-text',
+                )}
+                title="阅后即焚"
+              >
+                <Lock size={15} />
+              </button>
+            )}
+            <input
+              value={input}
+              onChange={(e) => {
+                const v = e.target.value;
+                setInput(v);
+                // "/" opens the session-share picker (Slack-style command).
+                setShareOpen(v.startsWith('/'));
+                if (v.startsWith('/')) setShareError('');
+              }}
+              onKeyDown={(e) =>
+                e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSend())
+              }
+              placeholder={
+                enforceViewOnce
+                  ? '强制阅后即焚消息…'
+                  : viewOnceMode
+                    ? '阅后即焚消息…'
+                    : '输入消息…（/ 分享历史会话）'
+              }
+              disabled={!online || recording}
+              className="flex-1 rounded-full border border-border-soft bg-bg px-4 py-2 text-sm text-text outline-none placeholder:text-muted focus:border-accent/40 disabled:opacity-50"
+            />
             <button
-              onClick={() => setViewOnceMode(!viewOnceMode)}
-              disabled={recording || busy}
-              className={cn(
-                "flex h-9 w-9 shrink-0 items-center justify-center rounded-full border",
-                viewOnceMode ? "border-accent bg-accent text-accent-fg" : "border-border bg-surface-2 text-muted hover:text-text",
-              )}
-              title="阅后即焚"
-            >
-              <Lock size={15} />
-            </button>
-          )}
-          <input
-            value={input}
-            onChange={(e) => {
-              const v = e.target.value;
-              setInput(v);
-              // "/" opens the session-share picker (Slack-style command).
-              setShareOpen(v.startsWith("/"));
-              if (v.startsWith("/")) setShareError("");
-            }}
-            onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), handleSend())}
-            placeholder={enforceViewOnce ? "强制阅后即焚消息…" : viewOnceMode ? "阅后即焚消息…" : "输入消息…（/ 分享历史会话）"}
-            disabled={!online || recording}
-            className="flex-1 rounded-full border border-border-soft bg-bg px-4 py-2 text-sm text-text outline-none placeholder:text-muted focus:border-accent/40 disabled:opacity-50"
-          />
-          <button
-            onClick={handlePickFile}
-            disabled={!online || recording || busy}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border bg-surface-2 text-muted hover:text-text disabled:opacity-40"
-            title="发送文件"
-          >
-            <Paperclip size={15} />
-          </button>
-          {recording ? (
-            <button
-              onClick={stopRecording}
-              className="flex shrink-0 items-center gap-1 rounded-full bg-red-500 px-3 py-2 text-sm font-medium text-white hover:opacity-90"
-              title="停止录音"
-            >
-              <span className="h-2 w-2 animate-pulse rounded-full bg-white" />
-              {recordSeconds}″
-            </button>
-          ) : (
-            <button
-              onClick={startRecording}
-              disabled={!online || busy}
+              onClick={handlePickFile}
+              disabled={!online || recording || busy}
               className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border bg-surface-2 text-muted hover:text-text disabled:opacity-40"
-              title="语音消息"
+              title="发送文件"
             >
-              <Mic size={15} />
+              <Paperclip size={15} />
             </button>
+            {recording ? (
+              <button
+                onClick={stopRecording}
+                className="flex shrink-0 items-center gap-1 rounded-full bg-red-500 px-3 py-2 text-sm font-medium text-white hover:opacity-90"
+                title="停止录音"
+              >
+                <span className="h-2 w-2 animate-pulse rounded-full bg-white" />
+                {recordSeconds}″
+              </button>
+            ) : (
+              <button
+                onClick={startRecording}
+                disabled={!online || busy}
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border bg-surface-2 text-muted hover:text-text disabled:opacity-40"
+                title="语音消息"
+              >
+                <Mic size={15} />
+              </button>
+            )}
+            <button
+              onClick={handleSend}
+              disabled={!input.trim() || !online || recording}
+              className="shrink-0 rounded-full bg-accent px-4 py-2 text-sm font-medium text-accent-fg hover:opacity-90 disabled:opacity-40"
+            >
+              发送
+            </button>
+          </div>
+          {busy && (
+            <div className="mx-auto mt-1 max-w-3xl text-center text-xs text-muted">上传中…</div>
           )}
-          <button
-            onClick={handleSend}
-            disabled={!input.trim() || !online || recording}
-            className="shrink-0 rounded-full bg-accent px-4 py-2 text-sm font-medium text-accent-fg hover:opacity-90 disabled:opacity-40"
-          >
-            发送
-          </button>
-        </div>
-        {busy && (
-          <div className="mx-auto mt-1 max-w-3xl text-center text-xs text-muted">上传中…</div>
-        )}
         </div>
       </div>
 
@@ -927,7 +983,7 @@ function RoomChat({ inviteCode, nickname, creatorInitEnforce, onLeave }: {
 /** Format a byte size into a human-readable string. Module-level so
  *  MessageContent (a separate component from RoomChat) can use it. */
 function formatSize(bytes?: number): string {
-  if (!bytes) return "";
+  if (!bytes) return '';
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
@@ -944,17 +1000,17 @@ function MessageContent({
 }) {
   const [audioPath, setAudioPath] = useState<string | null>(null);
   const [audioLoading, setAudioLoading] = useState(false);
-  const [audioError, setAudioError] = useState("");
+  const [audioError, setAudioError] = useState('');
 
   const loadAudio = async () => {
     if (audioPath || !msg.fileId) return;
     setAudioLoading(true);
-    setAudioError("");
+    setAudioError('');
     try {
       const { path } = await roomDownloadFile(msg.fileId, `voice-${msg.messageId}.webm`);
       setAudioPath(path);
     } catch (e) {
-      setAudioError(e instanceof Error ? e.message : "加载失败");
+      setAudioError(e instanceof Error ? e.message : '加载失败');
     } finally {
       setAudioLoading(false);
     }
@@ -965,22 +1021,22 @@ function MessageContent({
     try {
       await roomDownloadFile(msg.fileId, msg.meta?.filename);
     } catch (e) {
-      setAudioError(e instanceof Error ? e.message : "下载失败");
+      setAudioError(e instanceof Error ? e.message : '下载失败');
     }
   };
 
   const bubble = cn(
-    "rounded-2xl px-3 py-2 text-sm",
-    embedded ? "min-h-[60px] border border-border-soft bg-bg leading-relaxed" : (
-      fromMe
-        ? "max-w-[80%] rounded-tr-sm bg-accent text-accent-fg"
-        : "max-w-[80%] rounded-tl-sm border border-border bg-surface text-text"
-    ),
+    'rounded-2xl px-3 py-2 text-sm',
+    embedded
+      ? 'min-h-[60px] border border-border-soft bg-bg leading-relaxed'
+      : fromMe
+        ? 'max-w-[80%] rounded-tr-sm bg-accent text-accent-fg'
+        : 'max-w-[80%] rounded-tl-sm border border-border bg-surface text-text',
   );
 
-  if (msg.kind === "audio") {
+  if (msg.kind === 'audio') {
     return (
-      <div className={cn(bubble, "min-w-[180px]")}>
+      <div className={cn(bubble, 'min-w-[180px]')}>
         {audioPath ? (
           <audio controls src={`file://${audioPath}`} className="w-full" />
         ) : (
@@ -989,7 +1045,7 @@ function MessageContent({
             disabled={audioLoading}
             className="text-left text-xs hover:underline"
           >
-            {audioLoading ? "加载中…" : `▶ 语音 ${msg.meta?.duration ?? 0}″`}
+            {audioLoading ? '加载中…' : `▶ 语音 ${msg.meta?.duration ?? 0}″`}
           </button>
         )}
         {audioError && <div className="mt-1 text-[10px] text-red-500">{audioError}</div>}
@@ -997,26 +1053,24 @@ function MessageContent({
     );
   }
 
-  if (msg.kind === "file") {
+  if (msg.kind === 'file') {
     return (
       <div className={bubble}>
         <button
           onClick={handleSaveFile}
           className="text-left text-xs text-accent hover:underline break-all"
         >
-          📄 {msg.meta?.filename ?? "文件"} ({formatSize(msg.meta?.size)})
+          📄 {msg.meta?.filename ?? '文件'} ({formatSize(msg.meta?.size)})
         </button>
       </div>
     );
   }
 
-  if (msg.kind === "session-share") {
+  if (msg.kind === 'session-share') {
     return <SessionShareCard msg={msg} />;
   }
 
-  return (
-    <div className={cn(bubble, "whitespace-pre-wrap break-words")}>{msg.text}</div>
-  );
+  return <div className={cn(bubble, 'whitespace-pre-wrap break-words')}>{msg.text}</div>;
 }
 
 /** Collapsible card for a shared session: shows the title + preview, expands
@@ -1024,23 +1078,27 @@ function MessageContent({
 function SessionShareCard({ msg }: { msg: ChatMessage }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className={cn(
-      "w-full max-w-[320px] overflow-hidden rounded-card border border-border bg-surface",
-      open && "max-w-[420px]",
-    )}>
+    <div
+      className={cn(
+        'w-full max-w-[320px] overflow-hidden rounded-card border border-border bg-surface',
+        open && 'max-w-[420px]',
+      )}
+    >
       <button
         onClick={() => setOpen((v) => !v)}
         className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-text hover:bg-surface-2"
       >
         <span>📎</span>
         <span className="min-w-0 flex-1 truncate font-semibold">
-          会话分享：{msg.meta?.sessionTitle ?? "未命名会话"}
+          会话分享：{msg.meta?.sessionTitle ?? '未命名会话'}
         </span>
-        <span className="shrink-0 text-xs text-accent">{open ? "收起" : "展开查看"}</span>
+        <span className="shrink-0 text-xs text-accent">{open ? '收起' : '展开查看'}</span>
       </button>
       {open && (
         <div className="max-h-80 overflow-y-auto border-t border-border bg-bg px-3 py-2">
-          <MarkdownViewer variant="chat" className="text-xs leading-relaxed">{msg.text}</MarkdownViewer>
+          <MarkdownViewer variant="chat" className="text-xs leading-relaxed">
+            {msg.text}
+          </MarkdownViewer>
         </div>
       )}
     </div>
@@ -1048,7 +1106,12 @@ function SessionShareCard({ msg }: { msg: ChatMessage }) {
 }
 
 /** "/" session-share picker: lists history sessions for the user to pick. */
-function SessionSharePicker({ busy, error, onPick, onClose }: {
+function SessionSharePicker({
+  busy,
+  error,
+  onPick,
+  onClose,
+}: {
   busy: boolean;
   error: string;
   onPick: (session: { id: string; title: string }) => void;
@@ -1064,17 +1127,28 @@ function SessionSharePicker({ busy, error, onPick, onClose }: {
       setLoading(false);
       return;
     }
-    client.listSessions()
-      .then((list) => { if (!cancelled) setSessions(list); })
-      .catch(() => { /* surfaced via parent error */ })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
+    client
+      .listSessions()
+      .then((list) => {
+        if (!cancelled) setSessions(list);
+      })
+      .catch(() => {
+        /* surfaced via parent error */
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   return (
     <div className="mx-auto max-w-3xl border-b border-border bg-surface">
       <div className="flex items-center justify-between border-b border-border px-4 py-2">
-        <span className="text-xs font-semibold uppercase tracking-wider text-muted">分享历史会话</span>
+        <span className="text-xs font-semibold uppercase tracking-wider text-muted">
+          分享历史会话
+        </span>
         <button
           onClick={onClose}
           className="text-lg leading-none text-muted hover:text-text"
@@ -1083,8 +1157,14 @@ function SessionSharePicker({ busy, error, onPick, onClose }: {
           ×
         </button>
       </div>
-      {error && <div className="border-b border-border px-4 py-1.5 text-xs text-red-500">{error}</div>}
-      {!getClient() && <div className="border-b border-border px-4 py-1.5 text-xs text-red-500">请先在顶部选择设备</div>}
+      {error && (
+        <div className="border-b border-border px-4 py-1.5 text-xs text-red-500">{error}</div>
+      )}
+      {!getClient() && (
+        <div className="border-b border-border px-4 py-1.5 text-xs text-red-500">
+          请先在顶部选择设备
+        </div>
+      )}
       {loading ? (
         <div className="px-4 py-3 text-center text-xs text-muted">加载中…</div>
       ) : sessions.length === 0 ? (
@@ -1098,7 +1178,7 @@ function SessionSharePicker({ busy, error, onPick, onClose }: {
               disabled={busy}
               className="flex w-full items-center justify-between gap-2 px-4 py-2 text-left text-sm text-text hover:bg-surface-2 disabled:opacity-50"
             >
-              <span className="min-w-0 flex-1 truncate">{s.title || "未命名会话"}</span>
+              <span className="min-w-0 flex-1 truncate">{s.title || '未命名会话'}</span>
             </button>
           ))}
         </div>
@@ -1115,6 +1195,6 @@ function decodeMessage(ct: string): string {
     const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
     return new TextDecoder().decode(bytes);
   } catch {
-    return "(无法解码)";
+    return '(无法解码)';
   }
 }

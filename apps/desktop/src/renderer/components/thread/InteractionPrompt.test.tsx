@@ -1,22 +1,23 @@
-import { cleanup, render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
-import type { PermissionAskedEvent, QuestionAskedEvent } from "@workbench/sdk";
-import { InteractionPrompt } from "./InteractionPrompt";
+import { cleanup, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import type { PermissionAskedEvent, QuestionAskedEvent } from '@workbench/sdk';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import { InteractionPrompt } from './InteractionPrompt';
 
 afterEach(cleanup);
 
 const singleQ: QuestionAskedEvent = {
-  type: "question.asked",
-  sessionId: "ses_1",
-  requestId: "que_1",
+  type: 'question.asked',
+  sessionId: 'ses_1',
+  requestId: 'que_1',
   questions: [
     {
-      question: "Which data file should I analyze?",
-      header: "Select file",
+      question: 'Which data file should I analyze?',
+      header: 'Select file',
       options: [
-        { label: "atlas.csv", description: "3 rows: species" },
-        { label: "export.csv", description: "306 rows" },
+        { label: 'atlas.csv', description: '3 rows: species' },
+        { label: 'export.csv', description: '306 rows' },
       ],
     },
   ],
@@ -24,58 +25,86 @@ const singleQ: QuestionAskedEvent = {
 
 const multiQ: QuestionAskedEvent = {
   ...singleQ,
-  requestId: "que_2",
+  requestId: 'que_2',
   questions: [{ ...singleQ.questions[0], multiple: true }],
 };
 
 const noop = () => {};
 
-describe("InteractionPrompt — question", () => {
-  it("answers immediately on click for a single-select question", async () => {
+describe('InteractionPrompt — question', () => {
+  it('answers immediately on click for a single-select question', async () => {
     const onAnswer = vi.fn();
-    render(<InteractionPrompt question={singleQ} onAnswer={onAnswer} onReject={noop} onPermission={noop} />);
-    await userEvent.click(screen.getByText("atlas.csv"));
-    expect(onAnswer).toHaveBeenCalledWith("que_1", [["atlas.csv"]]);
+    render(
+      <InteractionPrompt
+        question={singleQ}
+        onAnswer={onAnswer}
+        onReject={noop}
+        onPermission={noop}
+      />,
+    );
+    await userEvent.click(screen.getByText('atlas.csv'));
+    expect(onAnswer).toHaveBeenCalledWith('que_1', [['atlas.csv']]);
   });
 
-  it("collects multiple selections behind a Submit for a multi-select question", async () => {
+  it('collects multiple selections behind a Submit for a multi-select question', async () => {
     const onAnswer = vi.fn();
-    render(<InteractionPrompt question={multiQ} onAnswer={onAnswer} onReject={noop} onPermission={noop} />);
+    render(
+      <InteractionPrompt
+        question={multiQ}
+        onAnswer={onAnswer}
+        onReject={noop}
+        onPermission={noop}
+      />,
+    );
     // No immediate answer on click.
-    await userEvent.click(screen.getByText("atlas.csv"));
-    await userEvent.click(screen.getByText("export.csv"));
+    await userEvent.click(screen.getByText('atlas.csv'));
+    await userEvent.click(screen.getByText('export.csv'));
     expect(onAnswer).not.toHaveBeenCalled();
-    await userEvent.click(screen.getByRole("button", { name: "提交" }));
-    expect(onAnswer).toHaveBeenCalledWith("que_2", [["atlas.csv", "export.csv"]]);
+    await userEvent.click(screen.getByRole('button', { name: '提交' }));
+    expect(onAnswer).toHaveBeenCalledWith('que_2', [['atlas.csv', 'export.csv']]);
   });
 
-  it("skips a question via reject", async () => {
+  it('skips a question via reject', async () => {
     const onReject = vi.fn();
-    render(<InteractionPrompt question={singleQ} onAnswer={noop} onReject={onReject} onPermission={noop} />);
-    await userEvent.click(screen.getByText("跳过"));
-    expect(onReject).toHaveBeenCalledWith("que_1");
+    render(
+      <InteractionPrompt
+        question={singleQ}
+        onAnswer={noop}
+        onReject={onReject}
+        onPermission={noop}
+      />,
+    );
+    await userEvent.click(screen.getByText('跳过'));
+    expect(onReject).toHaveBeenCalledWith('que_1');
   });
 });
 
-describe("InteractionPrompt — permission", () => {
+describe('InteractionPrompt — permission', () => {
   const perm: PermissionAskedEvent = {
-    type: "permission.asked",
-    sessionId: "ses_1",
-    requestId: "per_1",
-    action: "bash",
-    resources: ["rm -rf build/"],
+    type: 'permission.asked',
+    sessionId: 'ses_1',
+    requestId: 'per_1',
+    action: 'bash',
+    resources: ['rm -rf build/'],
   };
 
-  it("shows the action and resources and replies once / always / reject", async () => {
+  it('shows the action and resources and replies once / always / reject', async () => {
     const onPermission = vi.fn();
-    render(<InteractionPrompt permission={perm} onAnswer={noop} onReject={noop} onPermission={onPermission} />);
-    expect(screen.getByText("rm -rf build/")).toBeInTheDocument();
+    render(
+      <InteractionPrompt
+        permission={perm}
+        onAnswer={noop}
+        onReject={noop}
+        onPermission={onPermission}
+      />,
+    );
+    expect(screen.getByText('rm -rf build/')).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole("button", { name: "允许一次" }));
-    expect(onPermission).toHaveBeenCalledWith("per_1", "once");
-    await userEvent.click(screen.getByRole("button", { name: "始终允许" }));
-    expect(onPermission).toHaveBeenCalledWith("per_1", "always");
-    await userEvent.click(screen.getByRole("button", { name: "拒绝" }));
-    expect(onPermission).toHaveBeenCalledWith("per_1", "reject");
+    await userEvent.click(screen.getByRole('button', { name: '允许一次' }));
+    expect(onPermission).toHaveBeenCalledWith('per_1', 'once');
+    await userEvent.click(screen.getByRole('button', { name: '始终允许' }));
+    expect(onPermission).toHaveBeenCalledWith('per_1', 'always');
+    await userEvent.click(screen.getByRole('button', { name: '拒绝' }));
+    expect(onPermission).toHaveBeenCalledWith('per_1', 'reject');
   });
 });

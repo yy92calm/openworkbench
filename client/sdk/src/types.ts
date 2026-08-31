@@ -1,25 +1,25 @@
-import type { RuntimeStatus, ToolCallStatus } from "@workbench/shared";
+import type { RuntimeStatus, ToolCallStatus } from '@workbench/shared';
 
 export type { RuntimeStatus, ToolCallStatus };
 
 /** Pinned OpenCode release this client targets. */
-export const OPENCODE_VERSION = "1.17.13";
+export const OPENCODE_VERSION = '1.17.13';
 
 /** OpenCode server defaults (`opencode serve`). */
-export const DEFAULT_OPENCODE_URL = "http://127.0.0.1:4096";
+export const DEFAULT_OPENCODE_URL = 'http://127.0.0.1:4096';
 
 // ---- Normalized events (OpenCode SSE → app) ----
 // OpenCode emits idempotent "updated" events (full current value), not deltas, so
 // text/tool events carry a stable id and the app upserts by that id.
 
 export interface TextUpdatedEvent {
-  type: "text.updated";
+  type: 'text.updated';
   sessionId: string;
   partId: string;
   text: string;
 }
 export interface ReasoningUpdatedEvent {
-  type: "reasoning.updated";
+  type: 'reasoning.updated';
   sessionId: string;
   partId: string;
   text: string;
@@ -27,7 +27,7 @@ export interface ReasoningUpdatedEvent {
   streaming?: boolean;
 }
 export interface ToolUpdatedEvent {
-  type: "tool.updated";
+  type: 'tool.updated';
   sessionId: string;
   callId: string;
   tool: string;
@@ -42,12 +42,12 @@ export interface ToolUpdatedEvent {
   childSessionId?: string;
 }
 export interface SessionIdleEvent {
-  type: "session.idle";
+  type: 'session.idle';
   sessionId: string;
 }
 /** Session metadata updated (tokens/cost changed mid-turn). */
 export interface SessionUpdatedEvent {
-  type: "session.updated";
+  type: 'session.updated';
   sessionId: string;
   promptTokens?: number;
   completionTokens?: number;
@@ -60,14 +60,14 @@ export interface SessionUpdatedEvent {
  *  a model quota error). Lets the UI surface why a turn is not producing
  *  text instead of staying silent. */
 export interface SessionStatusEvent {
-  type: "session.status";
+  type: 'session.status';
   sessionId: string;
   status: SessionStatus;
 }
 /** Context was compacted (old messages summarized/pruned). A cache-reset
  *  point — every subsequent turn starts a fresh prompt prefix. */
 export interface SessionCompactedEvent {
-  type: "session.compacted";
+  type: 'session.compacted';
   sessionId: string;
 }
 
@@ -89,20 +89,20 @@ export interface QuestionItem {
   custom?: boolean;
 }
 export interface QuestionAskedEvent {
-  type: "question.asked";
+  type: 'question.asked';
   sessionId: string;
   requestId: string;
   questions: QuestionItem[];
 }
 /** A question was answered or rejected elsewhere — clear it from the UI. */
 export interface QuestionResolvedEvent {
-  type: "question.resolved";
+  type: 'question.resolved';
   sessionId: string;
   requestId: string;
 }
 
 export interface PermissionAskedEvent {
-  type: "permission.asked";
+  type: 'permission.asked';
   sessionId: string;
   requestId: string;
   /** e.g. "bash", "write", "edit" — what the agent wants to do. */
@@ -111,12 +111,12 @@ export interface PermissionAskedEvent {
   resources: string[];
 }
 export interface PermissionResolvedEvent {
-  type: "permission.resolved";
+  type: 'permission.resolved';
   sessionId: string;
   requestId: string;
 }
 export interface RuntimeErrorEvent {
-  type: "error";
+  type: 'error';
   sessionId?: string;
   message: string;
 }
@@ -136,10 +136,10 @@ export type OpenCodeEvent =
   | PermissionResolvedEvent;
 
 /** Approve a permission once, always (persist a rule), or reject it. */
-export type PermissionReply = "once" | "always" | "reject";
+export type PermissionReply = 'once' | 'always' | 'reject';
 
 /** Permission mode presets for the agent. */
-export type PermissionMode = "review" | "auto" | "yolo";
+export type PermissionMode = 'review' | 'auto' | 'yolo';
 
 // ---- REST shapes the app consumes ----
 
@@ -172,13 +172,13 @@ export interface SessionMeta {
 /** Per-session activity state as reported by GET /session/status.
  *  idel — no active turn; busy — a turn is in flight; retry — a turn is
  *  waiting on an interactive prompt (question/permission). */
-export type SessionStatusKind = "idle" | "busy" | "retry";
+export type SessionStatusKind = 'idle' | 'busy' | 'retry';
 
 /** Value of GET /session/status for one session. */
 export type SessionStatus =
-  | { type: "idle" }
-  | { type: "busy" }
-  | { type: "retry"; attempt: number; message?: string; action?: string; next?: number };
+  | { type: 'idle' }
+  | { type: 'busy' }
+  | { type: 'retry'; attempt: number; message?: string; action?: string; next?: number };
 
 /** Session status map: sessionId → status. Sessions absent are idle. */
 export type SessionStatusMap = Record<string, SessionStatus>;
@@ -198,15 +198,27 @@ export interface AttachmentFile {
 /** Wire shape of a file part: opencode FilePartInput. The `source` mirrors the
  *  sidecar's FilePartSource schema (FileSourceText is { value, start, end }). */
 export interface FilePartInput {
-  type: "file";
+  type: 'file';
   mime?: string;
   filename?: string;
   /** Required by the sidecar — a file:// URI for the attached file. */
   url: string;
   source:
-    | { type: "file"; text: { value: string; start: number; end: number }; path: string }
-    | { type: "symbol"; text: { value: string; start: number; end: number }; path: string; range?: unknown; name?: string; kind?: number }
-    | { type: "resource"; text: { value: string; start: number; end: number }; clientName: string; uri: string };
+    | { type: 'file'; text: { value: string; start: number; end: number }; path: string }
+    | {
+        type: 'symbol';
+        text: { value: string; start: number; end: number };
+        path: string;
+        range?: unknown;
+        name?: string;
+        kind?: number;
+      }
+    | {
+        type: 'resource';
+        text: { value: string; start: number; end: number };
+        clientName: string;
+        uri: string;
+      };
 }
 
 export interface SkillInfo {
@@ -239,7 +251,7 @@ export interface CommandInfo {
 
 /** A message loaded from history (GET /session/:id/message). */
 export interface HistoryMessage {
-  role: "user" | "assistant";
+  role: 'user' | 'assistant';
   /** Epoch ms when the message finished — unset while it is still streaming.
    *  On the LAST message this is the server's truth for "is the turn over". */
   completed?: number;
@@ -297,14 +309,14 @@ export interface ProviderInfo {
 
 /** Extra input an auth method needs before starting (e.g. Copilot deployment). */
 export interface AuthPrompt {
-  type: "select" | "text";
+  type: 'select' | 'text';
   key: string;
   message: string;
   options?: Array<{ label: string; value: string; hint?: string }>;
 }
 
 export interface ProviderAuthMethod {
-  type: "oauth" | "api";
+  type: 'oauth' | 'api';
   label: string;
   prompts?: AuthPrompt[];
 }
@@ -320,15 +332,15 @@ export interface ProviderCatalogEntry {
 export interface OAuthAuthorization {
   url: string;
   /** "auto" — callback completes on its own; "code" — the user pastes a code. */
-  method: "auto" | "code";
+  method: 'auto' | 'code';
   instructions: string;
 }
 
 // ---- MCP servers ----
 
 export type McpConfig =
-  | { type: "local"; command: string[]; enabled?: boolean; environment?: Record<string, string> }
-  | { type: "remote"; url: string; enabled?: boolean; headers?: Record<string, string> };
+  | { type: 'local'; command: string[]; enabled?: boolean; environment?: Record<string, string> }
+  | { type: 'remote'; url: string; enabled?: boolean; headers?: Record<string, string> };
 
 export interface McpServer {
   name: string;
@@ -346,15 +358,15 @@ export interface OpenCodeRawEvent {
 
 export interface OpenCodeTextPart {
   id: string;
-  type: "text";
+  type: 'text';
   text: string;
 }
 export interface OpenCodeToolPart {
   id: string;
-  type: "tool";
+  type: 'tool';
   callID: string;
   tool: string;
-  state: { status: "pending" | "running" | "completed" | "error"; title?: string };
+  state: { status: 'pending' | 'running' | 'completed' | 'error'; title?: string };
 }
 export type OpenCodePart = OpenCodeTextPart | OpenCodeToolPart | { type: string };
 
@@ -386,14 +398,14 @@ export interface CreateTaskInput {
   tags?: string[];
 }
 
-export type UpdateTaskInput = Partial<Omit<CreateTaskInput, "name">> & { name?: string };
+export type UpdateTaskInput = Partial<Omit<CreateTaskInput, 'name'>> & { name?: string };
 
 export interface ExecutionRecord {
   id: string;
   taskId: string;
   taskName: string;
   triggeredAt: string;
-  status: "running" | "completed" | "failed" | "timeout";
+  status: 'running' | 'completed' | 'failed' | 'timeout';
   sessionId?: string;
   durationMs?: number;
   error?: string;
@@ -423,7 +435,7 @@ export interface WorkspaceInfo {
 }
 
 export interface RelayHostStatusInfo {
-  status: "off" | "connecting" | "connected" | "error";
+  status: 'off' | 'connecting' | 'connected' | 'error';
   config: {
     enabled: boolean;
     relayUrl: string;

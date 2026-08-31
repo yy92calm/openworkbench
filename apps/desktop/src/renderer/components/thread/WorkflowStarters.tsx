@@ -1,5 +1,6 @@
-import { ChevronRight, FileSearch, LineChart, Terminal, Command } from "lucide-react";
-import logo from "@/assets/logo.webp";
+import { ChevronRight, Command, FileSearch, LineChart, Terminal } from 'lucide-react';
+
+import logo from '@/assets/logo.webp';
 
 export interface WorkflowStarter {
   id: string;
@@ -12,32 +13,32 @@ export interface WorkflowStarter {
 /** One-click starter prompts for an empty session. */
 export const WORKFLOW_STARTERS: WorkflowStarter[] = [
   {
-    id: "analyze",
+    id: 'analyze',
     icon: <LineChart size={17} strokeWidth={1.75} />,
-    title: "分析我的数据",
-    description: "让 Agent 分析你添加的文件，生成图表和报告。",
+    title: '分析我的数据',
+    description: '让 Agent 分析你添加的文件，生成图表和报告。',
     prompt:
-      "Analyze the data file I added to the workspace end to end: explore it, run the analysis in code, " +
-      "save at least one figure as a PNG, and write report.md with the findings — every number traced to " +
-      "the code that produced it. Ask me which file to use if there is more than one candidate.",
+      'Analyze the data file I added to the workspace end to end: explore it, run the analysis in code, ' +
+      'save at least one figure as a PNG, and write report.md with the findings — every number traced to ' +
+      'the code that produced it. Ask me which file to use if there is more than one candidate.',
   },
   {
-    id: "build",
+    id: 'build',
     icon: <Terminal size={17} strokeWidth={1.75} />,
-    title: "构建脚本或工具",
-    description: "描述你的需求，Agent 编写、运行并迭代代码。",
+    title: '构建脚本或工具',
+    description: '描述你的需求，Agent 编写、运行并迭代代码。',
     prompt:
-      "Help me build a small tool: ask what I need, then write the code, run it to verify it works, " +
-      "and iterate until it does what I described. Keep all files in the workspace.",
+      'Help me build a small tool: ask what I need, then write the code, run it to verify it works, ' +
+      'and iterate until it does what I described. Keep all files in the workspace.',
   },
   {
-    id: "explain",
+    id: 'explain',
     icon: <FileSearch size={17} strokeWidth={1.75} />,
-    title: "解释文件",
-    description: "逐段解读工作区中的文件，总结其功能。",
+    title: '解释文件',
+    description: '逐段解读工作区中的文件，总结其功能。',
     prompt:
-      "Pick a file in the workspace and explain what it does, step by step. Ask me which file to " +
-      "explain if there is more than one candidate.",
+      'Pick a file in the workspace and explain what it does, step by step. Ask me which file to ' +
+      'explain if there is more than one candidate.',
   },
 ];
 
@@ -80,7 +81,9 @@ export function WorkflowStarters({ onPick }: { onPick: (prompt: string) => void 
               </span>
               <span className="min-w-0 flex-1">
                 <span className="block text-[13.5px] font-medium text-text">{s.title}</span>
-                <span className="mt-0.5 block text-xs leading-snug text-muted">{s.description}</span>
+                <span className="mt-0.5 block text-xs leading-snug text-muted">
+                  {s.description}
+                </span>
               </span>
               <ChevronRight
                 size={16}
@@ -94,7 +97,9 @@ export function WorkflowStarters({ onPick }: { onPick: (prompt: string) => void 
         <div className="mt-4 flex items-center justify-center gap-1.5 text-[11px] text-fg-faint">
           <Command size={11} />
           <span>按</span>
-          <kbd className="rounded border border-border bg-surface-2 px-1.5 py-0.5 font-mono text-[10px]">/</kbd>
+          <kbd className="rounded border border-border bg-surface-2 px-1.5 py-0.5 font-mono text-[10px]">
+            /
+          </kbd>
           <span>搜索命令</span>
         </div>
       </div>

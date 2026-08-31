@@ -1,0 +1,15 @@
+# Prettier 配置。
+#
+# 动机说明（配置即文档，仿 openai/codex 的 .bazelrc 风格）：
+# - printWidth 100：对齐仓库既有代码宽度习惯（TypeScript 常见宽度）。
+# - proseWrap preserve：不自动重排 markdown 段落——仓库文档以简体中文为主，
+#   自动换行会破坏中文标点与段落结构；markdown 的格式门禁交给 markdownlint。
+# - singleQuote / trailingComma all：与既有代码风格一致（见 apps/desktop 存量代码）。
+# - docs/**/*.md 整体排除（见 .prettierignore）：中文方案文档由 markdownlint 管理。
+
+printWidth = 100
+tabWidth = 2
+singleQuote = true
+trailingComma = "all"
+semi = true
+proseWrap = "preserve"

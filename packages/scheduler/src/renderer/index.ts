@@ -6,4 +6,4 @@
  * window.electronAPI.scheduler* methods.
  */
 
-export { TasksPage } from "./renderer/TasksPage";
+export { TasksPage } from './renderer/TasksPage';

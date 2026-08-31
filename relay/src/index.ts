@@ -3,17 +3,17 @@
  *  projects; each keeps its own copy of the wire protocol contract. This
  *  package owns the relay server, account registry, admin CLI and the
  *  authoritative wire protocol definition. */
-export { RelayServer, startRelayFromEnv, type RelayServerOptions } from "./server";
-export { AccountRegistry, loadRegistry, type AccountRecord, type RegistryState } from "./registry";
 export type {
+  RelayChunk,
+  RelayConnectionParams,
+  RelayDeviceInfo,
+  RelayDeviceList,
+  RelayDone,
+  RelayListDevices,
   RelayMessage,
   RelayRequest,
   RelayResponseHead,
-  RelayChunk,
-  RelayDone,
-  RelayListDevices,
-  RelayDeviceList,
-  RelayDeviceInfo,
-  RelayConnectionParams,
-} from "./protocol";
-export { parseConnectionParams } from "./protocol";
+} from './protocol';
+export { parseConnectionParams } from './protocol';
+export { type AccountRecord, AccountRegistry, loadRegistry, type RegistryState } from './registry';
+export { RelayServer, type RelayServerOptions, startRelayFromEnv } from './server';

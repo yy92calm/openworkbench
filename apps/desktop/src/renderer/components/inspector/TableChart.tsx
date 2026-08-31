@@ -1,7 +1,8 @@
-import { useMemo, useState } from "react";
-import { analyzeColumns, defaultChartSpec, type ChartType } from "@/lib/tableChart";
-import type { ParsedTable } from "@/lib/csv";
-import { cn } from "@/lib/cn";
+import { useMemo, useState } from 'react';
+
+import { cn } from '@/lib/cn';
+import type { ParsedTable } from '@/lib/csv';
+import { analyzeColumns, type ChartType, defaultChartSpec } from '@/lib/tableChart';
 
 /**
  * Native chart for a parsed table (P1-5): plots numeric columns with the app's
@@ -15,7 +16,7 @@ const SERIES = Array.from({ length: 8 }, (_, i) => `var(--series-${i + 1})`);
 export function TableChart({ table }: { table: ParsedTable }) {
   const cols = useMemo(() => analyzeColumns(table), [table]);
   const def = useMemo(() => defaultChartSpec(cols), [cols]);
-  const [type, setType] = useState<ChartType>(def?.type ?? "line");
+  const [type, setType] = useState<ChartType>(def?.type ?? 'line');
   const [xIndex, setXIndex] = useState<number>(def?.xIndex ?? -1);
   const [ys, setYs] = useState<number[]>(def?.yIndexes ?? []);
 
@@ -24,7 +25,7 @@ export function TableChart({ table }: { table: ParsedTable }) {
   }
 
   const numericCols = cols.filter((c) => c.numeric);
-  const xIsValue = type !== "bar" && xIndex >= 0 && (cols[xIndex]?.numeric ?? false);
+  const xIsValue = type !== 'bar' && xIndex >= 0 && (cols[xIndex]?.numeric ?? false);
   const n = table.rows.length;
 
   // X positions + labels.
@@ -33,14 +34,14 @@ export function TableChart({ table }: { table: ParsedTable }) {
   for (let i = 0; i < n; i++) {
     if (xIsValue) xVals.push(cols[xIndex].values[i] ?? NaN);
     else xVals.push(i);
-    xLabels.push(xIndex >= 0 ? (table.rows[i][xIndex] ?? "") : String(i + 1));
+    xLabels.push(xIndex >= 0 ? (table.rows[i][xIndex] ?? '') : String(i + 1));
   }
   const xMin = xIsValue ? Math.min(...xVals.filter(Number.isFinite)) : 0;
   const xMax = xIsValue ? Math.max(...xVals.filter(Number.isFinite)) : Math.max(1, n - 1);
   const xSpan = xMax - xMin || 1;
 
   // Y range across selected series.
-  let yMin = type === "bar" ? 0 : Infinity;
+  let yMin = type === 'bar' ? 0 : Infinity;
   let yMax = -Infinity;
   for (const s of ys) {
     for (const v of cols[s].values) {
@@ -60,7 +61,9 @@ export function TableChart({ table }: { table: ParsedTable }) {
   const plotW = W - pad.l - pad.r;
   const plotH = H - pad.t - pad.b;
   const xAt = (i: number) =>
-    xIsValue ? pad.l + ((xVals[i] - xMin) / xSpan) * plotW : pad.l + (n <= 1 ? plotW / 2 : (i / (n - 1)) * plotW);
+    xIsValue
+      ? pad.l + ((xVals[i] - xMin) / xSpan) * plotW
+      : pad.l + (n <= 1 ? plotW / 2 : (i / (n - 1)) * plotW);
   const yAt = (v: number) => pad.t + ((yMax - v) / ySpan) * plotH;
 
   const toggleY = (idx: number) =>
@@ -69,7 +72,11 @@ export function TableChart({ table }: { table: ParsedTable }) {
   return (
     <div className="flex h-full flex-col bg-surface">
       <div className="flex flex-wrap items-center gap-2 border-b border-border px-3 py-2 text-[12px]">
-        <Segmented value={type} onChange={(v) => setType(v as ChartType)} options={["line", "bar", "scatter"]} />
+        <Segmented
+          value={type}
+          onChange={(v) => setType(v as ChartType)}
+          options={['line', 'bar', 'scatter']}
+        />
         <label className="flex items-center gap-1 text-muted">
           x:
           <select
@@ -93,15 +100,15 @@ export function TableChart({ table }: { table: ParsedTable }) {
                 key={c.index}
                 onClick={() => toggleY(c.index)}
                 className={cn(
-                  "inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px] ring-1 transition-colors",
-                  on ? "text-text ring-border" : "text-muted/60 ring-transparent hover:text-muted",
+                  'inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-[11px] ring-1 transition-colors',
+                  on ? 'text-text ring-border' : 'text-muted/60 ring-transparent hover:text-muted',
                 )}
-                style={on ? { background: "var(--surface-2)" } : undefined}
-                title={on ? "Hide series" : "Show series"}
+                style={on ? { background: 'var(--surface-2)' } : undefined}
+                title={on ? 'Hide series' : 'Show series'}
               >
                 <span
                   className="h-2 w-2 rounded-full"
-                  style={{ background: on ? SERIES[ys.indexOf(c.index) % 8] : "var(--border)" }}
+                  style={{ background: on ? SERIES[ys.indexOf(c.index) % 8] : 'var(--border)' }}
                 />
                 {c.name}
               </button>
@@ -118,8 +125,22 @@ export function TableChart({ table }: { table: ParsedTable }) {
             const y = yAt(v);
             return (
               <g key={f}>
-                <line x1={pad.l} y1={y} x2={W - pad.r} y2={y} stroke="currentColor" className="text-border" strokeWidth={0.75} strokeOpacity={0.6} />
-                <text x={pad.l - 6} y={y + 3} textAnchor="end" className="fill-muted font-mono text-[10px]">
+                <line
+                  x1={pad.l}
+                  y1={y}
+                  x2={W - pad.r}
+                  y2={y}
+                  stroke="currentColor"
+                  className="text-border"
+                  strokeWidth={0.75}
+                  strokeOpacity={0.6}
+                />
+                <text
+                  x={pad.l - 6}
+                  y={y + 3}
+                  textAnchor="end"
+                  className="fill-muted font-mono text-[10px]"
+                >
                   {v.toPrecision(3)}
                 </text>
               </g>
@@ -130,7 +151,7 @@ export function TableChart({ table }: { table: ParsedTable }) {
           {ys.map((sIdx, si) => {
             const color = SERIES[si % 8];
             const vals = cols[sIdx].values;
-            if (type === "bar") {
+            if (type === 'bar') {
               const groupW = (plotW / Math.max(1, n)) * 0.8;
               const barW = groupW / ys.length;
               return (
@@ -140,21 +161,42 @@ export function TableChart({ table }: { table: ParsedTable }) {
                     const cx = xAt(i) - groupW / 2 + si * barW;
                     const y = yAt(v);
                     const zeroY = yAt(Math.max(0, yMin));
-                    return <rect key={i} x={cx} y={Math.min(y, zeroY)} width={Math.max(1, barW - 1)} height={Math.abs(zeroY - y)} fill={color} fillOpacity={0.85} />;
+                    return (
+                      <rect
+                        key={i}
+                        x={cx}
+                        y={Math.min(y, zeroY)}
+                        width={Math.max(1, barW - 1)}
+                        height={Math.abs(zeroY - y)}
+                        fill={color}
+                        fillOpacity={0.85}
+                      />
+                    );
                   })}
                 </g>
               );
             }
             const pts = vals
-              .map((v, i) => (v === null || (xIsValue && !Number.isFinite(xVals[i])) ? null : { x: xAt(i), y: yAt(v) }))
+              .map((v, i) =>
+                v === null || (xIsValue && !Number.isFinite(xVals[i]))
+                  ? null
+                  : { x: xAt(i), y: yAt(v) },
+              )
               .filter((p): p is { x: number; y: number } => p !== null);
             return (
               <g key={sIdx}>
-                {type === "line" && pts.length > 1 && (
-                  <path d={pts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ")} fill="none" stroke={color} strokeWidth={1.75} />
+                {type === 'line' && pts.length > 1 && (
+                  <path
+                    d={pts
+                      .map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(1)},${p.y.toFixed(1)}`)
+                      .join(' ')}
+                    fill="none"
+                    stroke={color}
+                    strokeWidth={1.75}
+                  />
                 )}
                 {pts.map((p, i) => (
-                  <circle key={i} cx={p.x} cy={p.y} r={type === "scatter" ? 3 : 2.2} fill={color} />
+                  <circle key={i} cx={p.x} cy={p.y} r={type === 'scatter' ? 3 : 2.2} fill={color} />
                 ))}
               </g>
             );
@@ -165,13 +207,24 @@ export function TableChart({ table }: { table: ParsedTable }) {
             const step = Math.ceil(n / 8);
             if (i % step !== 0 && i !== n - 1) return null;
             return (
-              <text key={i} x={xAt(i)} y={H - pad.b + 16} textAnchor="middle" className="fill-muted font-mono text-[9.5px]">
-                {lab.length > 8 ? lab.slice(0, 7) + "…" : lab}
+              <text
+                key={i}
+                x={xAt(i)}
+                y={H - pad.b + 16}
+                textAnchor="middle"
+                className="fill-muted font-mono text-[9.5px]"
+              >
+                {lab.length > 8 ? lab.slice(0, 7) + '…' : lab}
               </text>
             );
           })}
-          <text x={pad.l + plotW / 2} y={H - 6} textAnchor="middle" className="fill-muted font-mono text-[10px]">
-            {xIndex >= 0 ? cols[xIndex].name : "row"}
+          <text
+            x={pad.l + plotW / 2}
+            y={H - 6}
+            textAnchor="middle"
+            className="fill-muted font-mono text-[10px]"
+          >
+            {xIndex >= 0 ? cols[xIndex].name : 'row'}
           </text>
         </svg>
       </div>
@@ -207,8 +260,8 @@ function Segmented({
           key={o}
           onClick={() => onChange(o)}
           className={cn(
-            "px-2 py-1 text-[11px] font-medium capitalize transition-colors",
-            value === o ? "bg-surface-2 text-text" : "text-muted hover:text-text",
+            'px-2 py-1 text-[11px] font-medium capitalize transition-colors',
+            value === o ? 'bg-surface-2 text-text' : 'text-muted hover:text-text',
           )}
         >
           {o}

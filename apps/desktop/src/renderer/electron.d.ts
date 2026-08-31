@@ -17,7 +17,10 @@ export interface ElectronAPI {
   openWorkspaceBase: () => Promise<void>;
   pickFolder: () => Promise<string | null>;
 
-  readArtifact: (rel: string, root?: string) => Promise<{ content: string; binary: boolean } | null>;
+  readArtifact: (
+    rel: string,
+    root?: string,
+  ) => Promise<{ content: string; binary: boolean } | null>;
   openPath: (rel: string, root?: string) => Promise<void>;
   resolveArtifact: (rel: string) => Promise<string | null>;
   saveTextFile: (filename: string, content: string) => Promise<string | null>;
@@ -25,13 +28,27 @@ export interface ElectronAPI {
   addFilesToWorkspace: () => Promise<string[]>;
   addTextToWorkspace: (filename: string, content: string) => Promise<string>;
   listNotebooks: (root?: string) => Promise<{ name: string; path: string; modified: string }[]>;
-  listDir: (rel: string, root?: string) => Promise<{ name: string; is_dir: boolean; is_file: boolean; size: number }[]>;
+  listDir: (
+    rel: string,
+    root?: string,
+  ) => Promise<{ name: string; is_dir: boolean; is_file: boolean; size: number }[]>;
   writeWorkspaceFile: (rel: string, content: string, root?: string) => Promise<void>;
 
-  kernelExecute: (code: string, language: string, notebook?: string) => Promise<{ stdout: string; stderr: string; exitCode: number | null }>;
+  kernelExecute: (
+    code: string,
+    language: string,
+    notebook?: string,
+  ) => Promise<{ stdout: string; stderr: string; exitCode: number | null }>;
   kernelReset: (language: string, notebook?: string) => Promise<void>;
 
-  recordProvenance: (sessionId: string, callId: string, tool: string, input: unknown, output: unknown, model: string | null) => Promise<void>;
+  recordProvenance: (
+    sessionId: string,
+    callId: string,
+    tool: string,
+    input: unknown,
+    output: unknown,
+    model: string | null,
+  ) => Promise<void>;
   listProvenance: (path: string) => Promise<unknown[]>;
   readEnvLockfile: (hash: string) => Promise<string>;
 
@@ -51,17 +68,23 @@ export interface ElectronAPI {
 
   profileManifest: () => Promise<unknown | null>;
   profileInteraction: () => Promise<unknown>;
-  profileValidatePatch: (raw: string) =>
-    Promise<{ ok: true; ops: number } | { ok: false; rejection: { kind: string; detail: string } }>;
+  profileValidatePatch: (
+    raw: string,
+  ) => Promise<
+    { ok: true; ops: number } | { ok: false; rejection: { kind: string; detail: string } }
+  >;
   profileWritePatch: (raw: string) => Promise<{ ok: boolean; error?: string }>;
 
   /** Remote relay (host side). */
   relayStatus: () => Promise<{
-    status: "off" | "connecting" | "connected" | "error";
+    status: 'off' | 'connecting' | 'connected' | 'error';
     config: { enabled: boolean; relayUrl: string; deviceId: string; tokenSet: boolean };
   }>;
-  relayStart: (config: { relayUrl: string; deviceId: string; token: string }) =>
-    Promise<"off" | "connecting" | "connected" | "error">;
+  relayStart: (config: {
+    relayUrl: string;
+    deviceId: string;
+    token: string;
+  }) => Promise<'off' | 'connecting' | 'connected' | 'error'>;
   relayStop: () => Promise<string>;
   onRelayStatus: (callback: (status: string) => void) => () => void;
   /** Session IDs created by remote guests via relay (for sidebar badge). */
@@ -71,14 +94,21 @@ export interface ElectronAPI {
   // Room (peer chat)
   roomCreate: () => Promise<{ inviteCode: string }>;
   roomValidate: (code: string) => Promise<boolean>;
-  roomJoin: (inviteCode: string, nickname: string, opts?: { enforceViewOnce?: boolean }) => Promise<boolean>;
+  roomJoin: (
+    inviteCode: string,
+    nickname: string,
+    opts?: { enforceViewOnce?: boolean },
+  ) => Promise<boolean>;
   roomLeave: () => Promise<boolean>;
   roomSend: (text: string, viewOnce: boolean) => Promise<string>;
   roomViewed: (messageId: string) => Promise<boolean>;
   roomSetViewOnce: (enforce: boolean) => Promise<boolean>;
-  roomSendSessionShare: (payload: { title: string; sessionId: string; summary: string }, viewOnce?: boolean) => Promise<string>;
+  roomSendSessionShare: (
+    payload: { title: string; sessionId: string; summary: string },
+    viewOnce?: boolean,
+  ) => Promise<string>;
   roomStatus: () => Promise<{
-    status: "off" | "connecting" | "joined" | "error";
+    status: 'off' | 'connecting' | 'joined' | 'error';
     inviteCode: string;
     myMemberId: string;
     members: Array<{ id: string; nickname?: string; pubKey?: string }>;

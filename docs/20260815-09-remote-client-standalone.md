@@ -25,7 +25,7 @@
 
 ## 结构
 
-```
+```text
 client/                         ← 客户端连接器独立目录
 ├── package.json                ← @workbench/client；exports "." → src/client.ts
 ├── tsconfig.json               ← DOM + React；paths 仅 @/ 与 @workbench/sdk

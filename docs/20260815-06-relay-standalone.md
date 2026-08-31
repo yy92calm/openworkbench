@@ -21,7 +21,7 @@
 
 ## 目标结构
 
-```
+```text
 relay/                          ← 仓库顶层独立目录（替代 packages/relay）
 ├── package.json                ← 自洽；scripts: serve/admin/test/e2e
 ├── README.md                   ← 独立文档（已有，随目录搬）

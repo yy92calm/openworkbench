@@ -1,11 +1,15 @@
-import type { RelayDeviceList, RelayDeviceInfo, RelayListDevices, RelayMessage, RelayRequest } from "./protocol";
+import type { RelayDeviceInfo, RelayListDevices, RelayMessage, RelayRequest } from './protocol';
 
-export type { RelayDeviceInfo } from "./protocol";
+export type { RelayDeviceInfo } from './protocol';
 
 /** Minimal WebSocket surface shared by browsers and the `ws` npm package. */
 export interface WebSocketLike {
   readyState: number;
-  addEventListener(type: string, listener: (ev: unknown) => void, options?: { once?: boolean }): void;
+  addEventListener(
+    type: string,
+    listener: (ev: unknown) => void,
+    options?: { once?: boolean },
+  ): void;
   send(data: string): void;
   close(): void;
 }
@@ -55,10 +59,12 @@ export class RelayHttpTransport {
     this.opts = opts;
     if (opts.WebSocketImpl) {
       this.wsCtor = opts.WebSocketImpl;
-    } else if (typeof WebSocket !== "undefined") {
+    } else if (typeof WebSocket !== 'undefined') {
       this.wsCtor = WebSocket as unknown as WebSocketCtor;
     } else {
-      throw new Error("RelayHttpTransport needs a WebSocket implementation (pass WebSocketImpl in Node)");
+      throw new Error(
+        'RelayHttpTransport needs a WebSocket implementation (pass WebSocketImpl in Node)',
+      );
     }
   }
 
@@ -67,29 +73,36 @@ export class RelayHttpTransport {
    *  existing connection is reused; a different set tears the old one down and
    *  reconnects (a transport is single-session). */
   connect(relayUrl: string, deviceId: string, token: string): Promise<void> {
-    if (this.opened && this.connectedTo &&
-        this.connectedTo.url === relayUrl &&
-        this.connectedTo.device === deviceId &&
-        this.connectedTo.token === token) {
+    if (
+      this.opened &&
+      this.connectedTo &&
+      this.connectedTo.url === relayUrl &&
+      this.connectedTo.device === deviceId &&
+      this.connectedTo.token === token
+    ) {
       return this.opened;
     }
     // Different target than the live connection — rebuild it.
     this.close();
     this.connectedTo = { url: relayUrl, device: deviceId, token };
     const url = new URL(relayUrl);
-    url.searchParams.set("role", "guest");
-    url.searchParams.set("device", deviceId);
-    url.searchParams.set("token", token);
+    url.searchParams.set('role', 'guest');
+    url.searchParams.set('device', deviceId);
+    url.searchParams.set('token', token);
     const ws = new this.wsCtor(url.toString());
     this.ws = ws;
-    ws.addEventListener("message", (ev) => this.handleMessage((ev as { data: unknown }).data));
-    ws.addEventListener("close", () => {
+    ws.addEventListener('message', (ev) => this.handleMessage((ev as { data: unknown }).data));
+    ws.addEventListener('close', () => {
       // Only report unexpected disconnects (not close()).
       const wasOpen = this.opened !== null && this.ws === ws;
-      const err = new Error("relay connection closed");
+      const err = new Error('relay connection closed');
       for (const [id, p] of this.pending) {
         this.pending.delete(id);
-        try { p.controller?.error(err); } catch { /* already closed */ }
+        try {
+          p.controller?.error(err);
+        } catch {
+          /* already closed */
+        }
         p.headReject(err);
       }
       if (wasOpen && this.ws === ws) {
@@ -99,8 +112,10 @@ export class RelayHttpTransport {
       }
     });
     this.opened = new Promise((resolveOpen, rejectOpen) => {
-      ws.addEventListener("open", () => resolveOpen(), { once: true });
-      ws.addEventListener("error", () => rejectOpen(new Error("relay connection failed")), { once: true });
+      ws.addEventListener('open', () => resolveOpen(), { once: true });
+      ws.addEventListener('error', () => rejectOpen(new Error('relay connection failed')), {
+        once: true,
+      });
     });
     return this.opened;
   }
@@ -119,18 +134,22 @@ export class RelayHttpTransport {
    *  forwarded to the relay anyway. */
   fetchImpl = (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
     const url =
-      typeof input === "string" ? new URL(input, "http://relay.local")
-      : input instanceof URL ? input
-      : new URL(input.url, "http://relay.local");
+      typeof input === 'string'
+        ? new URL(input, 'http://relay.local')
+        : input instanceof URL
+          ? input
+          : new URL(input.url, 'http://relay.local');
     const headers: Record<string, string> = {};
     if (init?.headers) {
-      new Headers(init.headers).forEach((v, k) => { headers[k] = v; });
+      new Headers(init.headers).forEach((v, k) => {
+        headers[k] = v;
+      });
     }
     const body = init?.body == null ? undefined : stringifyBody(init.body);
     const msg: RelayRequest = {
-      type: "request",
+      type: 'request',
       id: nextId(),
-      method: init?.method ?? "GET",
+      method: init?.method ?? 'GET',
       path: url.pathname + url.search,
       ...(Object.keys(headers).length ? { headers } : {}),
       ...(body !== undefined ? { body } : {}),
@@ -141,7 +160,7 @@ export class RelayHttpTransport {
   private roundTrip(msg: RelayRequest): Promise<Response> {
     const ws = this.ws;
     if (!ws || ws.readyState !== this.wsCtor.OPEN) {
-      return Promise.reject(new Error("relay not connected"));
+      return Promise.reject(new Error('relay not connected'));
     }
     const pending: PendingRequest = {
       controller: null,
@@ -179,11 +198,11 @@ export class RelayHttpTransport {
     }
     // Room (peer) messages don't have an `id` — they're handled by a separate
     // WebSocket connection in roomConnection.ts, not this transport. Ignore them.
-    if (!("id" in msg)) return;
+    if (!('id' in msg)) return;
     const p = this.pending.get(msg.id);
     if (!p) return;
     switch (msg.type) {
-      case "head": {
+      case 'head': {
         if (p.done) break;
         try {
           // Status 204/205/304 must not carry a body per the fetch spec, and a
@@ -193,35 +212,48 @@ export class RelayHttpTransport {
           const noBody =
             msg.status === 204 || msg.status === 205 || msg.status === 304 || p.stream.locked;
           if (noBody) {
-            p.headResolve(new Response(null, {
-              status: msg.status,
-              headers: new Headers(msg.headers ?? {}),
-            }));
+            p.headResolve(
+              new Response(null, {
+                status: msg.status,
+                headers: new Headers(msg.headers ?? {}),
+              }),
+            );
           } else {
-            p.headResolve(new Response(p.stream, {
-              status: msg.status,
-              headers: new Headers(msg.headers ?? {}),
-            }));
+            p.headResolve(
+              new Response(p.stream, {
+                status: msg.status,
+                headers: new Headers(msg.headers ?? {}),
+              }),
+            );
           }
         } catch (e) {
-          console.error("RELAY-DEBUG head id=", msg.id, "err:", (e as Error).message);
+          console.error('RELAY-DEBUG head id=', msg.id, 'err:', (e as Error).message);
           throw e;
         }
         break;
       }
-      case "chunk": {
-        if (!p.controller) { p.buffered.push(msg.chunk); break; }
+      case 'chunk': {
+        if (!p.controller) {
+          p.buffered.push(msg.chunk);
+          break;
+        }
         try {
           p.controller.enqueue(new TextEncoder().encode(msg.chunk));
-        } catch { /* stream closed */ }
+        } catch {
+          /* stream closed */
+        }
         break;
       }
-      case "done": {
+      case 'done': {
         if (p.done) break;
         p.done = true;
         this.pending.delete(msg.id);
         if (p.controller) {
-          try { p.controller.close(); } catch { /* already closed */ }
+          try {
+            p.controller.close();
+          } catch {
+            /* already closed */
+          }
         }
         break;
       }
@@ -230,11 +262,11 @@ export class RelayHttpTransport {
 }
 
 function stringifyBody(body: BodyInit): string | undefined {
-  if (typeof body === "string") return body;
+  if (typeof body === 'string') return body;
   if (body instanceof Uint8Array) return new TextDecoder().decode(body);
   if (body instanceof ArrayBuffer) return new TextDecoder().decode(body);
   // Blob / FormData / ReadableStream are not used by the SDK — reject loudly.
-  throw new Error("relay transport: unsupported body type");
+  throw new Error('relay transport: unsupported body type');
 }
 
 /**
@@ -262,32 +294,45 @@ export function listAccountDevices(
     };
     let wsCtor = opts.WebSocketImpl;
     if (!wsCtor) {
-      if (typeof WebSocket !== "undefined") wsCtor = WebSocket as unknown as WebSocketCtor;
-      else throw new Error("listAccountDevices needs a WebSocket implementation (pass WebSocketImpl in Node)");
+      if (typeof WebSocket !== 'undefined') wsCtor = WebSocket as unknown as WebSocketCtor;
+      else
+        throw new Error(
+          'listAccountDevices needs a WebSocket implementation (pass WebSocketImpl in Node)',
+        );
     }
     const url = new URL(relayUrl);
-    url.searchParams.set("role", "guest");
-    url.searchParams.set("token", token);
+    url.searchParams.set('role', 'guest');
+    url.searchParams.set('token', token);
     const ws = new wsCtor(url.toString());
     let timer: ReturnType<typeof setTimeout> | null = setTimeout(() => {
-      done(() => reject(new Error("relay: timed out waiting for device-list")));
+      done(() => reject(new Error('relay: timed out waiting for device-list')));
     }, 15_000);
-    const msg: RelayListDevices = { type: "list-devices", id: "devices" };
-    ws.addEventListener("open", () => ws.send(JSON.stringify(msg)), { once: true });
-    ws.addEventListener("message", (ev) => {
+    const msg: RelayListDevices = { type: 'list-devices', id: 'devices' };
+    ws.addEventListener('open', () => ws.send(JSON.stringify(msg)), { once: true });
+    ws.addEventListener('message', (ev) => {
       let parsed: RelayMessage | null = null;
-      try { parsed = JSON.parse(String((ev as { data: unknown }).data)) as RelayMessage; } catch { return; }
-      if (parsed.type !== "device-list" || parsed.id !== msg.id) return;
-      if (timer) { clearTimeout(timer); timer = null; }
+      try {
+        parsed = JSON.parse(String((ev as { data: unknown }).data)) as RelayMessage;
+      } catch {
+        return;
+      }
+      if (parsed.type !== 'device-list' || parsed.id !== msg.id) return;
+      if (timer) {
+        clearTimeout(timer);
+        timer = null;
+      }
       done(() => resolve(parsed.devices));
     });
-    ws.addEventListener("close", () => {
+    ws.addEventListener('close', () => {
       if (settled) return;
-      if (timer) { clearTimeout(timer); timer = null; }
-      reject(new Error("relay: connection closed without device-list (check token)"));
+      if (timer) {
+        clearTimeout(timer);
+        timer = null;
+      }
+      reject(new Error('relay: connection closed without device-list (check token)'));
     });
-    ws.addEventListener("error", () => {
-      done(() => reject(new Error("relay: connection failed")));
+    ws.addEventListener('error', () => {
+      done(() => reject(new Error('relay: connection failed')));
     });
   });
 }

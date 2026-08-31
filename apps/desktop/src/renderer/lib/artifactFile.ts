@@ -1,11 +1,11 @@
-import type { FileRoot } from "@workbench/shared";
+import type { FileRoot } from '@workbench/shared';
 
 export type { FileRoot };
 
 export interface ArtifactFile {
   path: string;
   mime: string;
-  encoding: "utf8" | "base64";
+  encoding: 'utf8' | 'base64';
   data: string;
   size: number;
 }
@@ -24,8 +24,8 @@ export interface DirEntry {
 }
 
 function electronAPI() {
-  if (typeof window === "undefined" || !window.electronAPI)
-    throw new Error("not running in the desktop app");
+  if (typeof window === 'undefined' || !window.electronAPI)
+    throw new Error('not running in the desktop app');
   return window.electronAPI;
 }
 
@@ -35,8 +35,8 @@ export async function readArtifact(path: string, root?: FileRoot): Promise<Artif
     if (!result) return null;
     return {
       path,
-      mime: result.binary ? "application/octet-stream" : "text/plain",
-      encoding: result.binary ? "base64" : "utf8",
+      mime: result.binary ? 'application/octet-stream' : 'text/plain',
+      encoding: result.binary ? 'base64' : 'utf8',
       data: result.content,
       size: result.content.length,
     };
@@ -64,7 +64,9 @@ export async function resolveArtifactPath(path: string): Promise<string | null> 
 export async function openArtifactExternally(path: string, root?: FileRoot): Promise<void> {
   try {
     await electronAPI().openPath(path, root);
-  } catch { /* noop */ }
+  } catch {
+    /* noop */
+  }
 }
 
 export async function listNotebooks(root?: FileRoot): Promise<NotebookEntry[]> {
@@ -99,12 +101,12 @@ export async function writeWorkspaceFile(
   try {
     await electronAPI().writeWorkspaceFile(path, content, root);
   } catch {
-    throw new Error("not running in the desktop app");
+    throw new Error('not running in the desktop app');
   }
 }
 
 export function toDataUrl(f: ArtifactFile): string {
-  if (f.encoding === "base64") return `data:${f.mime};base64,${f.data}`;
+  if (f.encoding === 'base64') return `data:${f.mime};base64,${f.data}`;
   return `data:${f.mime};charset=utf-8,${encodeURIComponent(f.data)}`;
 }
 

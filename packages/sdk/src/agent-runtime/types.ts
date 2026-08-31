@@ -5,23 +5,26 @@
 // a transport-neutral surface so a future ClaudeCodeAdapter can emit the same
 // events without the UI knowing which runtime is behind it.
 
-import type { RuntimeStatus, ToolCallStatus } from "@workbench/shared";
+import type { RuntimeStatus, ToolCallStatus } from '@workbench/shared';
+
+import type { SessionStatus } from '../types';
 
 export type { RuntimeStatus, ToolCallStatus };
+export type { SessionStatus };
 
 // ---- Normalized events (runtime -> app) ----
 // Each event is idempotent where possible: text/tool events carry a stable id
 // and the app upserts by that id; only text/reasoning deltas are accumulative.
 
 export interface TextUpdatedEvent {
-  type: "text.updated";
+  type: 'text.updated';
   sessionId: string;
   partId: string;
   text: string;
 }
 
 export interface ReasoningUpdatedEvent {
-  type: "reasoning.updated";
+  type: 'reasoning.updated';
   sessionId: string;
   partId: string;
   text: string;
@@ -30,7 +33,7 @@ export interface ReasoningUpdatedEvent {
 }
 
 export interface ToolUpdatedEvent {
-  type: "tool.updated";
+  type: 'tool.updated';
   sessionId: string;
   callId: string;
   tool: string;
@@ -46,12 +49,40 @@ export interface ToolUpdatedEvent {
 }
 
 export interface SessionIdleEvent {
-  type: "session.idle";
+  type: 'session.idle';
+  sessionId: string;
+}
+
+/** Session metadata updated (tokens/cost changed mid-turn). */
+export interface SessionUpdatedEvent {
+  type: 'session.updated';
+  sessionId: string;
+  promptTokens?: number;
+  completionTokens?: number;
+  reasoningTokens?: number;
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
+  cost?: number;
+}
+
+/** Session activity state changed (busy / idle / retry with a reason, e.g.
+ *  a model quota error). Lets the UI surface why a turn is not producing
+ *  text instead of staying silent. */
+export interface SessionStatusEvent {
+  type: 'session.status';
+  sessionId: string;
+  status: SessionStatus;
+}
+
+/** Context was compacted (old messages summarized/pruned). A cache-reset
+ *  point — every subsequent turn starts a fresh prompt prefix. */
+export interface SessionCompactedEvent {
+  type: 'session.compacted';
   sessionId: string;
 }
 
 export interface RuntimeErrorEvent {
-  type: "error";
+  type: 'error';
   sessionId?: string;
   message: string;
 }
@@ -76,7 +107,7 @@ export interface QuestionItem {
 }
 
 export interface QuestionAskedEvent {
-  type: "question.asked";
+  type: 'question.asked';
   sessionId: string;
   requestId: string;
   questions: QuestionItem[];
@@ -84,13 +115,13 @@ export interface QuestionAskedEvent {
 
 /** A question was answered or rejected elsewhere - clear it from the UI. */
 export interface QuestionResolvedEvent {
-  type: "question.resolved";
+  type: 'question.resolved';
   sessionId: string;
   requestId: string;
 }
 
 export interface PermissionAskedEvent {
-  type: "permission.asked";
+  type: 'permission.asked';
   sessionId: string;
   requestId: string;
   /** e.g. "bash", "write", "edit" - what the agent wants to do. */
@@ -100,7 +131,7 @@ export interface PermissionAskedEvent {
 }
 
 export interface PermissionResolvedEvent {
-  type: "permission.resolved";
+  type: 'permission.resolved';
   sessionId: string;
   requestId: string;
 }
@@ -110,6 +141,9 @@ export type AgentRuntimeEvent =
   | ReasoningUpdatedEvent
   | ToolUpdatedEvent
   | SessionIdleEvent
+  | SessionUpdatedEvent
+  | SessionStatusEvent
+  | SessionCompactedEvent
   | RuntimeErrorEvent
   | QuestionAskedEvent
   | QuestionResolvedEvent
@@ -117,10 +151,10 @@ export type AgentRuntimeEvent =
   | PermissionResolvedEvent;
 
 /** Approve a permission once, always (persist a rule), or reject it. */
-export type PermissionReply = "once" | "always" | "reject";
+export type PermissionReply = 'once' | 'always' | 'reject';
 
 /** Permission mode presets for the agent. */
-export type PermissionMode = "review" | "auto" | "yolo";
+export type PermissionMode = 'review' | 'auto' | 'yolo';
 
 // ---- REST shapes the app consumes ----
 
@@ -164,7 +198,7 @@ export interface AgentCommandInfo {
 
 /** A message loaded from history. */
 export interface AgentHistoryMessage {
-  role: "user" | "assistant";
+  role: 'user' | 'assistant';
   /** Epoch ms when the message finished - unset while it is still streaming.
    *  On the LAST message this is the server's truth for "is the turn over". */
   completed?: number;
@@ -199,8 +233,8 @@ export interface AgentProviderInfo {
 }
 
 export type AgentMcpConfig =
-  | { type: "local"; command: string[]; enabled?: boolean; environment?: Record<string, string> }
-  | { type: "remote"; url: string; enabled?: boolean; headers?: Record<string, string> };
+  | { type: 'local'; command: string[]; enabled?: boolean; environment?: Record<string, string> }
+  | { type: 'remote'; url: string; enabled?: boolean; headers?: Record<string, string> };
 
 export interface AgentMcpServer {
   name: string;

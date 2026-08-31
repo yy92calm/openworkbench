@@ -1,23 +1,35 @@
-import { randomUUID } from "node:crypto";
-import { accessSync, cpSync, constants as fsConstants, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { get as httpGet } from "node:http";
-import { createServer } from "node:net";
-import { homedir } from "node:os";
-import { join } from "node:path";
-import { app } from "electron";
-import type { ChildProcess } from "node:child_process";
-import { execFileSync, spawn } from "node:child_process";
-import { deploySchedulerProfile, startSchedulerApi, stopSchedulerApi } from "./scheduler";
-import { createBrowserMcp, type BrowserMcpPlugin } from "@fafawork/browser-mcp";
-import { enrichedPath } from "./shell_env";
-import { syncDir } from "./syncDir";
-import { applyUserOverlay } from "./profilePatch";
-import { getStore } from "./store";
+import type { ChildProcess } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
+import {
+  accessSync,
+  constants as fsConstants,
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
+import { get as httpGet } from 'node:http';
+import { createServer } from 'node:net';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
+
+import { type BrowserMcpPlugin, createBrowserMcp } from '@fafawork/browser-mcp';
+import { app } from 'electron';
+
+import { applyUserOverlay } from './profilePatch';
+import { deploySchedulerProfile, startSchedulerApi } from './scheduler';
+import { enrichedPath } from './shell_env';
+import { getStore } from './store';
+import { syncDir } from './syncDir';
 
 let child: ChildProcess | null = null;
 let currentUrl: string | null = null;
 let currentPort: number | null = null;
-let serverPassword = "";
+let serverPassword = '';
 
 // Browser MCP plugin instance (lazy-initialized)
 let browserMcpInstance: BrowserMcpPlugin | null = null;
@@ -26,9 +38,9 @@ export function getBrowserMcp(): BrowserMcpPlugin {
     browserMcpInstance = createBrowserMcp({
       workspaceDir: () => workspaceDir(),
       logger: {
-        info: (...a: unknown[]) => log("browser-mcp", "info", a.map(String).join(" ")),
-        warn: (...a: unknown[]) => log("browser-mcp", "warn", a.map(String).join(" ")),
-        error: (...a: unknown[]) => log("browser-mcp", "error", a.map(String).join(" ")),
+        info: (...a: unknown[]) => log('browser-mcp', 'info', a.map(String).join(' ')),
+        warn: (...a: unknown[]) => log('browser-mcp', 'warn', a.map(String).join(' ')),
+        error: (...a: unknown[]) => log('browser-mcp', 'error', a.map(String).join(' ')),
       },
     });
   }
@@ -45,44 +57,48 @@ export function getServerUrl(): string | null {
 }
 
 function runtimeRoot(): string {
-  const dir = join(app.getPath("userData"), "runtime");
+  const dir = join(app.getPath('userData'), 'runtime');
   mkdirSync(dir, { recursive: true });
   return dir;
 }
 
 function xdgConfigHome(): string {
-  return join(runtimeRoot(), "xdg-config");
+  return join(runtimeRoot(), 'xdg-config');
 }
 
 /** Where the bundled OpenCode profile is deployed on each sidecar start. */
 export function deployedProfileDir(): string {
-  return join(xdgConfigHome(), "opencode");
+  return join(xdgConfigHome(), 'opencode');
 }
 
 function activeWorkspaceFile(): string {
-  return join(runtimeRoot(), "active-workspace.txt");
+  return join(runtimeRoot(), 'active-workspace.txt');
 }
 
 function baseWorkspaceFile(): string {
-  return join(runtimeRoot(), "base-workspace.txt");
+  return join(runtimeRoot(), 'base-workspace.txt');
 }
 
 export function workspaceDir(): string {
   const file = activeWorkspaceFile();
   try {
-    const dir = readFileSync(file, "utf-8").trim();
+    const dir = readFileSync(file, 'utf-8').trim();
     if (existsSync(dir)) return dir;
-  } catch { /* fall through */ }
+  } catch {
+    /* fall through */
+  }
   return baseWorkspaceDir();
 }
 
 export function baseWorkspaceDir(): string {
   const file = baseWorkspaceFile();
   try {
-    const dir = readFileSync(file, "utf-8").trim();
+    const dir = readFileSync(file, 'utf-8').trim();
     if (existsSync(dir)) return dir;
-  } catch { /* fall through */ }
-  const docs = join(app.getPath("documents"), "Workbench");
+  } catch {
+    /* fall through */
+  }
+  const docs = join(app.getPath('documents'), 'Workbench');
   mkdirSync(docs, { recursive: true });
   return docs;
 }
@@ -97,26 +113,26 @@ export function setBaseWorkspace(path: string): void {
 
 function bundledProfileSource(): string {
   if (app.isPackaged) {
-    return join(process.resourcesPath, "app-config", ".opencode");
+    return join(process.resourcesPath, 'app-config', '.opencode');
   }
   // app.getAppPath() -> apps/desktop  in dev, so we need two levels up to
   // reach the repo-root app-config/.opencode directory.
-  return join(app.getAppPath(), "..", "..", "app-config", ".opencode");
+  return join(app.getAppPath(), '..', '..', 'app-config', '.opencode');
 }
 
 function claudeProfileSource(): string {
   if (app.isPackaged) {
-    return join(process.resourcesPath, "app-config", ".claude");
+    return join(process.resourcesPath, 'app-config', '.claude');
   }
-  return join(app.getAppPath(), "..", "..", "app-config", ".claude");
+  return join(app.getAppPath(), '..', '..', 'app-config', '.claude');
 }
 
 function sidecarBinaryPath(): string {
-  const binaryName = process.platform === "win32" ? "opencode.exe" : "opencode";
+  const binaryName = process.platform === 'win32' ? 'opencode.exe' : 'opencode';
   if (app.isPackaged) {
-    return join(process.resourcesPath, "binaries", binaryName);
+    return join(process.resourcesPath, 'binaries', binaryName);
   }
-  return join(app.getAppPath(), "binaries", binaryName);
+  return join(app.getAppPath(), 'binaries', binaryName);
 }
 
 /** Clear the OpenCode SQLite database when the bundled sidecar binary changes.
@@ -127,11 +143,14 @@ function sidecarBinaryPath(): string {
  *  repackage/reinstall of the same binary must NOT wipe session history. Only
  *  an actual opencode version bump clears the DB. */
 function migrateStaleDatabase(sidecarPath: string, dataHome: string): void {
-  const markerPath = join(runtimeRoot(), "sidecar-fingerprint.txt");
-  let fingerprint = "";
+  const markerPath = join(runtimeRoot(), 'sidecar-fingerprint.txt');
+  let fingerprint = '';
   try {
     // Quick version probe: identical version ⇒ identical schema ⇒ keep the DB.
-    fingerprint = execFileSync(sidecarPath, ["--version"], { encoding: "utf8", timeout: 10_000 }).trim();
+    fingerprint = execFileSync(sidecarPath, ['--version'], {
+      encoding: 'utf8',
+      timeout: 10_000,
+    }).trim();
   } catch {
     // Can't probe (broken binary / no exec) — fall back to size+mtime.
     try {
@@ -141,42 +160,44 @@ function migrateStaleDatabase(sidecarPath: string, dataHome: string): void {
       return; // can't stat - let the normal "not found" path handle it
     }
   }
-  let stored = "";
+  let stored = '';
   try {
-    stored = readFileSync(markerPath, "utf-8").trim();
-  } catch { /* no marker yet */ }
+    stored = readFileSync(markerPath, 'utf-8').trim();
+  } catch {
+    /* no marker yet */
+  }
   if (stored === fingerprint) return; // same binary, DB is compatible
   // Binary changed (or first run) - clear stale DB files so OpenCode recreates
   // them with the correct schema.
-  const dbDir = join(dataHome, "opencode");
+  const dbDir = join(dataHome, 'opencode');
   if (existsSync(dbDir)) {
-    for (const f of ["opencode.db", "opencode.db-shm", "opencode.db-wal"]) {
+    for (const f of ['opencode.db', 'opencode.db-shm', 'opencode.db-wal']) {
       const p = join(dbDir, f);
       if (existsSync(p)) {
         rmSync(p, { force: true });
-        log("db", "migrate", `deleted stale ${f}`);
+        log('db', 'migrate', `deleted stale ${f}`);
       }
     }
   }
   writeFileSync(markerPath, fingerprint);
-  log("db", "migrate", `sidecar fingerprint updated: ${fingerprint}`);
+  log('db', 'migrate', `sidecar fingerprint updated: ${fingerprint}`);
 }
 
 export function deployBundledProfile(): void {
   const source = bundledProfileSource();
   const target = deployedProfileDir();
   if (!existsSync(source)) {
-    log("profile", "deploy", `source not found: ${source}`, "warn");
+    log('profile', 'deploy', `source not found: ${source}`, 'warn');
     return;
   }
   syncDir(source, target);
   // Layer user file overrides + patch.json on top of the base mirror.
   const manifest = applyUserOverlay(target);
   log(
-    "profile",
-    "deploy",
+    'profile',
+    'deploy',
     `deployed ${source} -> ${target} (base=${manifest.base} patch=${manifest.patch}` +
-      `${manifest.fileOverrides.length ? ` overlays=${manifest.fileOverrides.join(",")}` : ""})`,
+      `${manifest.fileOverrides.length ? ` overlays=${manifest.fileOverrides.join(',')}` : ''})`,
   );
   // Merge user-configured provider overrides (Settings → Model Config)
   applyUserProviderConfig(target);
@@ -191,31 +212,38 @@ function applyUserProviderConfig(profileDir: string): void {
     const store = getStore();
 
     // Try array format first
-    const arr = store.get("provider-configs") as
-      | Array<{ id: string; baseUrl?: string; apiKey?: string; modelId?: string; providerName?: string; active?: boolean }>
+    const arr = store.get('provider-configs') as
+      | Array<{
+          id: string;
+          baseUrl?: string;
+          apiKey?: string;
+          modelId?: string;
+          providerName?: string;
+          active?: boolean;
+        }>
       | undefined;
-    let cfg: { baseUrl?: string; apiKey?: string; modelId?: string; providerName?: string } | undefined;
+    let cfg:
+      { baseUrl?: string; apiKey?: string; modelId?: string; providerName?: string } | undefined;
     if (arr && Array.isArray(arr) && arr.length > 0) {
       cfg = arr.find((c) => c.active) ?? arr[0];
     } else {
       // Fall back to legacy single-config format
-      cfg = store.get("provider-config") as
-        | { baseUrl?: string; apiKey?: string; modelId?: string; providerName?: string }
-        | undefined;
+      cfg = store.get('provider-config') as
+        { baseUrl?: string; apiKey?: string; modelId?: string; providerName?: string } | undefined;
     }
     if (!cfg || (!cfg.baseUrl && !cfg.apiKey && !cfg.modelId)) return;
 
-    const jsonPath = join(profileDir, "opencode.json");
+    const jsonPath = join(profileDir, 'opencode.json');
     if (!existsSync(jsonPath)) return;
-    const json = JSON.parse(readFileSync(jsonPath, "utf-8"));
+    const json = JSON.parse(readFileSync(jsonPath, 'utf-8'));
 
-    const providerId = cfg.providerName || "custom";
-    const modelId = cfg.modelId || "default-model";
+    const providerId = cfg.providerName || 'custom';
+    const modelId = cfg.modelId || 'default-model';
 
     // Build / override the provider entry
     if (!json.provider) json.provider = {};
     json.provider[providerId] = {
-      npm: "@ai-sdk/openai-compatible",
+      npm: '@ai-sdk/openai-compatible',
       name: providerId,
       options: {
         ...(cfg.baseUrl ? { baseURL: cfg.baseUrl } : {}),
@@ -229,9 +257,9 @@ function applyUserProviderConfig(profileDir: string): void {
     json.model = `${providerId}/${modelId}`;
 
     writeFileSync(jsonPath, JSON.stringify(json, null, 2));
-    log("profile", "provider", `applied user provider config: ${providerId}/${modelId}`);
+    log('profile', 'provider', `applied user provider config: ${providerId}/${modelId}`);
   } catch (err) {
-    log("profile", "provider", `failed to apply user config: ${err}`, "warn");
+    log('profile', 'provider', `failed to apply user config: ${err}`, 'warn');
   }
 }
 
@@ -240,17 +268,17 @@ function applyUserProviderConfig(profileDir: string): void {
 export function deployClaudeProfile(): void {
   const source = claudeProfileSource();
   const ws = workspaceDir();
-  const target = join(ws, ".claude");
+  const target = join(ws, '.claude');
   if (!existsSync(source)) {
-    log("claude-profile", "deploy", `source not found: ${source}`, "warn");
+    log('claude-profile', 'deploy', `source not found: ${source}`, 'warn');
     return;
   }
   // Merge (not replace) so user-authored skills/commands survive a redeploy.
   cpSync(source, target, { recursive: true });
-  log("claude-profile", "deploy", `deployed ${source} -> ${target}`);
+  log('claude-profile', 'deploy', `deployed ${source} -> ${target}`);
 }
 
-export type AgentRuntimeKind = "opencode" | "claude-code";
+export type AgentRuntimeKind = 'opencode' | 'claude-code';
 
 export interface StartRuntimeResult {
   kind: AgentRuntimeKind;
@@ -263,24 +291,24 @@ export interface StartRuntimeResult {
  *  - claude-code: deploy the .claude profile, return null (no sidecar needed;
  *    the ClaudeCodeAdapter runs in-process via the Agent SDK). */
 export async function startAgentRuntime(kind: AgentRuntimeKind): Promise<StartRuntimeResult> {
-  if (kind === "claude-code") {
+  if (kind === 'claude-code') {
     deployClaudeProfile();
     return { kind, url: null };
   }
   // Default: opencode
   const url = await startSidecar();
-  return { kind: "opencode", url };
+  return { kind: 'opencode', url };
 }
 
 function freePort(): Promise<number> {
   return new Promise((resolve, reject) => {
     const srv = createServer();
-    srv.on("error", reject);
-    srv.listen(0, "127.0.0.1", () => {
+    srv.on('error', reject);
+    srv.listen(0, '127.0.0.1', () => {
       const addr = srv.address();
-      if (typeof addr !== "object" || !addr) {
+      if (typeof addr !== 'object' || !addr) {
         srv.close();
-        reject(new Error("Failed to get port"));
+        reject(new Error('Failed to get port'));
         return;
       }
       const port = addr.port;
@@ -291,9 +319,9 @@ function freePort(): Promise<number> {
 
 function mcpSchedulerScriptPath(): string {
   if (app.isPackaged) {
-    return join(process.resourcesPath, "scripts", "mcp_scheduler.mjs");
+    return join(process.resourcesPath, 'scripts', 'mcp_scheduler.mjs');
   }
-  return join(app.getAppPath(), "scripts", "mcp_scheduler.mjs");
+  return join(app.getAppPath(), 'scripts', 'mcp_scheduler.mjs');
 }
 
 export async function startSidecar(): Promise<string> {
@@ -303,10 +331,10 @@ export async function startSidecar(): Promise<string> {
   const url = `http://127.0.0.1:${port}`;
 
   const root = runtimeRoot();
-  const cfg = join(root, "xdg-config");
-  const data = join(root, "xdg-data");
-  const cache = join(root, "xdg-cache");
-  const state = join(root, "xdg-state");
+  const cfg = join(root, 'xdg-config');
+  const data = join(root, 'xdg-data');
+  const cache = join(root, 'xdg-cache');
+  const state = join(root, 'xdg-state');
   const workspace = workspaceDir();
   for (const d of [cfg, data, cache, state]) mkdirSync(d, { recursive: true });
 
@@ -339,7 +367,7 @@ export async function startSidecar(): Promise<string> {
 
   if (!existsSync(sidecarPath)) {
     const msg = `sidecar binary not found: ${sidecarPath}`;
-    log("server", "error", msg, "error");
+    log('server', 'error', msg, 'error');
     throw new Error(msg);
   }
 
@@ -347,33 +375,31 @@ export async function startSidecar(): Promise<string> {
     accessSync(sidecarPath, fsConstants.X_OK);
   } catch {
     const msg = `sidecar not executable: ${sidecarPath}`;
-    log("server", "error", msg, "error");
+    log('server', 'error', msg, 'error');
     throw new Error(msg);
   }
 
-  const cmd = spawn(sidecarPath, ["serve", "--hostname", "127.0.0.1", "--port", String(port)], {
+  const cmd = spawn(sidecarPath, ['serve', '--hostname', '127.0.0.1', '--port', String(port)], {
     env: { ...process.env, ...env },
     cwd: workspace,
-    stdio: ["ignore", "pipe", "pipe"],
+    stdio: ['ignore', 'pipe', 'pipe'],
   });
 
-  let spawnError: Error | null = null;
-  cmd.on("error", (err) => {
-    spawnError = err;
-    log("server", "error", `spawn failed: ${err.message}`, "error");
+  cmd.on('error', (err) => {
+    log('server', 'error', `spawn failed: ${err.message}`, 'error');
     child = null;
     currentUrl = null;
     currentPort = null;
   });
 
-  cmd.stdout?.on("data", (d: Buffer) => {
-    log("server", "stdout", d.toString().trim());
+  cmd.stdout?.on('data', (d: Buffer) => {
+    log('server', 'stdout', d.toString().trim());
   });
-  cmd.stderr?.on("data", (d: Buffer) => {
-    log("server", "stderr", d.toString().trim(), "warn");
+  cmd.stderr?.on('data', (d: Buffer) => {
+    log('server', 'stderr', d.toString().trim(), 'warn');
   });
-  cmd.on("exit", (code) => {
-    log("server", "sidecar exited", { code }, "warn");
+  cmd.on('exit', (code) => {
+    log('server', 'sidecar exited', { code }, 'warn');
     child = null;
     currentUrl = null;
     currentPort = null;
@@ -403,14 +429,25 @@ function waitForReady(url: string, timeoutMs: number): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   return new Promise((resolve, reject) => {
     const tryConnect = () => {
-      if (!child) { reject(new Error("sidecar process died")); return; }
-      if (Date.now() > deadline) { reject(new Error("sidecar ready timeout")); return; }
+      if (!child) {
+        reject(new Error('sidecar process died'));
+        return;
+      }
+      if (Date.now() > deadline) {
+        reject(new Error('sidecar ready timeout'));
+        return;
+      }
       const req = httpGet(url, (res: any) => {
         res.resume(); // drain
         resolve();
       });
-      req.on("error", () => { setTimeout(tryConnect, 200); });
-      req.setTimeout(500, () => { req.destroy(); setTimeout(tryConnect, 200); });
+      req.on('error', () => {
+        setTimeout(tryConnect, 200);
+      });
+      req.setTimeout(500, () => {
+        req.destroy();
+        setTimeout(tryConnect, 200);
+      });
     };
     tryConnect();
   });
@@ -420,12 +457,14 @@ function log(
   module: string,
   stream: string,
   message: string,
-  level: "info" | "warn" | "error" = "info",
+  level: 'info' | 'warn' | 'error' = 'info',
 ): void {
   try {
     // dynamic import to avoid circular deps
-    import("./logging").then(({ getLogger }) =>
+    import('./logging').then(({ getLogger }) =>
       getLogger()[level](`[${module}] [${stream}] ${message}`),
     );
-  } catch { /* ignore logging failures */ }
+  } catch {
+    /* ignore logging failures */
+  }
 }

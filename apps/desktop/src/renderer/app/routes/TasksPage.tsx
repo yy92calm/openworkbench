@@ -1,19 +1,20 @@
-import { useState, useEffect, useCallback } from "react";
-import { Plus } from "lucide-react";
-import { TaskCard } from "@/components/scheduler/TaskCard";
-import { TaskForm } from "@/components/scheduler/TaskForm";
-import { ExecutionHistory } from "@/components/scheduler/ExecutionHistory";
-import type { ScheduledTask, CreateTaskInput, UpdateTaskInput } from "@/lib/electron";
+import { Plus } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+
+import { ExecutionHistory } from '@/components/scheduler/ExecutionHistory';
+import { TaskCard } from '@/components/scheduler/TaskCard';
+import { TaskForm } from '@/components/scheduler/TaskForm';
+import type { CreateTaskInput, ScheduledTask, UpdateTaskInput } from '@/lib/electron';
 import {
-  schedulerList,
   schedulerCreate,
-  schedulerUpdate,
   schedulerDelete,
-  schedulerToggle,
   schedulerFireNow,
-} from "@/lib/electron";
-import { useRuntimeStore } from "@/lib/runtime";
-import { toast } from "@/lib/toast";
+  schedulerList,
+  schedulerToggle,
+  schedulerUpdate,
+} from '@/lib/electron';
+import { useRuntimeStore } from '@/lib/runtime';
+import { toast } from '@/lib/toast';
 
 export function TasksPage() {
   const [tasks, setTasks] = useState<ScheduledTask[]>([]);
@@ -63,7 +64,7 @@ export function TasksPage() {
       if (record) {
         toast.success(`任务已触发（${record.status}）`);
       } else {
-        toast.error("触发失败：运行时未就绪或任务不存在");
+        toast.error('触发失败：运行时未就绪或任务不存在');
       }
     } catch (err) {
       toast.error(`触发失败：${err instanceof Error ? err.message : String(err)}`);
@@ -89,9 +90,7 @@ export function TasksPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-xl font-semibold tracking-tight text-text">定时任务</h1>
-            <p className="mt-1 text-sm text-muted">
-              配置周期性 Agent 提示词，自动执行
-            </p>
+            <p className="mt-1 text-sm text-muted">配置周期性 Agent 提示词，自动执行</p>
           </div>
           <button
             className="flex items-center gap-1.5 rounded-input bg-accent px-3 py-1.5 text-sm font-medium text-accent-fg hover:opacity-90"
@@ -104,9 +103,7 @@ export function TasksPage() {
 
         {tasks.length === 0 ? (
           <div className="mt-6 rounded-card border border-border bg-surface p-10 text-center">
-            <p className="text-sm text-muted">
-              还没有定时任务，点击「新建任务」创建第一个。
-            </p>
+            <p className="text-sm text-muted">还没有定时任务，点击「新建任务」创建第一个。</p>
           </div>
         ) : (
           <div className="mt-4 space-y-2">
@@ -115,9 +112,7 @@ export function TasksPage() {
                 <TaskCard
                   task={task}
                   expanded={expandedId === task.id}
-                  onToggleExpand={() =>
-                    setExpandedId(expandedId === task.id ? null : task.id)
-                  }
+                  onToggleExpand={() => setExpandedId(expandedId === task.id ? null : task.id)}
                   onToggle={handleToggle}
                   onFireNow={handleFireNow}
                   onEdit={handleEdit}

@@ -4,7 +4,10 @@
 
 ## 背景
 
-参考 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（MIT，开发者预览，41.3k stars）的插件生态设计。Harness 基于 Cordis 框架，以「一切皆插件」为架构：模型适配器、工具注册表、会话日志、agent 主循环全部是插件，没有特权核心；一个运行中的 harness 是由启动时叠加的分层插件树组成的——**bundle（出厂层）、profile patch、home 层 patch、命令行 overlay**，上层按行 id 精确替换或插入下层配置，`--dump-config` 输出最终树。
+参考 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（MIT，开发者预览，41.3k stars）的插件生态设计。
+Harness 基于 Cordis 框架，以「一切皆插件」为架构：模型适配器、工具注册表、会话日志、agent 主循环全部是插件，没有特权核心；
+一个运行中的 harness 是由启动时叠加的分层插件树组成的——**bundle（出厂层）、profile patch、home 层 patch、命令行 overlay**，
+上层按行 id 精确替换或插入下层配置，`--dump-config` 输出最终树。
 
 对照 Workbench 现状，核心矛盾有三点：
 
@@ -68,7 +71,7 @@
 
 交互面按「数据驱动」与「代码能力」两类分别处理：
 
-**数据驱动（进 patch 层，零新代码）**
+#### 数据驱动（进 patch 层，零新代码）
 
 这些本质是「值」，与 model/MCP 是同一回事，直接扩展进 `user/patch.json`：
 
@@ -78,7 +81,7 @@
 
 落地方案：UI 初值来源顺序改为 `patch → 内置默认`，设置页改动写回 user 层，同走 manifest，可审计回滚。
 
-**代码能力（keyed renderer 注册表）**
+#### 代码能力（keyed renderer 注册表）
 
 例如让 Thread 对某 agent 的输出渲染专用卡片（合规结果卡、财务表格卡），而非通用 markdown。这类是组件，patch 文件表达不了。参考 Harness 的 `ConversationNodeDefinition` + keyed renderer：
 

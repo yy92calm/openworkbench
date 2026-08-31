@@ -11,36 +11,35 @@ import type {
   OpenCodeEvent,
   OpenCodePart,
   OpenCodeRawEvent,
+  PermissionAskedEvent,
   PermissionMode,
   PermissionReply,
   ProviderAuthMethod,
   ProviderCatalogEntry,
   ProviderInfo,
   QuestionAskedEvent,
-  PermissionAskedEvent,
   RuntimeStatus,
   SessionMeta,
   SessionStatus,
-  SessionStatusEvent,
   SessionStatusMap,
   SkillInfo,
   ToolCallStatus,
-} from "./types";
-import { DEFAULT_OPENCODE_URL } from "./types";
+} from './types';
+import { DEFAULT_OPENCODE_URL } from './types';
 
 type EventListener = (event: OpenCodeEvent) => void;
 type StatusListener = (status: RuntimeStatus) => void;
 
 function mapToolStatus(status: string): ToolCallStatus {
   switch (status) {
-    case "running":
-      return "running";
-    case "completed":
-      return "success";
-    case "error":
-      return "failed";
+    case 'running':
+      return 'running';
+    case 'completed':
+      return 'success';
+    case 'error':
+      return 'failed';
     default:
-      return "pending";
+      return 'pending';
   }
 }
 
@@ -63,7 +62,7 @@ export class OpenCodeClient {
    *  calls (`/session/:id/…`) need no directory: the server routes them by the
    *  session's own recorded folder (verified live: `pwd` runs in it). */
   private readonly directory: string | null;
-  private status: RuntimeStatus = "offline";
+  private status: RuntimeStatus = 'offline';
   private abort: AbortController | null = null;
   private es: EventSource | null = null;
   private readonly customFetch: boolean;
@@ -86,11 +85,11 @@ export class OpenCodeClient {
   private reconnectAttempts = 0;
 
   constructor(opts: OpenCodeClientOptions = {}) {
-    this.baseUrl = (opts.baseUrl ?? DEFAULT_OPENCODE_URL).replace(/\/$/, "");
+    this.baseUrl = (opts.baseUrl ?? DEFAULT_OPENCODE_URL).replace(/\/$/, '');
     this.customFetch = !!opts.fetchImpl;
     // Bind to globalThis — an unbound `fetch` reference throws "Illegal invocation" in browsers.
     this.fetchImpl = (opts.fetchImpl ?? globalThis.fetch).bind(globalThis);
-    this.authToken = opts.password ? btoa(`${opts.username ?? "opencode"}:${opts.password}`) : null;
+    this.authToken = opts.password ? btoa(`${opts.username ?? 'opencode'}:${opts.password}`) : null;
     this.authHeader = this.authToken ? `Basic ${this.authToken}` : null;
     this.directory = opts.directory ?? null;
   }
@@ -109,19 +108,19 @@ export class OpenCodeClient {
 
   private headers(json = false): Record<string, string> {
     const h: Record<string, string> = {};
-    if (json) h["Content-Type"] = "application/json";
-    if (this.authHeader) h["Authorization"] = this.authHeader;
+    if (json) h['Content-Type'] = 'application/json';
+    if (this.authHeader) h['Authorization'] = this.authHeader;
     return h;
   }
 
   /** Open the SSE event stream. Resolves once the server acknowledges. */
   connect(): Promise<void> {
-    this.setStatus("connecting");
+    this.setStatus('connecting');
 
     // Prefer EventSource in a real webview/browser (reliable SSE, incl. macOS
     // WKWebView) — auth rides along as ?auth_token=, since EventSource cannot
     // set headers. Fall back to streaming fetch for node/tests.
-    const canUseEventSource = !this.customFetch && typeof EventSource !== "undefined";
+    const canUseEventSource = !this.customFetch && typeof EventSource !== 'undefined';
     if (canUseEventSource) {
       return new Promise((resolve, reject) => {
         let opened = false;
@@ -129,7 +128,7 @@ export class OpenCodeClient {
         this.es = es;
         es.onopen = () => {
           opened = true;
-          this.setStatus("ready");
+          this.setStatus('ready');
           resolve();
         };
         es.onmessage = (ev) => {
@@ -141,13 +140,13 @@ export class OpenCodeClient {
         };
         es.onerror = () => {
           if (!opened) {
-            this.setStatus("error");
+            this.setStatus('error');
             es.close();
             this.es = null;
-            reject(new Error("Could not open OpenCode event stream"));
+            reject(new Error('Could not open OpenCode event stream'));
           } else {
             // EventSource auto-reconnects; reflect the transient state.
-            this.setStatus("connecting");
+            this.setStatus('connecting');
           }
         };
       });
@@ -160,16 +159,16 @@ export class OpenCodeClient {
       let opened = false;
       this.openEventStream()
         .then(() => {
-          this.setStatus("ready");
+          this.setStatus('ready');
           opened = true;
           resolve();
         })
         .catch((err) => {
           if (!opened) {
-            this.setStatus("error");
+            this.setStatus('error');
             reject(err instanceof Error ? err : new Error(String(err)));
           } else {
-            this.setStatus("offline");
+            this.setStatus('offline');
           }
         });
     });
@@ -180,7 +179,7 @@ export class OpenCodeClient {
    *  close() aborts. On an unexpected end, schedule a re-open with backoff. */
   private async openEventStream(): Promise<void> {
     const res = await this.fetchImpl(this.eventUrl(), {
-      headers: { Accept: "text/event-stream", ...this.headers() },
+      headers: { Accept: 'text/event-stream', ...this.headers() },
       signal: this.abort!.signal,
     });
     if (!res.ok || !res.body) {
@@ -199,11 +198,11 @@ export class OpenCodeClient {
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null;
       if (this.sseClosed) return;
-      this.setStatus("connecting");
+      this.setStatus('connecting');
       this.openEventStream()
         .then(() => {
           this.reconnectAttempts = 0;
-          this.setStatus("ready");
+          this.setStatus('ready');
         })
         .catch(() => this.scheduleSseReconnect());
     }, delay);
@@ -219,7 +218,7 @@ export class OpenCodeClient {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
     }
-    this.setStatus("offline");
+    this.setStatus('offline');
   }
 
   /** Create a new agent session, returning its id. Scoping is by the sidecar's
@@ -229,9 +228,9 @@ export class OpenCodeClient {
     // The directory decides where the session lives and works — without it the
     // server would put it in the process's boot folder, not the active one.
     const res = await this.fetchImpl(`${this.baseUrl}/session${this.dirQuery()}`, {
-      method: "POST",
+      method: 'POST',
       headers: this.headers(true),
-      body: "{}",
+      body: '{}',
     });
     if (!res.ok) throw new Error(`Failed to create session (${res.status})`);
     const json = (await res.json()) as { id: string };
@@ -260,7 +259,12 @@ export class OpenCodeClient {
       directory?: string;
       parentID?: string | null;
       // Nested format (OpenCode >= 0.2)
-      tokens?: { input?: number; output?: number; reasoning?: number; cache?: { read?: number; write?: number } };
+      tokens?: {
+        input?: number;
+        output?: number;
+        reasoning?: number;
+        cache?: { read?: number; write?: number };
+      };
       cost?: number;
       time?: { created?: number; updated?: number };
       // Legacy flat format
@@ -271,7 +275,7 @@ export class OpenCodeClient {
     }>;
     return arr.map((s) => ({
       id: s.id,
-      title: s.title ?? "Untitled",
+      title: s.title ?? 'Untitled',
       slug: s.slug,
       directory: s.directory,
       parentId: s.parentID ?? undefined,
@@ -300,7 +304,7 @@ export class OpenCodeClient {
   /** Delete a session. */
   async deleteSession(sessionId: string): Promise<void> {
     const res = await this.fetchImpl(`${this.baseUrl}/session/${encodeURIComponent(sessionId)}`, {
-      method: "DELETE",
+      method: 'DELETE',
       headers: this.headers(),
     });
     if (!res.ok) throw new Error(`Failed to delete session (${res.status})`);
@@ -314,8 +318,8 @@ export class OpenCodeClient {
     );
     if (!res.ok) throw new Error(`Failed to load messages (${res.status})`);
     const arr = (await res.json()) as Array<{
-      info: { role: "user" | "assistant"; time?: { completed?: number } };
-      parts: HistoryMessage["parts"];
+      info: { role: 'user' | 'assistant'; time?: { completed?: number } };
+      parts: HistoryMessage['parts'];
     }>;
     return arr.map((m) => ({
       role: m.info.role,
@@ -329,7 +333,7 @@ export class OpenCodeClient {
   async abortSession(sessionId: string): Promise<void> {
     const res = await this.fetchImpl(
       `${this.baseUrl}/session/${encodeURIComponent(sessionId)}/abort`,
-      { method: "POST", headers: this.headers(true), body: "{}" },
+      { method: 'POST', headers: this.headers(true), body: '{}' },
     );
     if (!res.ok) throw new Error(`Failed to interrupt the session (${res.status})`);
   }
@@ -338,7 +342,7 @@ export class OpenCodeClient {
   async listSkills(): Promise<SkillInfo[]> {
     // Scope to the workspace: skill instances are created lazily per directory,
     // and the unscoped endpoint answers from an instance that may have none.
-    const query = this.directory ? `?directory=${encodeURIComponent(this.directory)}` : "";
+    const query = this.directory ? `?directory=${encodeURIComponent(this.directory)}` : '';
     const res = await this.fetchImpl(`${this.baseUrl}/api/skill${query}`, {
       headers: this.headers(),
     });
@@ -358,7 +362,7 @@ export class OpenCodeClient {
   /** Set the default model in OpenCode's global (app-profile) config. */
   async setDefaultModel(model: string): Promise<void> {
     const res = await this.fetchImpl(`${this.baseUrl}/global/config`, {
-      method: "PATCH",
+      method: 'PATCH',
       headers: this.headers(true),
       body: JSON.stringify({ model }),
     });
@@ -384,7 +388,7 @@ export class OpenCodeClient {
       models: Object.entries(p.models ?? {}).map(([id, m]) => ({
         id,
         name: m.name ?? id,
-        contextLimit: typeof m.limit?.context === "number" ? m.limit.context : undefined,
+        contextLimit: typeof m.limit?.context === 'number' ? m.limit.context : undefined,
       })),
     }));
   }
@@ -407,7 +411,7 @@ export class OpenCodeClient {
       },
     };
     const res = await this.fetchImpl(`${this.baseUrl}/global/config`, {
-      method: "PATCH",
+      method: 'PATCH',
       headers: this.headers(true),
       body: JSON.stringify({ provider }),
     });
@@ -436,7 +440,7 @@ export class OpenCodeClient {
     const names = new Set([...Object.keys(status), ...Object.keys(cfg.mcp ?? {})]);
     return [...names].sort().map((name) => ({
       name,
-      status: status[name]?.status ?? "pending",
+      status: status[name]?.status ?? 'pending',
       config: cfg.mcp?.[name],
     }));
   }
@@ -444,7 +448,7 @@ export class OpenCodeClient {
   /** Add (or update) an MCP server in the global config. Applies live. */
   async addMcpServer(name: string, config: McpConfig): Promise<void> {
     const res = await this.fetchImpl(`${this.baseUrl}/global/config`, {
-      method: "PATCH",
+      method: 'PATCH',
       headers: this.headers(true),
       body: JSON.stringify({ mcp: { [name]: config } }),
     });
@@ -484,9 +488,9 @@ export class OpenCodeClient {
   /** Store an API key for a provider. */
   async setProviderApiKey(providerID: string, key: string): Promise<void> {
     const res = await this.fetchImpl(`${this.baseUrl}/auth/${encodeURIComponent(providerID)}`, {
-      method: "PUT",
+      method: 'PUT',
       headers: this.headers(true),
-      body: JSON.stringify({ type: "api", key }),
+      body: JSON.stringify({ type: 'api', key }),
     });
     if (!res.ok) throw new Error(`Failed to save the key (${res.status})`);
   }
@@ -494,7 +498,7 @@ export class OpenCodeClient {
   /** Remove a provider's stored credentials. */
   async removeProviderAuth(providerID: string): Promise<void> {
     const res = await this.fetchImpl(`${this.baseUrl}/auth/${encodeURIComponent(providerID)}`, {
-      method: "DELETE",
+      method: 'DELETE',
       headers: this.headers(),
     });
     if (!res.ok) throw new Error(`Failed to disconnect (${res.status})`);
@@ -508,7 +512,7 @@ export class OpenCodeClient {
   ): Promise<OAuthAuthorization> {
     const res = await this.fetchImpl(
       `${this.baseUrl}/provider/${encodeURIComponent(providerID)}/oauth/authorize`,
-      { method: "POST", headers: this.headers(true), body: JSON.stringify({ method, inputs }) },
+      { method: 'POST', headers: this.headers(true), body: JSON.stringify({ method, inputs }) },
     );
     if (!res.ok) throw new Error(`Failed to start the login (${res.status})`);
     return (await res.json()) as OAuthAuthorization;
@@ -518,7 +522,7 @@ export class OpenCodeClient {
   async oauthCallback(providerID: string, method: number, code?: string): Promise<void> {
     const res = await this.fetchImpl(
       `${this.baseUrl}/provider/${encodeURIComponent(providerID)}/oauth/callback`,
-      { method: "POST", headers: this.headers(true), body: JSON.stringify({ method, code }) },
+      { method: 'POST', headers: this.headers(true), body: JSON.stringify({ method, code }) },
     );
     if (!res.ok) throw new Error(`Login did not complete (${res.status})`);
   }
@@ -551,18 +555,18 @@ export class OpenCodeClient {
       description: c.description,
       source: c.source,
       agent: c.agent,
-      template: typeof c.template === "string" ? c.template : undefined,
+      template: typeof c.template === 'string' ? c.template : undefined,
     }));
   }
 
   /** Run a shell command directly in the session's workspace — no model turn.
    *  The result lands in the session history as a bash tool part and streams
    *  via onEvent; the POST resolves only when the command finishes. */
-  async runShell(sessionId: string, command: string, agent = "build"): Promise<void> {
+  async runShell(sessionId: string, command: string, agent = 'build'): Promise<void> {
     const res = await this.fetchImpl(
       `${this.baseUrl}/session/${encodeURIComponent(sessionId)}/shell`,
       {
-        method: "POST",
+        method: 'POST',
         headers: this.headers(true),
         body: JSON.stringify({ agent, command }),
       },
@@ -577,7 +581,7 @@ export class OpenCodeClient {
     const res = await this.fetchImpl(
       `${this.baseUrl}/session/${encodeURIComponent(sessionId)}/command`,
       {
-        method: "POST",
+        method: 'POST',
         headers: this.headers(true),
         body: JSON.stringify({ command, ...(args ? { arguments: args } : {}) }),
       },
@@ -591,23 +595,23 @@ export class OpenCodeClient {
   }
 
   /** Upload a file attachment into the host workspace and get its absolute path
- *  for referencing in a FilePartInput. Uses the relay's built-in
- *  /__relay/write-file endpoint (handled by the host, not the sidecar). */
+   *  for referencing in a FilePartInput. Uses the relay's built-in
+   *  /__relay/write-file endpoint (handled by the host, not the sidecar). */
   async uploadAttachment(f: AttachmentFile): Promise<{ path: string; filename: string }> {
-    let b64 = "";
+    let b64 = '';
     try {
       const chunks: string[] = [];
       const bytesPerChunk = 0x8000;
       for (let i = 0; i < f.data.length; i += bytesPerChunk) {
         chunks.push(String.fromCharCode(...f.data.subarray(i, i + bytesPerChunk)));
       }
-      b64 = btoa(chunks.join(""));
+      b64 = btoa(chunks.join(''));
     } catch {
-      b64 = Buffer.from(f.data).toString("base64");
+      b64 = Buffer.from(f.data).toString('base64');
     }
-    const res = await this.fetchImpl("http://relay/__relay/write-file", {
-      method: "POST",
-      headers: { ...this.headers(true), "content-type": "application/json" },
+    const res = await this.fetchImpl('http://relay/__relay/write-file', {
+      method: 'POST',
+      headers: { ...this.headers(true), 'content-type': 'application/json' },
       body: JSON.stringify({ filename: f.filename, base64: b64 }),
     });
     if (!res.ok) throw new Error(`Failed to upload file (${res.status})`);
@@ -617,22 +621,28 @@ export class OpenCodeClient {
   /** Send a prompt with optional file attachments. Each file is first written
    *  into the host workspace (via /__relay/write-file), then referenced in a
    *  FilePartInput so the host's agent can read it. */
-  async sendPromptWithFiles(sessionId: string, text: string, files: AttachmentFile[]): Promise<void> {
-    const parts: Array<{ type: "text"; text: string; metadata?: Record<string, unknown> } | FilePartInput> = [];
+  async sendPromptWithFiles(
+    sessionId: string,
+    text: string,
+    files: AttachmentFile[],
+  ): Promise<void> {
+    const parts: Array<
+      { type: 'text'; text: string; metadata?: Record<string, unknown> } | FilePartInput
+    > = [];
     if (text) {
-      parts.push({ type: "text", text, metadata: { source: "remote" } });
+      parts.push({ type: 'text', text, metadata: { source: 'remote' } });
     }
     for (const f of files) {
       // Upload first: the sidecar only accepts file parts whose source path
       // exists on the host. Write into the workspace via the relay endpoint.
       const uploaded = await this.uploadAttachment(f);
       parts.push({
-        type: "file",
+        type: 'file',
         mime: f.mime,
         filename: f.filename,
         url: `file://${uploaded.path}`,
         source: {
-          type: "file",
+          type: 'file',
           text: { value: `@${f.filename}`, start: 0, end: 1 },
           path: uploaded.path,
         },
@@ -641,7 +651,7 @@ export class OpenCodeClient {
     const res = await this.fetchImpl(
       `${this.baseUrl}/session/${encodeURIComponent(sessionId)}/prompt_async`,
       {
-        method: "POST",
+        method: 'POST',
         headers: this.headers(true),
         body: JSON.stringify({ parts }),
       },
@@ -658,16 +668,16 @@ export class OpenCodeClient {
    *  Note: the `workspace` param is a `wrk_` id, NOT a path — omit it (directory
    *  alone resolves the instance; sending a path as workspace 500s the server). */
   private dirQuery(): string {
-    return this.directory ? `?directory=${encodeURIComponent(this.directory)}` : "";
+    return this.directory ? `?directory=${encodeURIComponent(this.directory)}` : '';
   }
 
   /** The /event stream URL: directory scope + auth_token (EventSource has no headers). */
   private eventUrl(): string {
     const params = new URLSearchParams();
-    if (this.directory) params.set("directory", this.directory);
-    if (this.authToken) params.set("auth_token", this.authToken);
+    if (this.directory) params.set('directory', this.directory);
+    if (this.authToken) params.set('auth_token', this.authToken);
     const q = params.toString();
-    return `${this.baseUrl}/event${q ? `?${q}` : ""}`;
+    return `${this.baseUrl}/event${q ? `?${q}` : ''}`;
   }
 
   /** Pending questions in the workspace (recovery on open — an ask can predate connect). */
@@ -679,10 +689,10 @@ export class OpenCodeClient {
     const arr = (await res.json()) as Array<{
       id: string;
       sessionID: string;
-      questions?: QuestionAskedEvent["questions"];
+      questions?: QuestionAskedEvent['questions'];
     }>;
     return arr.map((q) => ({
-      type: "question.asked" as const,
+      type: 'question.asked' as const,
       sessionId: q.sessionID,
       requestId: q.id,
       questions: q.questions ?? [],
@@ -693,7 +703,7 @@ export class OpenCodeClient {
   async answerQuestion(requestId: string, answers: string[][]): Promise<void> {
     const res = await this.fetchImpl(
       `${this.baseUrl}/question/${encodeURIComponent(requestId)}/reply${this.dirQuery()}`,
-      { method: "POST", headers: this.headers(true), body: JSON.stringify({ answers }) },
+      { method: 'POST', headers: this.headers(true), body: JSON.stringify({ answers }) },
     );
     if (!res.ok) throw new Error(`Failed to answer the question (${res.status})`);
   }
@@ -702,7 +712,7 @@ export class OpenCodeClient {
   async rejectQuestion(requestId: string): Promise<void> {
     const res = await this.fetchImpl(
       `${this.baseUrl}/question/${encodeURIComponent(requestId)}/reject${this.dirQuery()}`,
-      { method: "POST", headers: this.headers(true), body: "{}" },
+      { method: 'POST', headers: this.headers(true), body: '{}' },
     );
     if (!res.ok) throw new Error(`Failed to reject the question (${res.status})`);
   }
@@ -724,10 +734,10 @@ export class OpenCodeClient {
       resources?: string[];
     }>;
     return arr.map((p) => ({
-      type: "permission.asked" as const,
+      type: 'permission.asked' as const,
       sessionId: p.sessionID,
       requestId: p.id,
-      action: p.permission ?? p.action ?? "action",
+      action: p.permission ?? p.action ?? 'action',
       resources: p.patterns ?? p.resources ?? [],
     }));
   }
@@ -736,7 +746,7 @@ export class OpenCodeClient {
   async replyPermission(requestId: string, reply: PermissionReply): Promise<void> {
     const res = await this.fetchImpl(
       `${this.baseUrl}/permission/${encodeURIComponent(requestId)}/reply${this.dirQuery()}`,
-      { method: "POST", headers: this.headers(true), body: JSON.stringify({ reply }) },
+      { method: 'POST', headers: this.headers(true), body: JSON.stringify({ reply }) },
     );
     if (!res.ok) throw new Error(`Failed to reply to the permission (${res.status})`);
   }
@@ -744,13 +754,37 @@ export class OpenCodeClient {
   /** Set the permission mode preset (review / auto / yolo) via the global config. */
   async setPermissionMode(mode: PermissionMode): Promise<void> {
     const permission: Record<string, string> =
-      mode === "review"
-        ? { bash: "ask", edit: "ask", write: "ask", skill: "allow", question: "allow", external_directory: "ask", doom_loop: "deny" }
-        : mode === "yolo"
-          ? { bash: "allow", edit: "allow", write: "allow", skill: "allow", question: "allow", external_directory: "allow", doom_loop: "allow" }
-          : { bash: "allow", edit: "allow", write: "allow", skill: "allow", question: "allow", external_directory: "allow", doom_loop: "deny" };
+      mode === 'review'
+        ? {
+            bash: 'ask',
+            edit: 'ask',
+            write: 'ask',
+            skill: 'allow',
+            question: 'allow',
+            external_directory: 'ask',
+            doom_loop: 'deny',
+          }
+        : mode === 'yolo'
+          ? {
+              bash: 'allow',
+              edit: 'allow',
+              write: 'allow',
+              skill: 'allow',
+              question: 'allow',
+              external_directory: 'allow',
+              doom_loop: 'allow',
+            }
+          : {
+              bash: 'allow',
+              edit: 'allow',
+              write: 'allow',
+              skill: 'allow',
+              question: 'allow',
+              external_directory: 'allow',
+              doom_loop: 'deny',
+            };
     const res = await this.fetchImpl(`${this.baseUrl}/global/config`, {
-      method: "PATCH",
+      method: 'PATCH',
       headers: this.headers(true),
       body: JSON.stringify({ permission }),
     });
@@ -760,12 +794,12 @@ export class OpenCodeClient {
   /** Read the current permission config to determine the active mode. */
   async getPermissionMode(): Promise<PermissionMode> {
     const res = await this.fetchImpl(`${this.baseUrl}/config`, { headers: this.headers() });
-    if (!res.ok) return "auto";
+    if (!res.ok) return 'auto';
     const cfg = (await res.json()) as { permission?: Record<string, string> };
     const p = cfg.permission ?? {};
-    if (p.bash === "ask" || p.edit === "ask" || p.write === "ask") return "review";
-    if (p.external_directory === "allow" && p.doom_loop === "allow") return "yolo";
-    return "auto";
+    if (p.bash === 'ask' || p.edit === 'ask' || p.write === 'ask') return 'review';
+    if (p.external_directory === 'allow' && p.doom_loop === 'allow') return 'yolo';
+    return 'auto';
   }
 
   // ---- internals ----
@@ -773,14 +807,14 @@ export class OpenCodeClient {
   private async readStream(body: ReadableStream<Uint8Array>): Promise<void> {
     const reader = body.getReader();
     const decoder = new TextDecoder();
-    let buffer = "";
+    let buffer = '';
     try {
       for (;;) {
         const { done, value } = await reader.read();
         if (done) break;
         buffer += decoder.decode(value, { stream: true });
         let sep: number;
-        while ((sep = buffer.indexOf("\n\n")) !== -1) {
+        while ((sep = buffer.indexOf('\n\n')) !== -1) {
           const chunk = buffer.slice(0, sep);
           buffer = buffer.slice(sep + 2);
           this.handleSseChunk(chunk);
@@ -789,20 +823,20 @@ export class OpenCodeClient {
     } catch {
       // aborted or connection dropped
     } finally {
-      this.setStatus("offline");
+      this.setStatus('offline');
       this.scheduleSseReconnect();
     }
   }
 
   private handleSseChunk(chunk: string): void {
     const dataLines = chunk
-      .split("\n")
-      .filter((l) => l.startsWith("data:"))
+      .split('\n')
+      .filter((l) => l.startsWith('data:'))
       .map((l) => l.slice(5).trim());
     if (dataLines.length === 0) return;
     let raw: OpenCodeRawEvent;
     try {
-      raw = JSON.parse(dataLines.join("\n"));
+      raw = JSON.parse(dataLines.join('\n'));
     } catch {
       return;
     }
@@ -812,29 +846,34 @@ export class OpenCodeClient {
   private normalize(raw: OpenCodeRawEvent): void {
     const props = raw.properties ?? {};
     switch (raw.type) {
-      case "message.updated": {
+      case 'message.updated': {
         // Learn each message's role so we can skip the echoed user message parts.
         const info = props.info as { id?: string; role?: string } | undefined;
         if (info?.id && info.role) this.roles.set(info.id, info.role);
         break;
       }
-      case "message.part.updated": {
+      case 'message.part.updated': {
         const part = props.part as
-          | (OpenCodePart & { sessionID?: string; messageID?: string })
-          | undefined;
+          (OpenCodePart & { sessionID?: string; messageID?: string }) | undefined;
         if (!part) return;
         // The user's own message is echoed here; the app already shows it locally.
-        if (part.messageID && this.roles.get(String(part.messageID)) === "user") return;
-        const sessionId = String(part.sessionID ?? "");
-        if (part.type === "text") {
+        if (part.messageID && this.roles.get(String(part.messageID)) === 'user') return;
+        const sessionId = String(part.sessionID ?? '');
+        if (part.type === 'text') {
           const t = part as { id: string; text: string };
-          this.textStreams.set(t.id, { sessionId, text: t.text ?? "" });
-          this.emit({ type: "text.updated", sessionId, partId: t.id, text: t.text ?? "" });
-        } else if (part.type === "reasoning") {
+          this.textStreams.set(t.id, { sessionId, text: t.text ?? '' });
+          this.emit({ type: 'text.updated', sessionId, partId: t.id, text: t.text ?? '' });
+        } else if (part.type === 'reasoning') {
           const r = part as unknown as { id: string; text: string };
-          this.reasoningStreams.set(r.id, { sessionId, text: r.text ?? "" });
-          this.emit({ type: "reasoning.updated", sessionId, partId: r.id, text: r.text ?? "", streaming: false });
-        } else if (part.type === "tool") {
+          this.reasoningStreams.set(r.id, { sessionId, text: r.text ?? '' });
+          this.emit({
+            type: 'reasoning.updated',
+            sessionId,
+            partId: r.id,
+            text: r.text ?? '',
+            streaming: false,
+          });
+        } else if (part.type === 'tool') {
           const tp = part as {
             callID: string;
             tool: string;
@@ -849,31 +888,31 @@ export class OpenCodeClient {
           // A task tool's metadata names the subagent session it spawned.
           const child = tp.state?.metadata?.sessionId;
           this.emit({
-            type: "tool.updated",
+            type: 'tool.updated',
             sessionId,
             callId: tp.callID,
             tool: tp.tool,
-            status: mapToolStatus(tp.state?.status ?? "pending"),
+            status: mapToolStatus(tp.state?.status ?? 'pending'),
             title: tp.state?.title,
             input: tp.state?.input,
-            output: typeof tp.state?.output === "string" ? tp.state.output : undefined,
-            childSessionId: typeof child === "string" ? child : undefined,
+            output: typeof tp.state?.output === 'string' ? tp.state.output : undefined,
+            childSessionId: typeof child === 'string' ? child : undefined,
           });
         }
         break;
       }
-      case "message.part.delta": {
+      case 'message.part.delta': {
         // One streamed token. Only text parts are accumulated (reasoning parts
         // never get seeded by message.part.updated, so their deltas fold out).
         const d = props as { partID?: string; field?: string; delta?: string };
-        if (!d.partID || typeof d.delta !== "string") return;
+        if (!d.partID || typeof d.delta !== 'string') return;
         // Text delta
-        if (d.field === "text") {
+        if (d.field === 'text') {
           const acc = this.textStreams.get(String(d.partID));
           if (!acc) return;
           acc.text += d.delta;
           this.emit({
-            type: "text.updated",
+            type: 'text.updated',
             sessionId: acc.sessionId,
             partId: String(d.partID),
             text: acc.text,
@@ -885,7 +924,7 @@ export class OpenCodeClient {
         if (racc) {
           racc.text += d.delta;
           this.emit({
-            type: "reasoning.updated",
+            type: 'reasoning.updated',
             sessionId: racc.sessionId,
             partId: String(d.partID),
             text: racc.text,
@@ -894,12 +933,12 @@ export class OpenCodeClient {
           return;
         }
         // First reasoning delta for a part we haven't seen — seed it.
-        const rField = d.field ?? "text";
-        if (rField === "text") {
-          const sessionId = String((props as { sessionID?: string }).sessionID ?? "");
+        const rField = d.field ?? 'text';
+        if (rField === 'text') {
+          const sessionId = String((props as { sessionID?: string }).sessionID ?? '');
           this.reasoningStreams.set(String(d.partID), { sessionId, text: d.delta });
           this.emit({
-            type: "reasoning.updated",
+            type: 'reasoning.updated',
             sessionId,
             partId: String(d.partID),
             text: d.delta,
@@ -908,48 +947,62 @@ export class OpenCodeClient {
         }
         break;
       }
-      case "session.idle": {
-        const sessionId = String(props.sessionID ?? "");
+      case 'session.idle': {
+        const sessionId = String(props.sessionID ?? '');
         // The turn is over — its text parts can no longer receive deltas.
         for (const [partId, acc] of this.textStreams)
           if (acc.sessionId === sessionId) this.textStreams.delete(partId);
         // Mark reasoning streams as no longer streaming.
         for (const [partId, acc] of this.reasoningStreams)
           if (acc.sessionId === sessionId) {
-            this.emit({ type: "reasoning.updated", sessionId, partId, text: acc.text, streaming: false });
+            this.emit({
+              type: 'reasoning.updated',
+              sessionId,
+              partId,
+              text: acc.text,
+              streaming: false,
+            });
             this.reasoningStreams.delete(partId);
           }
-        this.emit({ type: "session.idle", sessionId });
+        this.emit({ type: 'session.idle', sessionId });
         break;
       }
-      case "session.updated": {
-        const info = props.info as {
-          id?: string;
-          tokens?: { input?: number; output?: number; reasoning?: number; cache?: { read?: number; write?: number } };
-          cost?: number;
-        } | undefined;
+      case 'session.updated': {
+        const info = props.info as
+          | {
+              id?: string;
+              tokens?: {
+                input?: number;
+                output?: number;
+                reasoning?: number;
+                cache?: { read?: number; write?: number };
+              };
+              cost?: number;
+            }
+          | undefined;
         if (!info?.id) break;
         this.emit({
-          type: "session.updated",
+          type: 'session.updated',
           sessionId: info.id,
           promptTokens: info.tokens?.input,
-          completionTokens: info.tokens?.output,          reasoningTokens: info.tokens?.reasoning,
+          completionTokens: info.tokens?.output,
+          reasoningTokens: info.tokens?.reasoning,
           cacheReadTokens: info.tokens?.cache?.read,
           cacheWriteTokens: info.tokens?.cache?.write,
           cost: info.cost,
         });
         break;
       }
-      case "session.status": {
-        const sessionId = String(props.sessionID ?? "");
+      case 'session.status': {
+        const sessionId = String(props.sessionID ?? '');
         const status = props.status as SessionStatus | undefined;
         if (!sessionId || !status) break;
-        this.emit({ type: "session.status", sessionId, status });
+        this.emit({ type: 'session.status', sessionId, status });
         break;
       }
       // Interactive requests — support V2 (this server) and the bare names.
-      case "question.v2.asked":
-      case "question.asked": {
+      case 'question.v2.asked':
+      case 'question.asked': {
         const q = props as {
           id?: string;
           sessionID?: string;
@@ -962,9 +1015,9 @@ export class OpenCodeClient {
           }>;
         };
         this.emit({
-          type: "question.asked",
-          sessionId: String(q.sessionID ?? ""),
-          requestId: String(q.id ?? ""),
+          type: 'question.asked',
+          sessionId: String(q.sessionID ?? ''),
+          requestId: String(q.id ?? ''),
           questions: (q.questions ?? []).map((it) => ({
             question: it.question,
             header: it.header,
@@ -975,20 +1028,20 @@ export class OpenCodeClient {
         });
         break;
       }
-      case "question.v2.replied":
-      case "question.v2.rejected":
-      case "question.replied":
-      case "question.rejected": {
+      case 'question.v2.replied':
+      case 'question.v2.rejected':
+      case 'question.replied':
+      case 'question.rejected': {
         const q = props as { requestID?: string; id?: string; sessionID?: string };
         this.emit({
-          type: "question.resolved",
-          sessionId: String(q.sessionID ?? ""),
-          requestId: String(q.requestID ?? q.id ?? ""),
+          type: 'question.resolved',
+          sessionId: String(q.sessionID ?? ''),
+          requestId: String(q.requestID ?? q.id ?? ''),
         });
         break;
       }
-      case "permission.v2.asked":
-      case "permission.asked": {
+      case 'permission.v2.asked':
+      case 'permission.asked': {
         // The V2 server names the fields `permission` + `patterns`;
         // older payloads used `action` + `resources`. Accept both.
         const p = props as {
@@ -1000,40 +1053,39 @@ export class OpenCodeClient {
           resources?: string[];
         };
         this.emit({
-          type: "permission.asked",
-          sessionId: String(p.sessionID ?? ""),
-          requestId: String(p.id ?? ""),
-          action: String(p.permission ?? p.action ?? "action"),
+          type: 'permission.asked',
+          sessionId: String(p.sessionID ?? ''),
+          requestId: String(p.id ?? ''),
+          action: String(p.permission ?? p.action ?? 'action'),
           resources: p.patterns ?? p.resources ?? [],
         });
         break;
       }
-      case "permission.v2.replied":
-      case "permission.replied": {
+      case 'permission.v2.replied':
+      case 'permission.replied': {
         const p = props as { requestID?: string; id?: string; sessionID?: string };
         this.emit({
-          type: "permission.resolved",
-          sessionId: String(p.sessionID ?? ""),
-          requestId: String(p.requestID ?? p.id ?? ""),
+          type: 'permission.resolved',
+          sessionId: String(p.sessionID ?? ''),
+          requestId: String(p.requestID ?? p.id ?? ''),
         });
         break;
       }
-      case "session.error": {
+      case 'session.error': {
         const err = props.error as
-          | { name?: string; message?: string; data?: { message?: string } }
-          | undefined;
+          { name?: string; message?: string; data?: { message?: string } } | undefined;
         // OpenCode nests the human-readable message at error.data.message.
-        const full = err?.data?.message ?? err?.message ?? err?.name ?? "session error";
+        const full = err?.data?.message ?? err?.message ?? err?.name ?? 'session error';
         // Keep the first line — OpenCode appends a stack trace to some errors.
         this.emit({
-          type: "error",
-          sessionId: String(props.sessionID ?? ""),
-          message: full.split("\n")[0],
+          type: 'error',
+          sessionId: String(props.sessionID ?? ''),
+          message: full.split('\n')[0],
         });
         break;
       }
-      case "session.compacted": {
-        this.emit({ type: "session.compacted", sessionId: String(props.sessionID ?? "") });
+      case 'session.compacted': {
+        this.emit({ type: 'session.compacted', sessionId: String(props.sessionID ?? '') });
         break;
       }
       default:

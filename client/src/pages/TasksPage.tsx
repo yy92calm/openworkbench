@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useState } from "react";
-import { Clock, Play, Plus, RefreshCw, Trash2, ChevronRight } from "lucide-react";
-import type { ScheduledTask } from "@workbench/sdk";
-import { getHostClient, isConnected } from "@/lib/connection";
-import { humanCron, timeAgo, timeUntil } from "@/lib/format";
-import { ActionSheet } from "@/components/ActionSheet";
-import { DeviceRequiredCard } from "@/components/DeviceRequiredCard";
+import type { ScheduledTask } from '@workbench/sdk';
+import { ChevronRight, Clock, Play, Plus, RefreshCw, Trash2 } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+
+import { ActionSheet } from '@/components/ActionSheet';
+import { DeviceRequiredCard } from '@/components/DeviceRequiredCard';
+import { getHostClient, isConnected } from '@/lib/connection';
+import { humanCron, timeAgo, timeUntil } from '@/lib/format';
 
 interface Props {
   onNew: () => void;
@@ -15,16 +16,16 @@ interface Props {
 export function TasksPage({ onNew, onEdit, onHistory }: Props) {
   const [tasks, setTasks] = useState<ScheduledTask[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const [error, setError] = useState('');
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [actionSheet, setActionSheet] = useState<{ task: ScheduledTask } | null>(null);
-  const [toast, setToast] = useState<string>("");
+  const [toast, setToast] = useState<string>('');
 
   const refresh = useCallback(async () => {
     try {
       const host = getHostClient();
       setTasks(await host.listTasks());
-      setError("");
+      setError('');
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -45,7 +46,7 @@ export function TasksPage({ onNew, onEdit, onHistory }: Props) {
 
   const showToast = (msg: string) => {
     setToast(msg);
-    setTimeout(() => setToast(""), 2500);
+    setTimeout(() => setToast(''), 2500);
   };
 
   const toggle = async (id: string, enabled: boolean) => {
@@ -53,17 +54,17 @@ export function TasksPage({ onNew, onEdit, onHistory }: Props) {
       await getHostClient().toggleTask(id, enabled);
       setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, enabled } : t)));
     } catch (err) {
-      showToast(err instanceof Error ? err.message : "切换失败");
+      showToast(err instanceof Error ? err.message : '切换失败');
     }
   };
 
   const fireNow = async (id: string) => {
     try {
       await getHostClient().fireNow(id);
-      showToast("已触发");
+      showToast('已触发');
       void refresh();
     } catch (err) {
-      showToast(err instanceof Error ? err.message : "触发失败");
+      showToast(err instanceof Error ? err.message : '触发失败');
     }
   };
 
@@ -71,9 +72,9 @@ export function TasksPage({ onNew, onEdit, onHistory }: Props) {
     try {
       await getHostClient().deleteTask(id);
       setTasks((prev) => prev.filter((t) => t.id !== id));
-      showToast("已删除");
+      showToast('已删除');
     } catch (err) {
-      showToast(err instanceof Error ? err.message : "删除失败");
+      showToast(err instanceof Error ? err.message : '删除失败');
     }
   };
 
@@ -107,7 +108,7 @@ export function TasksPage({ onNew, onEdit, onHistory }: Props) {
                   className="task-card-head"
                   onClick={() => setExpandedId(expanded ? null : task.id)}
                 >
-                  <span className={`task-dot ${task.enabled ? "on" : "off"}`} />
+                  <span className={`task-dot ${task.enabled ? 'on' : 'off'}`} />
                   <div className="task-card-info">
                     <div className="task-name">{task.name}</div>
                     <div className="task-cron">
@@ -115,21 +116,23 @@ export function TasksPage({ onNew, onEdit, onHistory }: Props) {
                       <span>{humanCron(task.cron)}</span>
                     </div>
                   </div>
-                  <ChevronRight size={16} className={`task-chevron ${expanded ? "open" : ""}`} />
+                  <ChevronRight size={16} className={`task-chevron ${expanded ? 'open' : ''}`} />
                 </button>
 
                 {expanded && (
                   <div className="task-card-body">
                     <div className="task-meta">
-                      <span>{lastRun ? `上次：${lastRun}` : "尚未执行"}</span>
-                      <span>{nextRun ? `下次：${nextRun}` : "—"}</span>
+                      <span>{lastRun ? `上次：${lastRun}` : '尚未执行'}</span>
+                      <span>{nextRun ? `下次：${nextRun}` : '—'}</span>
                     </div>
                     <div className="task-prompt">{task.prompt}</div>
                     {task.agent && <div className="task-agent">Agent: {task.agent}</div>}
                     {task.tags && task.tags.length > 0 && (
                       <div className="task-tags">
                         {task.tags.map((tag) => (
-                          <span key={tag} className="task-tag">{tag}</span>
+                          <span key={tag} className="task-tag">
+                            {tag}
+                          </span>
                         ))}
                       </div>
                     )}
@@ -140,7 +143,10 @@ export function TasksPage({ onNew, onEdit, onHistory }: Props) {
                       <button className="task-action-btn" onClick={() => onEdit(task.id)}>
                         编辑
                       </button>
-                      <button className="task-action-btn" onClick={() => onHistory(task.id, task.name)}>
+                      <button
+                        className="task-action-btn"
+                        onClick={() => onHistory(task.id, task.name)}
+                      >
                         历史
                       </button>
                       <button
@@ -151,7 +157,7 @@ export function TasksPage({ onNew, onEdit, onHistory }: Props) {
                       </button>
                     </div>
                     <label className="task-toggle-row">
-                      <span>{task.enabled ? "已启用" : "已停用"}</span>
+                      <span>{task.enabled ? '已启用' : '已停用'}</span>
                       <label className="switch">
                         <input
                           type="checkbox"
@@ -174,7 +180,7 @@ export function TasksPage({ onNew, onEdit, onHistory }: Props) {
           title={`删除「${actionSheet.task.name}」？`}
           options={[
             {
-              label: "删除",
+              label: '删除',
               danger: true,
               onClick: () => {
                 const id = actionSheet.task.id;

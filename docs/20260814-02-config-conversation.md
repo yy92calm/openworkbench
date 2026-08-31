@@ -58,16 +58,18 @@ ipcMain.handle("profile-validate-patch", (_e, raw: string) => {
 
 ### 3. 对话约束前缀（prompt 侧限制）
 
-```
+```text
 你正在帮助用户修改本应用的 OpenCode 配置。规则：
 1. 只允许对 opencode.json 输出配置修改，且必须产出以下格式的 fenced code block：
    ```workbench:config-patch
    {"target":"opencode.json","patch":[ {"op":"replace","path":"/model","value":"<provider>/<model>"} ]}
    ```
-2. patch 必须是 RFC 6902 操作。permission 只能收紧（allow→lower），不允许放宽容限。
-3. 禁止修改 /instructions。禁止其他任何文件操作、bash、网络请求。
-4. 若用户要求的内容不在白名单内（模型、MCP 增删改启停、外观类键），说明做不到并建议人工。
-```
+
+1. patch 必须是 RFC 6902 操作。permission 只能收紧（allow→lower），不允许放宽容限。
+2. 禁止修改 /instructions。禁止其他任何文件操作、bash、网络请求。
+3. 若用户要求的内容不在白名单内（模型、MCP 增删改启停、外观类键），说明做不到并建议人工。
+
+```text
 
 白名单字段与 patch 校验列并行维护（model/provider/mcp/permission 收紧/ui 相关键）。
 

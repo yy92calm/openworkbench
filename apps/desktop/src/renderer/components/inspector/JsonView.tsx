@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronRight } from 'lucide-react';
+import { useState } from 'react';
 
 interface Props {
   data: unknown;
@@ -16,9 +16,9 @@ export function JsonView({ data }: Props) {
 function JsonNode({ value, depth }: { value: unknown; depth: number }) {
   if (value === null) return <span className="text-muted">null</span>;
   if (value === undefined) return <span className="text-muted">undefined</span>;
-  if (typeof value === "boolean") return <span className="text-muted">{String(value)}</span>;
-  if (typeof value === "number") return <span className="text-[#c98a2b]">{value}</span>;
-  if (typeof value === "string") {
+  if (typeof value === 'boolean') return <span className="text-muted">{String(value)}</span>;
+  if (typeof value === 'number') return <span className="text-[#c98a2b]">{value}</span>;
+  if (typeof value === 'string') {
     const display = value.length > 80 ? `"${value.slice(0, 77)}..."` : `"${value}"`;
     return <span className="text-[#4b8b5b]">{display}</span>;
   }
@@ -39,7 +39,7 @@ function JsonObject({ value, depth }: { value: Record<string, unknown>; depth: n
         style={pad}
       >
         <ChevronRight size={12} className="mr-0.5 inline align-middle" />
-        {"{"} <span className="text-muted">{keys.length} keys</span> {"}"}
+        {'{'} <span className="text-muted">{keys.length} keys</span> {'}'}
       </span>
     );
   }
@@ -51,7 +51,7 @@ function JsonObject({ value, depth }: { value: Record<string, unknown>; depth: n
         onClick={() => setCollapsed(true)}
       >
         <ChevronDown size={12} className="mr-0.5 inline align-middle" />
-        {"{"}
+        {'{'}
       </span>
       {keys.map((key) => (
         <div key={key} style={{ paddingLeft: 16 }}>
@@ -60,7 +60,7 @@ function JsonObject({ value, depth }: { value: Record<string, unknown>; depth: n
           <JsonNode value={value[key]} depth={depth + 1} />
         </div>
       ))}
-      <span>{"}"}</span>
+      <span>{'}'}</span>
     </div>
   );
 }
@@ -76,8 +76,8 @@ function JsonArray({ value, depth }: { value: unknown[]; depth: number }) {
         onClick={() => setCollapsed(false)}
         style={pad}
       >
-        <ChevronRight size={12} className="mr-0.5 inline align-middle" />
-        [<span className="text-muted">{value.length} items</span>]
+        <ChevronRight size={12} className="mr-0.5 inline align-middle" />[
+        <span className="text-muted">{value.length} items</span>]
       </span>
     );
   }
@@ -88,8 +88,7 @@ function JsonArray({ value, depth }: { value: unknown[]; depth: number }) {
         className="cursor-pointer text-text hover:text-accent"
         onClick={() => setCollapsed(true)}
       >
-        <ChevronDown size={12} className="mr-0.5 inline align-middle" />
-        [
+        <ChevronDown size={12} className="mr-0.5 inline align-middle" />[
       </span>
       {value.map((item, i) => (
         <div key={i} style={{ paddingLeft: 16 }}>

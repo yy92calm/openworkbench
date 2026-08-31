@@ -1,9 +1,10 @@
-import { useRef, useState, type KeyboardEvent } from "react";
-import { ChevronDown, CornerDownLeft, NotebookPen, X } from "lucide-react";
-import type { NotebookCell, NotebookInspector as NotebookInspectorT } from "@workbench/shared";
-import { CodeViewer } from "@/components/code-viewer/CodeViewer";
-import { formatExecResult, kernelExecute } from "@/lib/kernel";
-import { useScrollMemory } from "@/lib/scrollMemory";
+import type { NotebookCell, NotebookInspector as NotebookInspectorT } from '@workbench/shared';
+import { ChevronDown, CornerDownLeft, NotebookPen, X } from 'lucide-react';
+import { type KeyboardEvent, useRef, useState } from 'react';
+
+import { CodeViewer } from '@/components/code-viewer/CodeViewer';
+import { formatExecResult, kernelExecute } from '@/lib/kernel';
+import { useScrollMemory } from '@/lib/scrollMemory';
 
 export function NotebookInspector({
   data,
@@ -16,7 +17,7 @@ export function NotebookInspector({
   onEvaluate?: (expr: string) => void;
 }) {
   const [cells, setCells] = useState<NotebookCell[]>(data.cells);
-  const [expr, setExpr] = useState("");
+  const [expr, setExpr] = useState('');
   const [busy, setBusy] = useState(false);
   // Viewing position, restored when this notebook is reopened.
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -26,8 +27,8 @@ export function NotebookInspector({
     const code = expr.trim();
     if (!code || busy) return;
     const nextIndex = (cells[cells.length - 1]?.index ?? 0) + 1;
-    setCells((c) => [...c, { index: nextIndex, language: "python", code, output: "running…" }]);
-    setExpr("");
+    setCells((c) => [...c, { index: nextIndex, language: 'python', code, output: 'running…' }]);
+    setExpr('');
 
     const setOutput = (output: string) =>
       setCells((c) => c.map((cell) => (cell.index === nextIndex ? { ...cell, output } : cell)));
@@ -41,7 +42,7 @@ export function NotebookInspector({
         onEvaluate(code);
         setOutput("→ sent to the agent's kernel");
       } else {
-        setOutput("(local kernel available only in the desktop app)");
+        setOutput('(local kernel available only in the desktop app)');
       }
     } catch (e) {
       setOutput(`kernel error: ${e instanceof Error ? e.message : String(e)}`);
@@ -51,7 +52,7 @@ export function NotebookInspector({
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
+    if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       void evaluate();
     }
@@ -63,7 +64,11 @@ export function NotebookInspector({
         <NotebookPen size={15} className="text-muted" />
         <span className="text-sm font-medium text-text">Notebook</span>
         <div className="flex-1" />
-        <button className="text-muted hover:text-text" aria-label="Close inspector" onClick={onClose}>
+        <button
+          className="text-muted hover:text-text"
+          aria-label="Close inspector"
+          onClick={onClose}
+        >
           <X size={16} />
         </button>
       </header>

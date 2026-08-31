@@ -51,7 +51,8 @@
 ```
 
 主界面结构：
-```
+
+```text
 app-shell
 ├── DeviceBar            (全局顶部，常驻)
 └── tab-content          (tab 根页 / 栈顶页)
@@ -72,7 +73,7 @@ app-shell
 
 参考用户偏好（app-style + 底部 sheet），把 SessionsPage 现有的 modal 设备列表改造为底部 sheet 样式，提取为独立组件 `DeviceSheet.tsx`，供 DeviceBar 调用。
 
-```
+```text
 DeviceSheet
 ├── backdrop
 └── sheet (底部上滑)
@@ -102,6 +103,7 @@ SessionsPage 现有 header 里的「切换设备」按钮和 modal 切换器删�
 新增一个共用空状态组件 `DeviceRequiredCard.tsx`，包含说明文字 + 「选择设备」按钮（触发全局 DeviceSheet 的事件）。
 
 通过事件总线让 DeviceRequiredCard 触发 DeviceBar 打开 sheet：
+
 - `connection.ts` 新增 `openDeviceSheet()` / `onOpenDeviceSheet(cb)` 简单事件订阅
 - DeviceBar 在 mount 时订阅 `onOpenDeviceSheet`，收到事件就 `setSheetOpen(true)`
 - DeviceRequiredCard 点击按钮调 `openDeviceSheet()`
@@ -146,11 +148,13 @@ useEffect(() => {
 ## 涉及文件
 
 新增：
+
 - `client/src/components/DeviceBar.tsx`
 - `client/src/components/DeviceSheet.tsx`
 - `client/src/components/DeviceRequiredCard.tsx`
 
 修改：
+
 - `client/src/lib/connection.ts` —— `isLoggedIn` / `openDeviceSheet` / `onOpenDeviceSheet` / `connect` 调整
 - `client/src/App.tsx` —— 渲染条件 + 嵌入 DeviceBar
 - `client/src/pages/ConnectPage.tsx` —— 删除设备选择 UI

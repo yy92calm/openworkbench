@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect } from 'react';
 
 /**
  * Minimal in-app confirmation dialog. `window.confirm` is unreliable inside
@@ -19,10 +19,10 @@ export function ConfirmDialog({
 }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onCancel();
+      if (e.key === 'Escape') onCancel();
     };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
   }, [onCancel]);
 
   return (
@@ -44,7 +44,7 @@ export function ConfirmDialog({
             className="rounded-input border border-border px-3 py-1.5 text-sm text-text hover:bg-surface-2"
             onClick={onCancel}
           >
-取消
+            取消
           </button>
           <button
             className="rounded-input bg-error px-3 py-1.5 text-sm font-medium text-white hover:opacity-90"

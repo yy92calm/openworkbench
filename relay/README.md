@@ -4,13 +4,15 @@
 
 > 独立项目：本仓库有**三个相互独立**的项目，只通过服务接口
 > （WebSocket/HTTP）连接，代码互不 import：
+>
 > 1. **Workbench**（桌面端 host，`apps/desktop/` + `packages/`）
 > 2. **relay**（中继服务，本目录）——自建 pnpm workspace，独立 `pnpm-lock.yaml`
 > 3. **client**（远程客户端，仓库根 `client/`）——独立项目
 >
 > 三项目各持一份**协议定义**（relay: `src/protocol.ts`；client: `client/src/protocol.ts`；
 > desktop: `apps/desktop/src/main/relay-protocol.ts`），有变更需手动同步。
-> 管理界面源码在 `relay/admin/`（构建产物输出到 `relay/admin-web`，已入库）。
+> 管理界面源码在 `relay/admin/`（构建产物输出到 `relay/admin-web`，不入库，
+> 由 `scripts/deploy-relay.sh` 本地构建后上传）。
 > 首次使用：`cd relay && pnpm install`。
 
 ## 账号模型
@@ -25,7 +27,7 @@
 
 ## 架构
 
-```
+```text
 公网机 (relay-server: WS 转发 + 账号注册 + 静态托管 Web 客户端)
    ▲ 出站 WS            ▲ 浏览器 / Electron
 桌面端 Workbench    手机 / 电脑 (Web App 或 Electron 壳)
@@ -63,6 +65,7 @@ Environment=RELAY_ADMIN_STATIC_DIR=/opt/workbench-relay/admin-web
 ```
 
 重启服务后：
+
 - **管理界面**（推荐）：浏览器打开 `http://<中继>:12960/relayadmin`，输入
   密码（默认 `test@123`）登录后可可视化管理账号令牌、查看各账号设备及其
   在线状态、新增/删除账号与设备。
@@ -83,6 +86,7 @@ RELAY_DATA_DIR=/opt/workbench-relay/data pnpm exec tsx src/admin.ts remove --tok
 ## 二、桌面端开启远程访问
 
 设置 → 远程访问：
+
 1. 中继地址填 `ws://43.133.82.137:12960`
 2. 设备 ID 自动生成（升级不变，会出现在客户端的设备列表里）
 3. 账号令牌：填入你**自己的账号令牌**（不是共享值）

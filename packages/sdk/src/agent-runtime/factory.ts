@@ -4,11 +4,12 @@
 // "opencode" returns the existing OpenCodeClient (satisfies AgentRuntime).
 // "claude-code" returns a ClaudeCodeAdapter (backed by the Claude Agent SDK).
 
-import { OpenCodeClient, type OpenCodeClientOptions } from "../OpenCodeClient";
-import type { AgentRuntime } from "./adapter";
-import type { RuntimeStatus } from "./types";
+import { OpenCodeClient } from '../OpenCodeClient';
+import type { OpenCodeClientOptions } from '../types';
+import type { AgentRuntime } from './adapter';
+import type { RuntimeStatus } from './types';
 
-export type AgentRuntimeKind = "opencode" | "claude-code";
+export type AgentRuntimeKind = 'opencode' | 'claude-code';
 
 export interface AgentRuntimeConfig {
   kind: AgentRuntimeKind;
@@ -42,7 +43,7 @@ export interface AgentRuntimeConfig {
  */
 export async function createAgentRuntime(config: AgentRuntimeConfig): Promise<AgentRuntime> {
   switch (config.kind) {
-    case "opencode": {
+    case 'opencode': {
       const opts: OpenCodeClientOptions = {
         baseUrl: config.baseUrl,
         password: config.password,
@@ -57,12 +58,12 @@ export async function createAgentRuntime(config: AgentRuntimeConfig): Promise<Ag
       const client: AgentRuntime = new OpenCodeClient(opts);
       return client;
     }
-    case "claude-code": {
+    case 'claude-code': {
       // Dynamic import so @anthropic-ai/claude-agent-sdk (Node-only, bundles a
       // native binary) never enters the renderer bundle. The adapter module
       // itself only imports types at the top level; the SDK is loaded lazily
       // inside the adapter's connect().
-      const { ClaudeCodeAdapter } = await import("./claude-code-adapter");
+      const { ClaudeCodeAdapter } = await import('./claude-code-adapter');
       return new ClaudeCodeAdapter({
         cliPath: config.cliPath,
         directory: config.directory,

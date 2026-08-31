@@ -15,35 +15,36 @@
  * code IS the lookup key.
  */
 
-import { randomUUID, randomBytes } from "node:crypto";
-import type { WebSocket } from "ws";
+import { randomBytes, randomUUID } from 'node:crypto';
+
+import type { WebSocket } from 'ws';
+
 import type {
-  RoomMember,
-  RoomJoin,
-  RoomLeave,
-  RoomMessage,
-  RoomMessageMeta,
-  RoomMessageViewed,
-  RoomSetViewOnce,
-  RoomViewOnceChanged,
-  RoomJoined,
-  RoomMemberJoined,
-  RoomMemberLeft,
-  RoomMessageRouted,
   RoomDestroyCountdown,
   RoomDestroyed,
   RoomError,
-} from "./protocol";
+  RoomJoin,
+  RoomJoined,
+  RoomMember,
+  RoomMemberJoined,
+  RoomMemberLeft,
+  RoomMessage,
+  RoomMessageMeta,
+  RoomMessageRouted,
+  RoomMessageViewed,
+  RoomSetViewOnce,
+  RoomViewOnceChanged,
+} from './protocol';
 
 /** Base32 alphabet (Crockford, no ambiguous chars). */
-const BASE32 = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+const BASE32 = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
 
 /** Generate a 6-char invite code (~30 bits of entropy). One fresh random
  *  byte per character — reusing bytes would make positions 5–6 repeat
  *  positions 1–2 (256 % 32 === 0, so `% 32` stays uniform). */
 export function generateInviteCode(): string {
   const bytes = randomBytes(6);
-  let out = "";
+  let out = '';
   for (let i = 0; i < 6; i++) {
     out += BASE32[bytes[i] % 32];
   }
@@ -73,7 +74,7 @@ interface Room {
 
 /** Per-socket state for peer connections (set on the WebSocket instance). */
 interface PeerSocketState {
-  kind: "peer";
+  kind: 'peer';
   member: Member | null; // null until room.join
 }
 export type SocketState = PeerSocketState | null;
@@ -96,7 +97,10 @@ export class RoomManager {
   /** fileId → binary blob (Buffer). Stored in memory; cleared on relay restart
    *  or when the owning room is destroyed. Used for voice messages and file
    *  attachments. */
-  private readonly files = new Map<string, { roomId: string; data: Buffer; meta: RoomMessageMeta }>();
+  private readonly files = new Map<
+    string,
+    { roomId: string; data: Buffer; meta: RoomMessageMeta }
+  >();
   /** Max file size: 50 MB. Voice messages and typical office docs fit. */
   private static readonly MAX_FILE_BYTES = 50 * 1024 * 1024;
   /** Destruction TTL after the creator leaves: 24h. */
@@ -154,7 +158,7 @@ export class RoomManager {
 
   /** Initialize a peer socket (called when role=peer connects). */
   initPeer(ws: WebSocket): void {
-    setPeerState(ws, { kind: "peer", member: null });
+    setPeerState(ws, { kind: 'peer', member: null });
   }
 
   /** Handle a peer message. Returns true if the message was a room message
@@ -163,21 +167,21 @@ export class RoomManager {
     const state = peerState(ws);
     if (!state) return false; // not a peer socket
     const m = msg as { type?: string };
-    if (!m || typeof m.type !== "string") return false;
+    if (!m || typeof m.type !== 'string') return false;
     switch (m.type) {
-      case "room.join":
+      case 'room.join':
         this.handleJoin(ws, m as unknown as RoomJoin);
         return true;
-      case "room.leave":
+      case 'room.leave':
         this.handleLeave(ws);
         return true;
-      case "room.message":
+      case 'room.message':
         this.handleMessage(ws, m as unknown as RoomMessage);
         return true;
-      case "room.message-viewed":
+      case 'room.message-viewed':
         this.handleMessageViewed(ws, m as unknown as RoomMessageViewed);
         return true;
-      case "room.set-view-once":
+      case 'room.set-view-once':
         this.handleSetViewOnce(ws, m as unknown as RoomSetViewOnce);
         return true;
       default:
@@ -198,7 +202,7 @@ export class RoomManager {
     if (state.member) this.removeMember(state.member);
     const room = this.rooms.get(msg.inviteCode);
     if (!room) {
-      this.send(ws, { type: "room.error", message: "room not found" } satisfies RoomError);
+      this.send(ws, { type: 'room.error', message: 'room not found' } satisfies RoomError);
       return;
     }
     const memberId = randomUUID();
@@ -215,7 +219,8 @@ export class RoomManager {
     // via room.join.enforceViewOnce on this first join; subsequent joins
     // ignore that field. A rejoin by the original creator (identified by
     // carrying their original memberId) restores creator status.
-    const creatorReturning = room.creatorMemberId !== null && msg.creatorId === room.creatorMemberId;
+    const creatorReturning =
+      room.creatorMemberId !== null && msg.creatorId === room.creatorMemberId;
     const isCreator = room.creatorMemberId === null || creatorReturning;
     if (isCreator) {
       room.creatorMemberId = memberId;
@@ -228,7 +233,7 @@ export class RoomManager {
         room.destroyTimer = null;
       }
       room.destroyExpiresAt = null;
-      const cancelled: RoomDestroyCountdown = { type: "room.destroy-countdown", expiresAt: null };
+      const cancelled: RoomDestroyCountdown = { type: 'room.destroy-countdown', expiresAt: null };
       this.broadcast(room, cancelled);
     }
     // Tell the new member they joined + the full member list.
@@ -237,7 +242,7 @@ export class RoomManager {
       members.push({ id: m.id, nickname: m.nickname, pubKey: m.pubKey });
     }
     this.send(ws, {
-      type: "room.joined",
+      type: 'room.joined',
       roomId: room.id,
       inviteCode: room.inviteCode,
       members,
@@ -247,7 +252,7 @@ export class RoomManager {
     } satisfies RoomJoined);
     // Tell everyone else a new member joined.
     const joinedMsg: RoomMemberJoined = {
-      type: "room.member-joined",
+      type: 'room.member-joined',
       member: { id: memberId, nickname: msg.nickname, pubKey: msg.pubKey },
     };
     this.broadcast(room, joinedMsg, memberId);
@@ -270,7 +275,7 @@ export class RoomManager {
       const recipient = room.members.get(c.to);
       if (!recipient || recipient.ws.readyState !== recipient.ws.OPEN) continue;
       this.send(recipient.ws, {
-        type: "room.message",
+        type: 'room.message',
         messageId: msg.messageId,
         from: state.member.id,
         nonce: c.nonce,
@@ -305,15 +310,15 @@ export class RoomManager {
     // Only the creator may toggle.
     if (state.member.id !== room.creatorMemberId) {
       this.send(ws, {
-        type: "room.error",
-        message: "only the creator can toggle view-once",
+        type: 'room.error',
+        message: 'only the creator can toggle view-once',
       } satisfies RoomError);
       return;
     }
     room.enforceViewOnce = msg.enforce;
     // Broadcast to everyone (including the creator) for UI consistency.
     const changed: RoomViewOnceChanged = {
-      type: "room.view-once-changed",
+      type: 'room.view-once-changed',
       enforce: room.enforceViewOnce,
     };
     this.broadcast(room, changed);
@@ -324,7 +329,7 @@ export class RoomManager {
     if (!room) return;
     room.members.delete(member.id);
     // Tell everyone else.
-    const leftMsg: RoomMemberLeft = { type: "room.member-left", memberId: member.id };
+    const leftMsg: RoomMemberLeft = { type: 'room.member-left', memberId: member.id };
     this.broadcast(room, leftMsg, member.id);
     // The creator leaving starts the destruction countdown — regardless of
     // whether other members remain. The room dies 24h after its creator left
@@ -337,7 +342,7 @@ export class RoomManager {
         this.destroyRoom(room);
       }, RoomManager.EMPTY_TTL_MS);
       const countdown: RoomDestroyCountdown = {
-        type: "room.destroy-countdown",
+        type: 'room.destroy-countdown',
         expiresAt: room.destroyExpiresAt,
       };
       this.broadcast(room, countdown);
@@ -349,7 +354,7 @@ export class RoomManager {
    *  Called when the destruction countdown elapses; safe to call multiple
    *  times (members list is still intact until the maps are cleared). */
   private destroyRoom(room: Room): void {
-    const destroyed: RoomDestroyed = { type: "room.destroyed" };
+    const destroyed: RoomDestroyed = { type: 'room.destroyed' };
     this.broadcast(room, destroyed);
     if (room.destroyTimer) {
       clearTimeout(room.destroyTimer);

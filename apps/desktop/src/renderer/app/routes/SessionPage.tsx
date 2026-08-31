@@ -1,9 +1,10 @@
-import { useParams } from "react-router-dom";
-import { findSession } from "@/lib/mock";
-import { useUiStore } from "@/lib/store";
-import { ThreadView } from "@/components/thread/ThreadView";
-import { InspectorShell } from "@/components/inspector/InspectorShell";
-import { EmptyState } from "@/components/cards/EmptyState";
+import { useParams } from 'react-router-dom';
+
+import { EmptyState } from '@/components/cards/EmptyState';
+import { InspectorShell } from '@/components/inspector/InspectorShell';
+import { ThreadView } from '@/components/thread/ThreadView';
+import { findSession } from '@/lib/mock';
+import { useUiStore } from '@/lib/store';
 
 export function SessionPage() {
   const { sessionId } = useParams();

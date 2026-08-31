@@ -1,0 +1,15 @@
+# EditorConfig：跨编辑器统一缩进与换行。
+# 与 prettier 保持一致（2 空格、utf-8、LF），避免编辑器与格式化器互相打架。
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+indent_style = space
+indent_size = 2
+trim_trailing_whitespace = true
+
+[*.md]
+trim_trailing_whitespace = false

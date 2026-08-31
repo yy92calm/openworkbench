@@ -1,5 +1,7 @@
 # E2E 本地数据（账号注册表快照）
 .e2e-data/
 
-# 构建产物（admin-web 保持入库，admin/dist 不入库；client 已独立出去，由 client/.gitignore 管）
+# 构建产物一律不入库：admin/dist 与 admin-web 都是本地构建的产物
+# （deploy-relay.sh 会本地构建 admin → admin-web 再 rsync 上传）。
 admin/dist/
+admin-web/

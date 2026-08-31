@@ -5,7 +5,7 @@
 `ModeSwitch` 提供「审核 / 自动 / YOLO」三档。YOLO 档通过 `setPermissionMode`
 （`packages/sdk/src/OpenCodeClient.ts:627`）映射到：
 
-```
+```text
 bash/edit/write/skill/question/external_directory: allow
 doom_loop: allow   ← 关闭死循环防护
 ```

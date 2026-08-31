@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
-import { Brain, ChevronRight, Loader2 } from "lucide-react";
-import type { ReasoningBlock } from "@workbench/shared";
-import { cn } from "@/lib/cn";
-import { useUiStore } from "@/lib/store";
+import type { ReasoningBlock } from '@workbench/shared';
+import { Brain, ChevronRight, Loader2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
+
+import { cn } from '@/lib/cn';
+import { useUiStore } from '@/lib/store';
 
 export function ReasoningCard({ block }: { block: ReasoningBlock }) {
   // Default fold follows the global setting; streaming does not auto-expand.
@@ -19,20 +20,18 @@ export function ReasoningCard({ block }: { block: ReasoningBlock }) {
       {/* Left gradient accent line — streaming shows animated gradient */}
       <div
         className={cn(
-          "w-[2px] shrink-0 rounded-full mr-3 transition-all duration-300",
+          'w-[2px] shrink-0 rounded-full mr-3 transition-all duration-300',
           isStreaming
-            ? "bg-gradient-to-b from-accent via-accent/50 to-transparent bg-[length:2px_200%] animate-[gradient-shimmer_2s_linear_infinite]"
-            : "bg-border",
+            ? 'bg-gradient-to-b from-accent via-accent/50 to-transparent bg-[length:2px_200%] animate-[gradient-shimmer_2s_linear_infinite]'
+            : 'bg-border',
         )}
       />
 
       {/* Card body */}
       <div
         className={cn(
-          "min-w-0 flex-1 rounded-lg border transition-colors",
-          isStreaming
-            ? "border-accent/20 bg-accent/[0.02]"
-            : "border-border-soft bg-surface/50",
+          'min-w-0 flex-1 rounded-lg border transition-colors',
+          isStreaming ? 'border-accent/20 bg-accent/[0.02]' : 'border-border-soft bg-surface/50',
         )}
       >
         <button
@@ -42,20 +41,16 @@ export function ReasoningCard({ block }: { block: ReasoningBlock }) {
           aria-expanded={expanded}
         >
           <span className="flex shrink-0 items-center text-accent/70">
-            {isStreaming ? (
-              <Loader2 size={13} className="animate-spin" />
-            ) : (
-              <Brain size={13} />
-            )}
+            {isStreaming ? <Loader2 size={13} className="animate-spin" /> : <Brain size={13} />}
           </span>
           <span className="flex-1 truncate text-[13px] font-medium text-text-dim">
-            {isStreaming ? "思考中…" : "思考过程"}
+            {isStreaming ? '思考中…' : '思考过程'}
           </span>
           <ChevronRight
             size={13}
             className={cn(
-              "shrink-0 text-muted transition-transform duration-150",
-              expanded && "rotate-90",
+              'shrink-0 text-muted transition-transform duration-150',
+              expanded && 'rotate-90',
             )}
           />
         </button>

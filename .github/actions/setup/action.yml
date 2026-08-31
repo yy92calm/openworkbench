@@ -1,0 +1,40 @@
+# 统一 CI 环境准备（仿 openai/codex 的 setup-ci composite action）。
+# 仓库有三个独立 workspace：根（apps+packages）、relay、client，各自有 lockfile。
+# 本 action 按 `workspace` 参数准备对应 workspace 的 Node + pnpm + 依赖缓存。
+#
+# 用法：
+#   - uses: ./.github/actions/setup
+#     with:
+#       workspace: root | relay | client
+
+name: 'Setup Node + pnpm'
+description: 'Install Node 20 + pnpm 9.4.0 and cache dependencies for one workspace'
+
+inputs:
+  workspace:
+    description: 'Which workspace to prepare: root, relay or client'
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Install pnpm
+      uses: pnpm/action-setup@v4
+      with:
+        version: 9.4.0
+
+    - name: Setup Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: 20
+        cache: pnpm
+        cache-dependency-path: ${{ inputs.workspace }}/pnpm-lock.yaml
+
+    - name: Install dependencies
+      shell: bash
+      run: |
+        if [ "${{ inputs.workspace }}" = "root" ]; then
+          pnpm install --frozen-lockfile
+        else
+          pnpm --dir ${{ inputs.workspace }} install --frozen-lockfile
+        fi

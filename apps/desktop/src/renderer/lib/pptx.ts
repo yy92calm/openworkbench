@@ -4,9 +4,9 @@
 // <a:rPr>: a 48 pt white bold title became 18 px black, invisible on a dark
 // slide. Rewriting each slide into the explicit per-run form fixes the
 // preview without touching the file on disk or the rendering library.
-import JSZip from "jszip";
+import JSZip from 'jszip';
 
-const A_NS = "http://schemas.openxmlformats.org/drawingml/2006/main";
+const A_NS = 'http://schemas.openxmlformats.org/drawingml/2006/main';
 
 const childNS = (el: Element, localName: string): Element | null => {
   for (const c of Array.from(el.children)) {
@@ -18,19 +18,19 @@ const childNS = (el: Element, localName: string): Element | null => {
 /** Merge each paragraph's defRPr into its runs' rPr (existing values win).
  *  Pure string → string; returns the input unchanged when nothing applies. */
 export function applyParagraphDefaults(xml: string): string {
-  const doc = new DOMParser().parseFromString(xml, "application/xml");
-  if (doc.getElementsByTagName("parsererror").length > 0) return xml;
+  const doc = new DOMParser().parseFromString(xml, 'application/xml');
+  if (doc.getElementsByTagName('parsererror').length > 0) return xml;
   let changed = false;
-  for (const p of Array.from(doc.getElementsByTagNameNS(A_NS, "p"))) {
-    const pPr = childNS(p, "pPr");
-    const def = pPr && childNS(pPr, "defRPr");
+  for (const p of Array.from(doc.getElementsByTagNameNS(A_NS, 'p'))) {
+    const pPr = childNS(p, 'pPr');
+    const def = pPr && childNS(pPr, 'defRPr');
     if (!def) continue;
     for (const run of Array.from(p.children)) {
       // <a:r> text runs and <a:fld> field runs (slide numbers, dates).
-      if (run.namespaceURI !== A_NS || (run.localName !== "r" && run.localName !== "fld")) continue;
-      let rPr = childNS(run, "rPr");
+      if (run.namespaceURI !== A_NS || (run.localName !== 'r' && run.localName !== 'fld')) continue;
+      let rPr = childNS(run, 'rPr');
       if (!rPr) {
-        const prefix = def.prefix ? `${def.prefix}:` : "";
+        const prefix = def.prefix ? `${def.prefix}:` : '';
         rPr = doc.createElementNS(A_NS, `${prefix}rPr`);
         run.insertBefore(rPr, run.firstChild); // rPr must precede <a:t>
         changed = true;
@@ -59,20 +59,20 @@ export function applyParagraphDefaults(xml: string): string {
  * deck when one is missing, so the preview comes back empty.
  */
 export async function dropMissingParts(zip: JSZip): Promise<boolean> {
-  const ct = zip.files["[Content_Types].xml"];
+  const ct = zip.files['[Content_Types].xml'];
   if (!ct) return false;
-  const xml = await ct.async("string");
-  const doc = new DOMParser().parseFromString(xml, "application/xml");
-  if (doc.getElementsByTagName("parsererror").length > 0) return false;
+  const xml = await ct.async('string');
+  const doc = new DOMParser().parseFromString(xml, 'application/xml');
+  if (doc.getElementsByTagName('parsererror').length > 0) return false;
   let changed = false;
-  for (const ov of Array.from(doc.getElementsByTagName("Override"))) {
-    const part = (ov.getAttribute("PartName") ?? "").replace(/^\//, "");
+  for (const ov of Array.from(doc.getElementsByTagName('Override'))) {
+    const part = (ov.getAttribute('PartName') ?? '').replace(/^\//, '');
     if (part && !zip.files[part]) {
       ov.parentNode?.removeChild(ov);
       changed = true;
     }
   }
-  if (changed) zip.file("[Content_Types].xml", new XMLSerializer().serializeToString(doc));
+  if (changed) zip.file('[Content_Types].xml', new XMLSerializer().serializeToString(doc));
   return changed;
 }
 
@@ -85,7 +85,7 @@ export async function normalizePptxForPreview(bytes: ArrayBuffer): Promise<Array
     const slides = Object.keys(zip.files).filter((n) => /^ppt\/slides\/slide\d+\.xml$/.test(n));
     let changed = false;
     for (const name of slides) {
-      const xml = await zip.files[name].async("string");
+      const xml = await zip.files[name].async('string');
       const out = applyParagraphDefaults(xml);
       if (out !== xml) {
         zip.file(name, out);
@@ -93,7 +93,7 @@ export async function normalizePptxForPreview(bytes: ArrayBuffer): Promise<Array
       }
     }
     changed = (await dropMissingParts(zip)) || changed;
-    return changed ? await zip.generateAsync({ type: "arraybuffer" }) : bytes;
+    return changed ? await zip.generateAsync({ type: 'arraybuffer' }) : bytes;
   } catch {
     return bytes; // a preview normalization must never break the preview
   }

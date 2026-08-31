@@ -1,31 +1,32 @@
-import { useState, useEffect } from "react";
-import { Link } from "react-router-dom";
-import { Trash2 } from "lucide-react";
-import type { ExecutionRecord } from "@/lib/electron";
-import { schedulerHistory, schedulerDeleteExecution, schedulerClearHistory } from "@/lib/electron";
-import { cn } from "@/lib/cn";
-import { toast } from "@/lib/toast";
-import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { Trash2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
+
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { cn } from '@/lib/cn';
+import type { ExecutionRecord } from '@/lib/electron';
+import { schedulerClearHistory, schedulerDeleteExecution, schedulerHistory } from '@/lib/electron';
+import { toast } from '@/lib/toast';
 
 const STATUS_MAP: Record<string, { label: string; className: string }> = {
-  running: { label: "运行中", className: "text-ok" },
-  completed: { label: "已完成", className: "text-ok" },
-  failed: { label: "失败", className: "text-error" },
-  timeout: { label: "超时", className: "text-warn" },
+  running: { label: '运行中', className: 'text-ok' },
+  completed: { label: '已完成', className: 'text-ok' },
+  failed: { label: '失败', className: 'text-error' },
+  timeout: { label: '超时', className: 'text-warn' },
 };
 
 function formatDuration(ms: number | undefined): string {
-  if (ms === undefined) return "-";
+  if (ms === undefined) return '-';
   if (ms < 1000) return `${ms}ms`;
   return `${(ms / 1000).toFixed(0)}秒`;
 }
 
 function formatTime(iso: string): string {
-  return new Date(iso).toLocaleString("zh-CN", {
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
+  return new Date(iso).toLocaleString('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
   });
 }
 
@@ -33,7 +34,7 @@ interface Props {
   taskId?: string;
 }
 
-type Pending = { kind: "one"; record: ExecutionRecord } | { kind: "clear" } | null;
+type Pending = { kind: 'one'; record: ExecutionRecord } | { kind: 'clear' } | null;
 
 export function ExecutionHistory({ taskId }: Props) {
   const [records, setRecords] = useState<ExecutionRecord[]>([]);
@@ -50,7 +51,7 @@ export function ExecutionHistory({ taskId }: Props) {
   const onConfirm = async () => {
     if (!pending) return;
     try {
-      if (pending.kind === "one") {
+      if (pending.kind === 'one') {
         await schedulerDeleteExecution(pending.record.id);
       } else {
         await schedulerClearHistory(taskId);
@@ -67,14 +68,14 @@ export function ExecutionHistory({ taskId }: Props) {
     return <div className="py-4 text-center text-xs text-muted">暂无执行记录</div>;
   }
 
-  const clearLabel = taskId ? "清空该任务记录" : "清空全部";
+  const clearLabel = taskId ? '清空该任务记录' : '清空全部';
 
   return (
     <div>
       <div className="mb-2 flex justify-end">
         <button
           className="flex items-center gap-1 rounded-input px-2 py-1 text-xs text-muted hover:bg-surface-2 hover:text-error"
-          onClick={() => setPending({ kind: "clear" })}
+          onClick={() => setPending({ kind: 'clear' })}
         >
           <Trash2 size={12} />
           {clearLabel}
@@ -93,13 +94,17 @@ export function ExecutionHistory({ taskId }: Props) {
           </thead>
           <tbody>
             {records.map((r) => {
-              const status = STATUS_MAP[r.status] ?? { label: r.status, className: "" };
+              const status = STATUS_MAP[r.status] ?? { label: r.status, className: '' };
               return (
                 <tr key={r.id} className="border-b border-border/50">
                   <td className="py-2 pr-3 text-text">{formatTime(r.triggeredAt)}</td>
                   <td className="py-2 pr-3">
-                    <span className={cn("font-medium", status.className)}>{status.label}</span>
-                    {r.error && <span className="ml-1 text-error" title={r.error}>⚠</span>}
+                    <span className={cn('font-medium', status.className)}>{status.label}</span>
+                    {r.error && (
+                      <span className="ml-1 text-error" title={r.error}>
+                        ⚠
+                      </span>
+                    )}
                   </td>
                   <td className="py-2 pr-3 text-muted">{formatDuration(r.durationMs)}</td>
                   {!taskId && <td className="py-2 pr-3 text-text">{r.taskName}</td>}
@@ -115,7 +120,7 @@ export function ExecutionHistory({ taskId }: Props) {
                       <button
                         className="text-muted hover:text-error"
                         aria-label="删除记录"
-                        onClick={() => setPending({ kind: "one", record: r })}
+                        onClick={() => setPending({ kind: 'one', record: r })}
                       >
                         <Trash2 size={12} />
                       </button>
@@ -129,13 +134,15 @@ export function ExecutionHistory({ taskId }: Props) {
       </div>
       {pending && (
         <ConfirmDialog
-          title={pending.kind === "one" ? "删除执行记录" : taskId ? "清空该任务记录" : "清空全部执行记录"}
+          title={
+            pending.kind === 'one' ? '删除执行记录' : taskId ? '清空该任务记录' : '清空全部执行记录'
+          }
           body={
-            pending.kind === "one"
+            pending.kind === 'one'
               ? `删除「${pending.record.taskName}」的这条执行记录?此操作不可撤销。`
               : taskId
-                ? "清空该任务的所有执行记录?此操作不可撤销。"
-                : "清空所有任务的执行记录?此操作不可撤销。"
+                ? '清空该任务的所有执行记录?此操作不可撤销。'
+                : '清空所有任务的执行记录?此操作不可撤销。'
           }
           confirmLabel="删除"
           onConfirm={onConfirm}

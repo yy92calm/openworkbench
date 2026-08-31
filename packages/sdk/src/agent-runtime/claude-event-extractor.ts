@@ -18,20 +18,18 @@
 // zero or more AgentRuntimeEvent objects. Keeping it separate from the adapter
 // makes the mapping testable without spawning a real Claude process.
 
-import type { AgentRuntimeEvent, ToolCallStatus } from "./types";
+import type { AgentRuntimeEvent, ToolCallStatus } from './types';
 
 /** A raw message object yielded by the Claude Agent SDK's query() iterator. */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
 export type ClaudeSdkMessage = Record<string, any>;
 
 /** Content block shapes inside assistant/user messages. */
 type ContentBlock =
-  | { type: "text"; text: string }
-  | { type: "thinking"; thinking: string }
-  | { type: "tool_use"; id: string; name: string; input: Record<string, unknown> }
-  | { type: "tool_result"; tool_use_id: string; content: string | unknown; is_error?: boolean }
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  | Record<string, any>;
+  | { type: 'text'; text: string }
+  | { type: 'thinking'; thinking: string }
+  | { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> }
+  | { type: 'tool_result'; tool_use_id: string; content: string | unknown; is_error?: boolean };
 
 /** Monotonic counter so each emitted event has a unique partId/callId within a turn. */
 let emitSeq = 0;
@@ -41,15 +39,15 @@ function nextId(prefix: string): string {
 }
 
 function mapToolStatus(isError?: boolean): ToolCallStatus {
-  if (isError) return "failed";
-  return "success";
+  if (isError) return 'failed';
+  return 'success';
 }
 
 /** Extract the session_id from a system/init message, or null if not one. */
 export function extractSessionId(msg: ClaudeSdkMessage): string | null {
-  if (msg.type === "system" && msg.subtype === "init") {
+  if (msg.type === 'system' && msg.subtype === 'init') {
     const sid = msg.session_id ?? msg.data?.session_id;
-    return typeof sid === "string" ? sid : null;
+    return typeof sid === 'string' ? sid : null;
   }
   return null;
 }
@@ -63,52 +61,53 @@ export function extractSessionId(msg: ClaudeSdkMessage): string | null {
 export function extractEvents(msg: ClaudeSdkMessage, sessionId: string): AgentRuntimeEvent[] {
   const events: AgentRuntimeEvent[] = [];
 
-  if (msg.type === "assistant" && Array.isArray(msg.message?.content)) {
+  if (msg.type === 'assistant' && Array.isArray(msg.message?.content)) {
     for (const block of msg.message.content as ContentBlock[]) {
-      if (!block || typeof block !== "object") continue;
-      if (block.type === "text" && typeof block.text === "string") {
+      if (!block || typeof block !== 'object') continue;
+      if (block.type === 'text' && typeof block.text === 'string') {
         events.push({
-          type: "text.updated",
+          type: 'text.updated',
           sessionId,
-          partId: nextId("txt"),
+          partId: nextId('txt'),
           text: block.text,
         });
-      } else if (block.type === "thinking" && typeof block.thinking === "string") {
+      } else if (block.type === 'thinking' && typeof block.thinking === 'string') {
         events.push({
-          type: "reasoning.updated",
+          type: 'reasoning.updated',
           sessionId,
-          partId: nextId("rsn"),
+          partId: nextId('rsn'),
           text: block.thinking,
           streaming: false,
         });
-      } else if (block.type === "tool_use" && typeof block.id === "string") {
+      } else if (block.type === 'tool_use' && typeof block.id === 'string') {
         events.push({
-          type: "tool.updated",
+          type: 'tool.updated',
           sessionId,
           callId: block.id,
-          tool: typeof block.name === "string" ? block.name : "tool",
-          status: "running",
-          title: typeof block.name === "string" ? block.name : undefined,
+          tool: typeof block.name === 'string' ? block.name : 'tool',
+          status: 'running',
+          title: typeof block.name === 'string' ? block.name : undefined,
           input: block.input as Record<string, unknown> | undefined,
         });
       }
     }
   }
 
-  if (msg.type === "user" && Array.isArray(msg.message?.content)) {
+  if (msg.type === 'user' && Array.isArray(msg.message?.content)) {
     for (const block of msg.message.content as ContentBlock[]) {
-      if (!block || typeof block !== "object") continue;
-      if (block.type === "tool_result" && typeof block.tool_use_id === "string") {
-        const output = typeof block.content === "string"
-          ? block.content
-          : typeof block.content === "object" && block.content !== null
-            ? JSON.stringify(block.content)
-            : "";
+      if (!block || typeof block !== 'object') continue;
+      if (block.type === 'tool_result' && typeof block.tool_use_id === 'string') {
+        const output =
+          typeof block.content === 'string'
+            ? block.content
+            : typeof block.content === 'object' && block.content !== null
+              ? JSON.stringify(block.content)
+              : '';
         events.push({
-          type: "tool.updated",
+          type: 'tool.updated',
           sessionId,
           callId: block.tool_use_id,
-          tool: "tool",
+          tool: 'tool',
           status: mapToolStatus(block.is_error),
           output,
         });
@@ -117,15 +116,15 @@ export function extractEvents(msg: ClaudeSdkMessage, sessionId: string): AgentRu
   }
 
   // The result message signals turn completion.
-  if (msg.type === "result") {
-    if (msg.subtype === "error_max_tokens" || msg.subtype === "error_during_execution") {
+  if (msg.type === 'result') {
+    if (msg.subtype === 'error_max_tokens' || msg.subtype === 'error_during_execution') {
       events.push({
-        type: "error",
+        type: 'error',
         sessionId,
-        message: typeof msg.result === "string" ? msg.result : `Claude turn ended: ${msg.subtype}`,
+        message: typeof msg.result === 'string' ? msg.result : `Claude turn ended: ${msg.subtype}`,
       });
     }
-    events.push({ type: "session.idle", sessionId });
+    events.push({ type: 'session.idle', sessionId });
   }
 
   return events;

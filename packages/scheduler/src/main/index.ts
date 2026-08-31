@@ -18,12 +18,13 @@
  *   scheduler.deploy(xdgConfig, mcpScriptPath);
  */
 
-import { randomUUID } from "node:crypto";
-import { createServer, type Server } from "node:http";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
-import { Cron } from "croner";
-import { ipcMain } from "electron";
+import { randomUUID } from 'node:crypto';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { type Server } from 'node:http';
+import { join } from 'node:path';
+
+import { Cron } from 'croner';
+import { ipcMain } from 'electron';
 
 // ── Types ────────────────────────────────────────────────────────────────
 
@@ -65,7 +66,7 @@ export interface ExecutionRecord {
   taskId: string;
   taskName: string;
   triggeredAt: string;
-  status: "running" | "completed" | "failed" | "timeout";
+  status: 'running' | 'completed' | 'failed' | 'timeout';
   sessionId?: string;
   error?: string;
   durationMs?: number;
@@ -74,7 +75,11 @@ export interface ExecutionRecord {
 
 export interface SchedulerOptions {
   store: { get: (key: string) => unknown; set: (key: string, value: unknown) => void };
-  logger?: { info: (...a: unknown[]) => void; warn: (...a: unknown[]) => void; error: (...a: unknown[]) => void };
+  logger?: {
+    info: (...a: unknown[]) => void;
+    warn: (...a: unknown[]) => void;
+    error: (...a: unknown[]) => void;
+  };
 }
 
 export interface AgentExecutor {
@@ -96,7 +101,7 @@ export interface SchedulerApiInfo {
 
 // ── Constants ────────────────────────────────────────────────────────────
 
-const STORE_SCOPE = "scheduler";
+const STORE_SCOPE = 'scheduler';
 
 export const SCHEDULER_SKILL = `# 定时任务技能
 
@@ -127,14 +132,20 @@ class CronEngine {
   private jobs = new Map<string, Cron>();
   private onFire: FireCallback | null = null;
   private store: { get: (key: string) => unknown; set: (key: string, value: unknown) => void };
-  private log: { info: (...a: unknown[]) => void; warn: (...a: unknown[]) => void; error: (...a: unknown[]) => void };
+  private log: {
+    info: (...a: unknown[]) => void;
+    warn: (...a: unknown[]) => void;
+    error: (...a: unknown[]) => void;
+  };
 
   constructor(opts: SchedulerOptions) {
     this.store = opts.store;
     this.log = opts.logger ?? console;
   }
 
-  setFireCallback(cb: FireCallback) { this.onFire = cb; }
+  setFireCallback(cb: FireCallback) {
+    this.onFire = cb;
+  }
 
   start() {
     for (const task of this.listTasks().filter((t) => t.enabled)) this.scheduleOne(task);
@@ -147,9 +158,18 @@ class CronEngine {
 
   addTask(input: CreateTaskInput): ScheduledTask {
     const now = new Date().toISOString();
-    const task: ScheduledTask = { id: randomUUID(), ...input, enabled: true, createdAt: now, updatedAt: now };
-    try { task.nextRunAt = new Cron(input.cron).nextRun()?.toISOString() ?? undefined; }
-    catch { throw new Error(`Invalid cron: ${input.cron}`); }
+    const task: ScheduledTask = {
+      id: randomUUID(),
+      ...input,
+      enabled: true,
+      createdAt: now,
+      updatedAt: now,
+    };
+    try {
+      task.nextRunAt = new Cron(input.cron).nextRun()?.toISOString() ?? undefined;
+    } catch {
+      throw new Error(`Invalid cron: ${input.cron}`);
+    }
     const tasks = this.listTasks();
     tasks.push(task);
     this.saveTasks(tasks);
@@ -158,14 +178,21 @@ class CronEngine {
     return task;
   }
 
-  removeTask(id: string) { this.unscheduleOne(id); this.saveTasks(this.listTasks().filter((t) => t.id !== id)); }
+  removeTask(id: string) {
+    this.unscheduleOne(id);
+    this.saveTasks(this.listTasks().filter((t) => t.id !== id));
+  }
 
   updateTask(id: string, patch: UpdateTaskInput): ScheduledTask | null {
     const tasks = this.listTasks();
     const idx = tasks.findIndex((t) => t.id === id);
     if (idx === -1) return null;
     Object.assign(tasks[idx], patch, { updatedAt: new Date().toISOString() });
-    try { tasks[idx].nextRunAt = new Cron(tasks[idx].cron).nextRun()?.toISOString() ?? undefined; } catch { /* */ }
+    try {
+      tasks[idx].nextRunAt = new Cron(tasks[idx].cron).nextRun()?.toISOString() ?? undefined;
+    } catch {
+      /* */
+    }
     this.saveTasks(tasks);
     this.unscheduleOne(id);
     if (tasks[idx].enabled) this.scheduleOne(tasks[idx]);
@@ -178,7 +205,8 @@ class CronEngine {
     if (idx === -1) return null;
     tasks[idx].enabled = enabled;
     this.saveTasks(tasks);
-    if (enabled) this.scheduleOne(tasks[idx]); else this.unscheduleOne(id);
+    if (enabled) this.scheduleOne(tasks[idx]);
+    else this.unscheduleOne(id);
     return tasks[idx];
   }
 
@@ -190,17 +218,19 @@ class CronEngine {
 
   listTasks(): ScheduledTask[] {
     const raw = this.store.get(`${STORE_SCOPE}:tasks`);
-    return Array.isArray(raw) ? raw as ScheduledTask[] : [];
+    return Array.isArray(raw) ? (raw as ScheduledTask[]) : [];
   }
 
   getHistory(taskId?: string, limit = 50): ExecutionRecord[] {
     const raw = this.store.get(`${STORE_SCOPE}:executions`);
-    let records = Array.isArray(raw) ? raw as ExecutionRecord[] : [];
+    let records = Array.isArray(raw) ? (raw as ExecutionRecord[]) : [];
     if (taskId) records = records.filter((r) => r.taskId === taskId);
     return records.slice(0, limit);
   }
 
-  private saveTasks(tasks: ScheduledTask[]) { this.store.set(`${STORE_SCOPE}:tasks`, tasks); }
+  private saveTasks(tasks: ScheduledTask[]) {
+    this.store.set(`${STORE_SCOPE}:tasks`, tasks);
+  }
 
   private saveExecution(record: ExecutionRecord) {
     const raw = this.store.get(`${STORE_SCOPE}:executions`);
@@ -220,10 +250,14 @@ class CronEngine {
 
   private scheduleOne(task: ScheduledTask) {
     try {
-      const cron = new Cron(task.cron, async () => { await this.executeTask(task); });
+      const cron = new Cron(task.cron, async () => {
+        await this.executeTask(task);
+      });
       this.jobs.set(task.id, cron);
       task.nextRunAt = cron.nextRun()?.toISOString();
-    } catch (err) { this.log.error(`[scheduler] invalid cron: ${task.cron}`, err); }
+    } catch (err) {
+      this.log.error(`[scheduler] invalid cron: ${task.cron}`, err);
+    }
   }
 
   private unscheduleOne(id: string) {
@@ -232,14 +266,20 @@ class CronEngine {
   }
 
   private async executeTask(task: ScheduledTask): Promise<ExecutionRecord> {
-    const record: ExecutionRecord = { id: randomUUID(), taskId: task.id, taskName: task.name, triggeredAt: new Date().toISOString(), status: "running" };
+    const record: ExecutionRecord = {
+      id: randomUUID(),
+      taskId: task.id,
+      taskName: task.name,
+      triggeredAt: new Date().toISOString(),
+      status: 'running',
+    };
     this.saveExecution(record);
     const start = Date.now();
     try {
-      record.sessionId = await this.onFire?.(task) ?? null;
-      record.status = "completed";
+      record.sessionId = (await this.onFire?.(task)) ?? null;
+      record.status = 'completed';
     } catch (err) {
-      record.status = "failed";
+      record.status = 'failed';
       record.error = err instanceof Error ? err.message : String(err);
     }
     record.durationMs = Date.now() - start;
@@ -252,7 +292,6 @@ class CronEngine {
 // ── Factory ──────────────────────────────────────────────────────────────
 
 export function createScheduler(opts: SchedulerOptions): SchedulerPlugin {
-  const log = opts.logger ?? console;
   const engine = new CronEngine(opts);
   let apiServer: Server | null = null;
   let apiInfo: SchedulerApiInfo | null = null;
@@ -263,62 +302,21 @@ export function createScheduler(opts: SchedulerOptions): SchedulerPlugin {
 
   // IPC handlers
   function registerIpc() {
-    ipcMain.handle("scheduler:list", () => engine.listTasks());
-    ipcMain.handle("scheduler:create", (_e, task: CreateTaskInput) => engine.addTask(task));
-    ipcMain.handle("scheduler:update", (_e, id: string, patch: UpdateTaskInput) => engine.updateTask(id, patch));
-    ipcMain.handle("scheduler:delete", (_e, id: string) => { engine.removeTask(id); });
-    ipcMain.handle("scheduler:toggle", (_e, id: string, enabled: boolean) => engine.toggleTask(id, enabled));
-    ipcMain.handle("scheduler:fire-now", (_e, id: string) => engine.fireNow(id));
-    ipcMain.handle("scheduler:history", (_e, taskId?: string, limit?: number) => engine.getHistory(taskId, limit));
-  }
-
-  // HTTP API for MCP server
-  async function startApi(password: string): Promise<SchedulerApiInfo> {
-    if (apiServer && apiInfo) return apiInfo;
-    const server = createServer(async (req, res) => {
-      const auth = req.headers.authorization ?? "";
-      const expected = "Basic " + Buffer.from(`user:${password}`).toString("base64");
-      if (auth !== expected) { res.writeHead(401, { "Content-Type": "application/json" }); res.end('{"error":"unauthorized"}'); return; }
-
-      const url = new URL(req.url ?? "/", "http://localhost");
-      const path = url.pathname;
-      const parseBody = (): Promise<unknown> => new Promise((resolve) => {
-        let d = ""; req.on("data", (c) => d += c); req.on("end", () => { try { resolve(JSON.parse(d)); } catch { resolve({}); } });
-      });
-      const json = (s: number, b: unknown) => { res.writeHead(s, { "Content-Type": "application/json" }); res.end(JSON.stringify(b)); };
-
-      try {
-        if (req.method === "GET" && path === "/api/scheduler/tasks") { json(200, engine.listTasks()); return; }
-        if (req.method === "POST" && path === "/api/scheduler/tasks") { json(201, engine.addTask(await parseBody() as CreateTaskInput)); return; }
-        if (req.method === "GET" && path === "/api/scheduler/history") { json(200, engine.getHistory(url.searchParams.get("taskId") ?? undefined, Number(url.searchParams.get("limit") ?? 50))); return; }
-        const m = path.match(/^\/api\/scheduler\/tasks\/([^/]+)(\/fire)?$/);
-        if (m) {
-          const id = m[1];
-          if (req.method === "PATCH" && !m[2]) {
-            const body = await parseBody() as UpdateTaskInput & { enabled?: boolean };
-            const { enabled, ...patch } = body;
-            let r = enabled !== undefined ? engine.toggleTask(id, enabled) : null;
-            if (Object.keys(patch).length > 0) r = engine.updateTask(id, patch);
-            json(r ? 200 : 404, r ?? { error: "not found" }); return;
-          }
-          if (req.method === "DELETE" && !m[2]) { engine.removeTask(id); json(200, { ok: true }); return; }
-          if (req.method === "POST" && m[2]) { const r = await engine.fireNow(id); json(r ? 200 : 404, r ?? { error: "not found" }); return; }
-        }
-        json(404, { error: "not found" });
-      } catch (err) { json(500, { error: err instanceof Error ? err.message : String(err) }); }
+    ipcMain.handle('scheduler:list', () => engine.listTasks());
+    ipcMain.handle('scheduler:create', (_e, task: CreateTaskInput) => engine.addTask(task));
+    ipcMain.handle('scheduler:update', (_e, id: string, patch: UpdateTaskInput) =>
+      engine.updateTask(id, patch),
+    );
+    ipcMain.handle('scheduler:delete', (_e, id: string) => {
+      engine.removeTask(id);
     });
-
-    return new Promise((resolve, reject) => {
-      server.on("error", reject);
-      server.listen(0, "127.0.0.1", () => {
-        const addr = server.address();
-        if (typeof addr !== "object" || !addr) { server.close(); reject(new Error("bind failed")); return; }
-        apiInfo = { url: `http://127.0.0.1:${addr.port}`, password };
-        apiServer = server;
-        log.info(`[scheduler] API at ${apiInfo.url}`);
-        resolve(apiInfo);
-      });
-    });
+    ipcMain.handle('scheduler:toggle', (_e, id: string, enabled: boolean) =>
+      engine.toggleTask(id, enabled),
+    );
+    ipcMain.handle('scheduler:fire-now', (_e, id: string) => engine.fireNow(id));
+    ipcMain.handle('scheduler:history', (_e, taskId?: string, limit?: number) =>
+      engine.getHistory(taskId, limit),
+    );
   }
 
   return {
@@ -332,21 +330,25 @@ export function createScheduler(opts: SchedulerOptions): SchedulerPlugin {
       apiServer = null;
       apiInfo = null;
     },
-    deploy(xdgConfig, mcpScriptPath) {
+    deploy(xdgConfig, _mcpScriptPath) {
       const password = randomUUID();
       // Start API synchronously if not running
-      const opencodeDir = join(xdgConfig, "opencode");
-      const skillsDir = join(opencodeDir, "skills", "scheduler");
-      const commandsDir = join(opencodeDir, "commands");
+      const opencodeDir = join(xdgConfig, 'opencode');
+      const skillsDir = join(opencodeDir, 'skills', 'scheduler');
+      const commandsDir = join(opencodeDir, 'commands');
       mkdirSync(skillsDir, { recursive: true });
       mkdirSync(commandsDir, { recursive: true });
-      writeFileSync(join(skillsDir, "SKILL.md"), SCHEDULER_SKILL);
+      writeFileSync(join(skillsDir, 'SKILL.md'), SCHEDULER_SKILL);
 
       // For API info, the caller must start the API first and pass the info
       // This deploy method writes the MCP config
-      return { url: "", password };
+      return { url: '', password };
     },
-    setExecutor(ex) { executor = ex; },
-    getApiInfo() { return apiInfo; },
+    setExecutor(ex) {
+      executor = ex;
+    },
+    getApiInfo() {
+      return apiInfo;
+    },
   };
 }

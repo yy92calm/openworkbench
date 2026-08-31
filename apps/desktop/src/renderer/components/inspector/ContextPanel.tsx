@@ -1,6 +1,7 @@
-import { X } from "lucide-react";
-import { TokenUsage } from "./TokenUsage";
-import { AutoContext } from "./AutoContext";
+import { X } from 'lucide-react';
+
+import { AutoContext } from './AutoContext';
+import { TokenUsage } from './TokenUsage';
 
 /**
  * Right-side context panel — what the model can actually see in this session.

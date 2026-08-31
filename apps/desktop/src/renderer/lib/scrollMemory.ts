@@ -1,4 +1,4 @@
-import { useLayoutEffect, type RefObject, type UIEvent } from "react";
+import { type RefObject, type UIEvent, useLayoutEffect } from 'react';
 
 /** Scroll offsets by pane key, kept for the app's lifetime — switching
  *  sessions or files comes back to where the user left off. Lives outside the
