@@ -11,6 +11,7 @@
     "format:check": "prettier --check .",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
+    "lint:skills": "node scripts/dev/lint-skills.mjs",
     "md:check": "markdownlint-cli2",
     "typecheck": "pnpm -r typecheck && pnpm --dir relay typecheck && pnpm --dir client typecheck",
     "test": "pnpm -r test && pnpm --dir relay test"

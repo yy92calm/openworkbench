@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import type { RendererManifest } from '@workbench/shared';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 
 import { extractConfigPatch, renderWorkbenchFence } from './renderers';
+import { useUiStore } from './store';
 
 function opts(type: string, options?: Record<string, unknown>): Map<string, RendererManifest> {
   return new Map([[type, { type, options } as RendererManifest]]);
@@ -56,6 +57,45 @@ describe('renderWorkbenchFence', () => {
     const node = renderWorkbenchFence('kv-card', 'not json', opts('kv-card'));
     render(<div>{node}</div>);
     expect(document.body.textContent).toContain('not json');
+  });
+});
+
+describe('kv-card actions', () => {
+  beforeEach(() => {
+    useUiStore.setState({ composerDraft: null });
+  });
+
+  function renderCard(payload: string) {
+    const node = renderWorkbenchFence('kv-card', payload, opts('kv-card'));
+    render(<div>{node}</div>);
+  }
+
+  it('renders action buttons and click prefills the composer draft (no auto-send)', () => {
+    renderCard(
+      '{"风险摘要":{"集中度":"高"},"actions":[{"label":"深挖集中度","prompt":"展开分析集中度风险"}]}',
+    );
+    fireEvent.click(screen.getByText('深挖集中度'));
+    expect(useUiStore.getState().composerDraft).toBe('展开分析集中度风险');
+  });
+
+  it('keeps single-key title detection when actions are present', () => {
+    renderCard('{"风险摘要":{"集中度":"高"},"actions":[{"label":"a","prompt":"p"}]}');
+    expect(screen.getByText('风险摘要')).toBeDefined();
+    expect(screen.getByText('集中度')).toBeDefined();
+  });
+
+  it('ignores malformed actions and caps at 4 buttons', () => {
+    renderCard(
+      '{"k":"v","actions":["bare",{"label":"缺prompt"},{"prompt":"缺label"},{"label":"a1","prompt":"p1"},{"label":"a2","prompt":"p2"},{"label":"a3","prompt":"p3"},{"label":"a4","prompt":"p4"},{"label":"a5","prompt":"p5"}]}',
+    );
+    expect(screen.queryByText('缺prompt')).toBeNull();
+    for (const label of ['a1', 'a2', 'a3', 'a4']) expect(screen.getByText(label)).toBeDefined();
+    expect(screen.queryByText('a5')).toBeNull();
+  });
+
+  it('renders no action row when actions are absent', () => {
+    renderCard('{"k":"v"}');
+    expect(document.querySelector('button')).toBeNull();
   });
 });
 

@@ -6,6 +6,20 @@ bump minor；发版时打 `v<version>` git tag 并将本条「Unreleased」归�
 
 ## [Unreleased]
 
+### Added（WorkBuddy 三套机制移植，方案 docs/20260911-01）
+
+- profile（app-config，注意其在 .gitignore 中、随打包分发）新增 6 个技能：
+  finance-core（45 个五段式方法论 + 红线/检索纪律总入口）、finance-quant
+  （16 个算法引擎，run_signal 统一 JSON 契约）、office-routing（Office 路由
+  门卫）、office-docx（Word md→html→docx 三阶段，含 html_to_docx 引擎全量与
+  html-review 评审门禁）、visual-output-spec（富内容规范，含 Visualizer 设计
+  宪法原文）；xlsx-author / pptx-author 增强（recalc 重算交付门禁、缩略图
+  回读自检）。AGENTS.md「输出渲染约定」改薄指针，详规按需加载。
+- kv-card 支持 `actions` 按钮：点击把 prompt 预填到会话输入框（复用
+  composerDraft 语义，追加 + 聚焦，不自动发送）。
+- lint-skills.mjs 结构检查：SKILL.md 提及的 references/scripts 路径存在性 +
+  finance-core 五段模板标题完整性（skill-creator 教学示例豁免）。
+
 ### Added（工程底座）
 
 - 统一格式化与 lint 门禁：prettier（`.prettierrc.toml`）、markdownlint
@@ -22,6 +36,8 @@ bump minor；发版时打 `v<version>` git tag 并将本条「Unreleased」归�
 
 ### Fixed
 
+- run_signal.py vcp 引擎 pandas 3.x 兼容（np.array_split 直接切 DataFrame
+  产出 ndarray 导致列访问崩溃，改为切索引再 iloc）。
 - 修复 2 个既有失败的 desktop 测试（SessionPage not-found、CommandPalette
   open）：jsdom 测试环境缺少 Electron preload 桥，AppShell 级测试挂载
   Sidebar 时订阅 IPC 事件崩溃。测试 setup 现提供 noop `window.electronAPI`

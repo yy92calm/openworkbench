@@ -12,6 +12,8 @@
 import type { RendererManifest } from '@workbench/shared';
 import type { ReactNode } from 'react';
 
+import { useUiStore } from './store';
+
 /** Built-in renderer contract: given the fence payload (any JSON) and the
  *  manifest options, return a node. Returning null degrades to a code block. */
 export type RendererFn = (payload: unknown, options?: Record<string, unknown>) => ReactNode;
@@ -38,13 +40,55 @@ function kvCell(row: [string, unknown]): [string, string] {
 }
 
 /** kv-card: renders `{ "标题可选项": {k: v, …} }` or `{k: v, …}` /
- *  `[ [k, v], … ]` as a titled key-value card. */
+ *  `[ [k, v], … ]` as a titled key-value card. An optional top-level
+ *  `actions: [{label, prompt}]` (max 4) renders buttons that PREFILL the
+ *  composer draft — they never auto-send (docs/20260911-01). */
+type KvAction = { label: string; prompt: string };
+
+function extractKvActions(payload: unknown): { actions: KvAction[]; rest: unknown } {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    return { actions: [], rest: payload };
+  }
+  const obj = payload as Record<string, unknown>;
+  if (!Array.isArray(obj.actions)) return { actions: [], rest: payload };
+  const actions = obj.actions
+    .filter((a): a is Record<string, unknown> => !!a && typeof a === 'object')
+    .map((a) => ({
+      label: typeof a.label === 'string' ? a.label : '',
+      prompt: typeof a.prompt === 'string' ? a.prompt : '',
+    }))
+    .filter((a) => a.label && a.prompt)
+    .slice(0, 4);
+  const rest = { ...obj };
+  delete rest.actions;
+  return { actions, rest };
+}
+
+function KvCardActions({ actions }: { actions: KvAction[] }) {
+  const setComposerDraft = useUiStore((s) => s.setComposerDraft);
+  return (
+    <div className="flex flex-wrap gap-2 border-t border-border-soft px-4 py-2">
+      {actions.map((a, i) => (
+        <button
+          key={i}
+          type="button"
+          onClick={() => setComposerDraft(a.prompt)}
+          className="rounded-input border border-border bg-surface px-2.5 py-1 text-[12px] text-text transition-colors hover:bg-surface-2"
+        >
+          {a.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function KvCard(payload: unknown, options?: Record<string, unknown>): ReactNode {
   const title = typeof options?.title === 'string' ? options.title : undefined;
-  let data: unknown = payload;
+  const { actions, rest } = extractKvActions(payload);
+  let data: unknown = rest;
   let label = title;
-  if (payload && typeof payload === 'object' && !Array.isArray(payload)) {
-    const entries = Object.entries(payload as Record<string, unknown>);
+  if (rest && typeof rest === 'object' && !Array.isArray(rest)) {
+    const entries = Object.entries(rest as Record<string, unknown>);
     // A single inner object becomes the card body with its key as the title.
     if (
       entries.length === 1 &&
@@ -84,6 +128,7 @@ function KvCard(payload: unknown, options?: Record<string, unknown>): ReactNode 
           );
         })}
       </dl>
+      {actions.length > 0 && <KvCardActions actions={actions} />}
     </div>
   );
 }
