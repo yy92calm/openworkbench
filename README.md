@@ -1,49 +1,45 @@
 # Workbench
 
-**A config-driven OpenCode desktop shell.** Drop a complete `.opencode/` profile
-into `app-config/`, build, and you get a dedicated desktop app for that
-configuration — providers, model, skills, agents, commands, MCP, and
-permissions all decided by the bundled profile, not configurable at runtime.
+**配置驱动的 OpenCode 桌面外壳。** 把一份完整的 `.opencode/` 配置放进
+`app-config/`，构建后即可得到针对该配置的专用桌面应用——provider、模型、
+skills、agents、命令、MCP、权限全部由打包配置决定，运行时不可配置。
 
-Built on [Electron](https://www.electronjs.org) + React + TypeScript, with
-[OpenCode](https://opencode.ai) as the bundled agent runtime (single-binary
-sidecar, pinned and managed by the app).
+基于 [Electron](https://www.electronjs.org) + React + TypeScript，以
+[OpenCode](https://opencode.ai) 作为内置 agent 运行时（单二进制 sidecar，
+版本由应用固定并管理）。
 
-## What it is
+## 它是什么
 
-A reusable desktop shell around the OpenCode agent runtime. The app itself
-ships no model/provider/skill configuration UI — everything comes from the
-packager's `.opencode/` profile. End users get a focused, locked-down app; the
-packager decides what it can do.
+一个围绕 OpenCode agent 运行时的可复用桌面外壳。应用本身不提供
+模型/provider/skill 配置界面——一切都来自打包者的 `.opencode/` 配置。终端
+用户得到一个聚焦、锁定的应用；打包者决定它能做什么。
 
-- **Config-driven** — `app-config/.opencode/` is bundled as an Electron extra
-  resource and deployed to the app's private OpenCode config dir on every
-  startup.
-- **Local-first** — workspace files, code execution, session history, and
-  provenance stay on the machine; only conversation turns reach the model
-  provider.
-- **Reproducible artifacts** — every agent write appends a version record to
-  `.workbench/provenance.jsonl` with its code, environment, and originating
-  conversation.
-- **Manual approval by default** — dangerous shell commands (deletion, installs,
-  remote, privilege) prompt before running. The approval mode is fixed by the
-  bundled profile and not switchable to "full" from the UI.
-- **Local Python/R kernel + Jupyter** — persistent per-notebook kernels; the
-  agent runs code in the workspace.
+- **配置驱动** — `app-config/.opencode/` 作为 Electron extra resource 打包，
+  每次启动自动部署到应用私有的 OpenCode 配置目录（含用户覆盖与 patch 层）。
+- **本地优先** — 工作区文件、代码执行、会话历史、provenance 都留在本机；
+  只有对话轮次发往模型 provider。
+- **可复现产物** — agent 的写类工具调用会向 `.workbench/provenance.jsonl`
+  追加记录（当前读侧存在已知问题，见差异清单）。
+- **默认手动审批** — 危险命令（删除、安装、远程、提权）运行前需审批；
+  审批模式由打包配置固定，UI 不会默认切到 yolo。
+- **富输出渲染** — 会话支持 A2UI 声明式卡片、html/svg/echarts/csv 富围栏、
+  产物卡与 `workbench:` 键控渲染。
+- **远程控制** — 手机/另一台电脑可经 relay 中继驱动桌面端（独立项目，
+  见下文「三项目」）。
 
-## Build a dedicated app
+## 构建一个专用应用
 
-1. Put your OpenCode configuration in `app-config/.opencode/` — `opencode.json`
-   (providers, model, permission), `skills/`, `agents/`, `commands/`. See
-   [`app-config/.opencode/README.md`](./app-config/.opencode/README.md).
-2. Fetch the pinned sidecar (kept out of git):
+1. 把 OpenCode 配置放进 `app-config/.opencode/`——`opencode.json`
+   （provider、model、permission）、`skills/`、`agents/`、`commands/`。详见
+   [`app-config/.opencode/README.md`](./app-config/.opencode/README.md)。
+2. 拉取固定的 sidecar（不进 git）：
 
    ```bash
    pnpm install
-   bash scripts/dev/fetch-opencode.sh   # the OpenCode agent runtime
+   bash scripts/dev/fetch-opencode.sh   # OpenCode agent 运行时
    ```
 
-3. Build an installer:
+3. 构建安装包：
 
    ```bash
    pnpm build
@@ -52,34 +48,40 @@ packager decides what it can do.
    pnpm --filter @workbench/desktop package:linux  # Linux
    ```
 
-The resulting `.dmg` / `.exe` / `.AppImage` is a dedicated desktop app for your
-`.opencode` profile.
+产出的 `.dmg` / `.exe` / `.AppImage` 就是针对你 `.opencode` 配置的专用桌面应用。
 
-## Brand it
+## 改品牌
 
-The shipped name is the placeholder **Workbench** (`com.workbench.app`). To
-rebrand for your product, change `appId` / `productName` in
-`apps/desktop/electron-builder.config.ts`, the app icon in
-`apps/desktop/build/`, and the sidebar label in
-`apps/desktop/src/renderer/components/sidebar/Sidebar.tsx`.
+默认名是占位符 **Workbench**（`com.workbench.app`）。要换成你的产品品牌，
+改 `apps/desktop/electron-builder.config.ts` 的 `appId` / `productName`、
+`apps/desktop/build/` 的图标、以及
+`apps/desktop/src/renderer/components/sidebar/Sidebar.tsx` 的侧栏标签。
 
-## Repository layout
+## 仓库结构
 
-| Path                    | Purpose                                                                                                                             |
-| ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `app-config/.opencode/` | The OpenCode profile the app bundles and deploys                                                                                    |
-| `apps/desktop/`         | Electron + React shell (`src/` frontend, `src/main/` main process)                                                                  |
-| `packages/sdk/`         | `OpenCodeClient` SDK wrapper (isolates the UI from the runtime)                                                                     |
-| `packages/shared/`      | Shared domain types and the chart design system                                                                                     |
-| `runtime/kernel/`       | Python and R kernel bridges                                                                                                         |
-| `scripts/dev/`          | Sidecar fetcher (opencode)                                                                                                          |
-| `relay/`                | **Standalone project** — relay server + admin UI (`admin/`), own pnpm workspace                                                     |
-| `client/`               | **Standalone project** — remote client (drive the desktop from a phone/another machine), own workspace with `sdk/`/`shared/` copies |
+| 路径                    | 用途                                                                                      |
+| ----------------------- | ----------------------------------------------------------------------------------------- |
+| `app-config/.opencode/` | 应用打包并部署的 OpenCode 配置（打包者所有）                                              |
+| `apps/desktop/`         | Electron + React 外壳（`src/` 前端，`src/main/` 主进程）                                  |
+| `packages/`             | `sdk`（运行时接入层）、`shared`（领域类型）、`browser-mcp`、`terminal`、`scheduler`、`ui` |
+| `relay/`                | **独立项目**——中继服务器 + 管理端（`admin/`），自建 pnpm workspace                        |
+| `client/`               | **独立项目**——远端客户端（手机/另一台电脑驱动桌面端），自持 `sdk/`/`shared/` 副本         |
+| `scripts/`              | sidecar 拉取、渠道构建、部署脚本                                                          |
+| `docs/`                 | 方案文档（日期命名）+ `architecture/`（架构现状系列）                                     |
 
-## Three projects (remote control)
+## 文档入口
 
-This repository contains **three independent projects** that talk to each
-other only over WebSocket/HTTP — no code imports across project boundaries:
+| 文档                                                  | 内容                                                                                                 |
+| ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| [`docs/architecture/`](./docs/architecture/README.md) | **架构现状系列**（以代码为准）：桌面壳、配置与安全、渲染层、远程、能力模块、工程底座、差异与风险清单 |
+| [`docs/`](./docs)                                     | 历史方案文档（设计意图与实施记录）                                                                   |
+| [`relay/README.md`](./relay/README.md)                | 中继部署与账号管理手册                                                                               |
+| [`AGENTS.md`](./AGENTS.md)                            | 项目约定：设计原则、工程规范、安全默认                                                               |
+
+## 三项目与远程控制
+
+本仓库包含**三个相互独立**的项目，彼此只通过 WebSocket/HTTP 通信，
+代码不跨项目 import：
 
 ```mermaid
 flowchart LR
@@ -91,7 +93,7 @@ flowchart LR
         RH -- "转发 HTTP 语义请求" --> SC
     end
     subgraph Relay["② relay 中继服务 · relay/"]
-        WS["WS 转发 + 账号/设备注册"]
+        WS["WS 转发 + 账号/设备注册 + 房间"]
         ADMIN["admin 管理端 /relayadmin"]
     end
     subgraph Client["③ client 远端客户端 · client/"]
@@ -104,126 +106,47 @@ flowchart LR
     ADMIN -. "HTTP (同端口)" .- WS
 ```
 
-Key properties:
+- **host** 持有 API key 与 sidecar 密码——每个远端请求由 host 重新鉴权，
+  密钥永不经过 relay。
+- **relay** 是纯内存转发器；只持久化账号注册表（token → 设备列表）。
+- **client** 拉取账号下设备（在线优先）、配对一台，随后经 relay 驱动会话、
+  流式与文件传输；另支持跨账号房间聊天与会话分享。
 
-- **host** owns the API keys and the sidecar password — every remote request
-  is re-authenticated by the host, and the secret never crosses the relay.
-- **relay** is a pure in-memory forwarder; only the account registry
-  (token → devices) is persisted.
-- **client** lists the account's devices (online first), pairs with one, then
-  drives sessions, streaming and file transfer through the relay.
+协议一份契约、三处副本需手动同步；完整机制与已知边界见
+[`docs/architecture/04-remote.md`](./docs/architecture/04-remote.md)。
 
-### Wire protocol
+## 架构速览
 
-One contract, three copies that must be kept in sync manually:
-`relay/src/protocol.ts` (authoritative), `client/src/protocol.ts`,
-`apps/desktop/src/main/relay-protocol.ts`.
+三个隔离的 Electron 进程（main / preload / renderer）加共享 workspace 包。
+依赖单向流动：renderer → preload（contextBridge）→ main → `packages/sdk` →
+opencode sidecar。主进程按「一文件一能力」拆分，由 `src/main/index.ts` 统一
+编排启停。
 
-```mermaid
-sequenceDiagram
-    participant C as client (guest)
-    participant R as relay
-    participant H as host
-    C->>R: list-devices (控制连接, 无 device)
-    R-->>C: device-list (在线优先)
-    C->>R: request { id, method, path, headers?, body? }
-    R->>H: 转发 request
-    H->>H: fetch 本地 sidecar (注入密码)
-    H-->>R: head { status, headers }
-    H-->>R: chunk* (流式 SSE/JSON)
-    H-->>R: done
-    R-->>C: 原样回传 head/chunk/done
-    Note over C,R: guest 断开 / 心跳超时
-    R->>H: cancel { id } → host abort 对应 fetch
-```
+| 主题         | 一句话                                                        | 详见                                                                    |
+| ------------ | ------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| 桌面壳与 IPC | 83 个 IPC 通道 + SSE 事件直连，sidecar 启动链路               | [01-desktop-shell](./docs/architecture/01-desktop-shell.md)             |
+| 配置与安全   | 镜像 → 用户覆盖 → patch → provider → MCP 注入；沙箱/权限/脱敏 | [02-config-and-security](./docs/architecture/02-config-and-security.md) |
+| 渲染层       | zustand 状态机 + 幂等折叠 + 富输出四通道                      | [03-renderer](./docs/architecture/03-renderer.md)                       |
+| 远程与房间   | relay/client/host 三方 + 连接稳定三层                         | [04-remote](./docs/architecture/04-remote.md)                           |
+| 能力模块     | 调度器、终端、kernel、浏览器 MCP、语音、预览                  | [05-capabilities](./docs/architecture/05-capabilities.md)               |
+| 工程底座     | 质量门禁、测试、版本约定、部署脚本                            | [06-engineering](./docs/architecture/06-engineering.md)                 |
 
-Additional messages: `file-write` upload (`POST /__relay/write-file` writes
-into the host workspace, then the prompt references the real path as an
-opencode `FilePartInput`), and per-session status via `GET /session/status`
-(`busy` / `idle` / `retry`) surfaced in both UIs.
+## 安全默认
 
-### Connection resilience
+- agent 只能访问当前工作区；sidecar 与 kernel 的执行可由 OS 级沙箱包装
+  （macOS seatbelt / Linux bwrap，策略只能收紧）。
+- 命令执行、文件删除、依赖安装、远程连接需审批（默认 review 模式）。
+- provider key 建议只存 app 私有配置（设置页），不要写进随包分发的 profile；
+  密钥永不进 provenance、日志、崩溃报告、git。
 
-```mermaid
-flowchart TD
-    A["relay 心跳 (30s ping/pong)"] -->|"超时 terminate + cancel"| B["host abort fetch<br/>(无连接泄漏)"]
-    C["client transport WS 断线"] --> D["指数退避重连 1s→30s<br/>重建 client + SSE"]
-    E["/event SSE 流意外断开"] --> F["SDK 自动重开<br/>1s→15s 退避"]
-    G["UI 提示"] --> H["离线横幅 + 列表/详情自动刷新"]
-```
+## 许可证
 
-See `docs/20260815-10-three-projects.md` for the full design and
-`docs/20260815-11-three-projects-readme.md` (zh) for the operational
-runbook (deploy, dev, known limits).
+[MIT](./LICENSE)。内置的第三方 skill 和连接器各有自己的许可。
 
-## Architecture
+## 致谢
 
-Three isolated Electron processes (main / preload / renderer) plus shared
-workspace packages. Dependencies flow one way: renderer -> preload
-(contextBridge allowlist) -> main -> `packages/sdk` -> runtime. The main
-process is split into one-file-per-capability, each owning its state and
-started/stopped from `src/main/index.ts`.
+本项目借鉴了 [Open Science](https://github.com/ai4s-research/open-science) 和
+[OpenCode](https://github.com/anomalyco/opencode) 的设计思路，但与两个项目无直接关联。
 
-### Base app (the shell itself)
-
-The desktop shell cannot run without these:
-
-| Module       | Path                                                                                                | Role                                                          |
-| ------------ | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
-| Lifecycle    | `apps/desktop/src/main/index.ts`                                                                    | `app.whenReady` / `before-quit` orchestration                 |
-| Channels     | `apps/desktop/src/main/constants.ts`                                                                | dev/beta/prod naming and IDs                                  |
-| Windows      | `apps/desktop/src/main/windows.ts`                                                                  | main window + state persistence                               |
-| IPC registry | `apps/desktop/src/main/ipc.ts`                                                                      | all `ipcMain.handle` registrations                            |
-| KV store     | `apps/desktop/src/main/store.ts`                                                                    | electron-store with scoped cache                              |
-| Logging      | `apps/desktop/src/main/logging.ts`                                                                  | unified logs and export                                       |
-| Shell env    | `apps/desktop/src/main/shell_env.ts`                                                                | shell/tool detection, PATH                                    |
-| Updater      | `apps/desktop/src/main/updater.ts`                                                                  | electron-updater                                              |
-| Preload      | `apps/desktop/src/preload/index.ts`                                                                 | contextBridge allowlist                                       |
-| SDK          | `packages/sdk`                                                                                      | sole boundary to the agent runtime (`AgentRuntime` + factory) |
-| Shared types | `packages/shared`                                                                                   | domain types shared by main + renderer                        |
-| Shell UI     | `apps/desktop/src/renderer/{app,components/{sidebar,thread,inspector,command-palette,settings,ui}}` | layout, routing, shell components                             |
-
-### Capability modules (removable)
-
-Each is an independent capability wired in via `ipc.ts` blocks and
-started/stopped from `index.ts`:
-
-| Module          | Main file                        | Package                | Capability                                                                     |
-| --------------- | -------------------------------- | ---------------------- | ------------------------------------------------------------------------------ |
-| Sidecar runtime | `src/main/server.ts`             | `packages/sdk`         | spawn `opencode serve`, deploy profile, multi-backend (opencode / claude-code) |
-| Workspace files | `src/main/artifact_file.ts`      | -                      | file IO, artifact resolve, dir listing                                         |
-| Code kernel     | `src/main/kernel.ts`             | -                      | Python/R subprocess execution                                                  |
-| Terminal        | `src/main/terminal.ts`           | `packages/terminal`    | node-pty sessions (xterm front-end)                                            |
-| Scheduler       | `src/main/scheduler.ts`          | `packages/scheduler`   | CronEngine + internal HTTP API + MCP bridge                                    |
-| Provenance      | `src/main/provenance.ts`         | -                      | JSONL provenance + env lockfile                                                |
-| Preview server  | `src/main/preview_server.ts`     | -                      | local static file HTTP server (token auth)                                     |
-| Web fetch       | `src/main/browser.ts`            | -                      | HTTP fetch + HTML-to-text                                                      |
-| Browser MCP     | `src/main/browser-mcp-server.ts` | `packages/browser-mcp` | standalone MCP server + preload/panel                                          |
-
-### Packager profile (not app code)
-
-`app-config/.opencode/` and `app-config/.claude/` are packager-owned and
-deployed to the app-private config dir on every startup
-(`server.ts:deployBundledProfile()`). The app ships no skill/agent/command at
-runtime - swap the profile to get a different product.
-
-## Safety defaults
-
-- The agent may only access the current workspace.
-- Command execution, file deletion, dependency installs, and remote connections
-  require approval (manual approval mode by default — never ship `full`).
-- Provider keys live in the app-private config dir (owner-only); never in
-  provenance, logs, crash reports, git, or exports.
-
-## License
-
-[MIT](./LICENSE). Bundled third-party skills and connectors carry their own
-licenses.
-
-## Acknowledgements
-
-This project draws inspiration from [Open Science](https://github.com/ai4s-research/open-science)
-and [OpenCode](https://github.com/anomalyco/opencode), but is not affiliated
-with or endorsed by either project.
-
-> This is beta tooling. Verify outputs before relying on them.
+> 这是 beta 工具。依赖其输出前请自行验证；文档与代码的已知差异见
+> [`docs/architecture/07-doc-code-gaps.md`](./docs/architecture/07-doc-code-gaps.md)。

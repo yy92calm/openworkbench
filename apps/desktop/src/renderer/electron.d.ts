@@ -1,3 +1,15 @@
+import type {
+  MacroBoard,
+  MacroDashboardSnapshot,
+  MacroIndustryDetail,
+  MacroKlinePoint,
+  MacroNotification,
+  MacroReportMeta,
+  MacroThemeId,
+  ResearchDecision,
+  SandboxStatus,
+} from '@workbench/shared';
+
 export interface ElectronAPI {
   channelName: () => Promise<string>;
   appIdentifier: () => Promise<string>;
@@ -8,6 +20,9 @@ export interface ElectronAPI {
   runtimePassword: () => Promise<string>;
   stopRuntime: () => Promise<void>;
   serverUrl: () => Promise<string | null>;
+  /** Sandbox enforcement status (platform / mode / effective) from the main
+   *  process. */
+  sandboxStatus: () => Promise<SandboxStatus>;
 
   workspacePath: () => Promise<string>;
   workspaceBase: () => Promise<string>;
@@ -52,6 +67,14 @@ export interface ElectronAPI {
   listProvenance: (path: string) => Promise<unknown[]>;
   readEnvLockfile: (hash: string) => Promise<string>;
 
+  /** Persist a compaction-boundary transcript snapshot for audit. */
+  writeCompactionSnapshot: (payload: {
+    sessionId: string;
+    historyVersion: number;
+    triggeredAt: string;
+    messages: unknown[];
+  }) => Promise<string | null>;
+
   previewUrl: (rel: string, root?: string) => Promise<string | null>;
 
   detectTools: () => Promise<{ name: string; found: boolean; version: string | null }[]>;
@@ -68,12 +91,17 @@ export interface ElectronAPI {
 
   profileManifest: () => Promise<unknown | null>;
   profileInteraction: () => Promise<unknown>;
+  profileExplainConfig: () => Promise<unknown>;
   profileValidatePatch: (
     raw: string,
   ) => Promise<
-    { ok: true; ops: number } | { ok: false; rejection: { kind: string; detail: string } }
+    | { ok: true; ops: number; baseHash: string }
+    | { ok: false; rejection: { kind: string; detail: string } }
   >;
-  profileWritePatch: (raw: string) => Promise<{ ok: boolean; error?: string }>;
+  profileWritePatch: (
+    raw: string,
+    expectedBaseHash?: string,
+  ) => Promise<{ ok: boolean; error?: string; stale?: boolean }>;
 
   /** Remote relay (host side). */
   relayStatus: () => Promise<{
@@ -142,6 +170,53 @@ export interface ElectronAPI {
   schedulerHistory: (taskId?: string, limit?: number) => Promise<unknown[]>;
   schedulerDeleteExecution: (id: string) => Promise<void>;
   schedulerClearHistory: (taskId?: string) => Promise<void>;
+
+  /** Macro insights (宏观洞察): reads return the cached snapshot immediately. */
+  macroDashboard: (opts?: { force?: boolean }) => Promise<MacroDashboardSnapshot>;
+  macroSeries: (secid: string, days?: number) => Promise<MacroKlinePoint[]>;
+  macroNotifications: () => Promise<{ items: MacroNotification[]; unread: number }>;
+  macroNotificationsRead: (id?: string) => Promise<{ items: MacroNotification[]; unread: number }>;
+  onMacroDashboard: (callback: (snapshot: MacroDashboardSnapshot) => void) => () => void;
+  onMacroNotification: (callback: (notification: MacroNotification) => void) => () => void;
+
+  /** Industry model: on-demand board detail. */
+  macroIndustry: (board: MacroBoard) => Promise<MacroIndustryDetail | null>;
+  /** Research loop: decision ledger + knowledge digest. */
+  researchDecisions: () => Promise<ResearchDecision[]>;
+  researchAddDecision: (input: {
+    model: 'rotation' | 'industry';
+    target: string;
+    stance: 'overweight' | 'neutral' | 'underweight' | 'watch';
+    thesis: string;
+    sessionId?: string;
+  }) => Promise<ResearchDecision>;
+  researchAttribute: (
+    id: string,
+    outcome: 'hit' | 'partial' | 'miss',
+    note: string,
+  ) => Promise<ResearchDecision | null>;
+  researchUpdateDecision: (
+    id: string,
+    patch: {
+      target?: string;
+      stance?: 'overweight' | 'neutral' | 'underweight' | 'watch';
+      thesis?: string;
+    },
+  ) => Promise<ResearchDecision | null>;
+  researchDeleteDecision: (id: string) => Promise<boolean>;
+  researchExport: () => Promise<{ path: string; count: number } | null>;
+  researchDigest: () => Promise<string | null>;
+  /** Leadership report markdown; returns the workspace-relative path written. */
+  macroExportReport: (markdown: string) => Promise<{ path: string } | null>;
+
+  /** Background-generated reports: latest per theme + body reads. */
+  macroReports: () => Promise<MacroReportMeta[]>;
+  macroReportRead: (file: string) => Promise<{ file: string; markdown: string } | null>;
+  /** Re-run a theme's background task; resolves immediately (fire and forget). */
+  macroRegenerate: (
+    themeId: MacroThemeId,
+  ) => Promise<{ ok: true; taskId: string } | { ok: false; reason: string }>;
+  onMacroReports: (callback: () => void) => () => void;
 
   /** Fetch page content from a URL (browser service). */
   browserFetch: (url: string) => Promise<string | null>;

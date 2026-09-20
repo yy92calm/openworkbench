@@ -23,6 +23,7 @@ vi.mock('@/lib/tauri', () => ({
   },
   newDatedWorkspace: async (name: string) => `/ws/${name}`,
   pickFolder: async () => mocks.pickedFolder,
+  sandboxStatus: async () => null,
 }));
 vi.mock('@/lib/kernel', () => ({ kernelReset: async () => {} }));
 // switchWorkspace reconnects after a pick — give it a client that connects instantly.

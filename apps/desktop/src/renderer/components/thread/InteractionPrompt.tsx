@@ -267,6 +267,12 @@ function PermissionCard({
   origin?: string;
   onReply: (requestId: string, reply: PermissionReply) => void;
 }) {
+  // Advisory defense (Codex's protected-path carve-out): a write that touches
+  // the agent's own instruction/config surface can rewrite the safety policy
+  // itself. OpenCode enforces no hard boundary here, so at minimum flag it.
+  const hitsProtectedPath = permission.resources.some((r) =>
+    /(^|[/\\])(\.opencode|\.git)([/\\]|$)|(^|[/\\])AGENTS\.md$/.test(r),
+  );
   return (
     <PromptShelf
       icon={<ShieldQuestion size={15} className="text-warn" />}
@@ -301,6 +307,12 @@ function PermissionCard({
         </>
       }
     >
+      {hitsProtectedPath && (
+        <div className="mb-2 rounded-input border border-warn/50 bg-warn/10 px-3 py-2 text-xs text-warn">
+          警告：目标包含安全敏感路径（.opencode / .git / AGENTS.md）。允许写入等同于允许 agent
+          改写自身的权限与指令配置，请确认这是你的本意。
+        </div>
+      )}
       {permission.resources.length > 0 && (
         <pre className="max-h-40 overflow-auto whitespace-pre-wrap rounded-input border border-border bg-surface-2 px-3 py-2 font-mono text-[12px] text-text">
           {permission.resources.join('\n')}

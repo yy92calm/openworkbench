@@ -12,7 +12,10 @@ export function Toaster() {
       {toasts.map((t) => (
         <button
           key={t.id}
-          onClick={() => dismiss(t.id)}
+          onClick={() => {
+            t.onClick?.();
+            dismiss(t.id);
+          }}
           className={cn(
             'pointer-events-auto flex max-w-[70vw] items-center gap-2 rounded-card border px-3.5 py-2 text-sm shadow-card',
             t.tone === 'success'

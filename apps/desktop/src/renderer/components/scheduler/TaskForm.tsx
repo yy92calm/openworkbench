@@ -41,6 +41,9 @@ export function TaskForm({ task, agents, onSave, onUpdate, onCancel }: Props) {
   const [agent, setAgent] = useState(task?.agent ?? '');
   const [model, setModel] = useState(task?.model ?? '');
   const [tags, setTags] = useState(task?.tags?.join(', ') ?? '');
+  const [maxRunsPerDay, setMaxRunsPerDay] = useState(
+    task?.maxRunsPerDay != null ? String(task.maxRunsPerDay) : '',
+  );
   const [cronError, setCronError] = useState('');
 
   useEffect(() => {
@@ -73,12 +76,18 @@ export function TaskForm({ task, agents, onSave, onUpdate, onCancel }: Props) {
     }
     if (!name.trim() || !prompt.trim()) return;
 
+    const parsedLimit = maxRunsPerDay.trim() === '' ? undefined : Number(maxRunsPerDay);
+
     const input: CreateTaskInput = {
       name: name.trim(),
       cron: cron.trim(),
       prompt: prompt.trim(),
       agent: agent.trim() || undefined,
       model: model.trim() || undefined,
+      maxRunsPerDay:
+        parsedLimit !== undefined && Number.isFinite(parsedLimit) && parsedLimit > 0
+          ? parsedLimit
+          : undefined,
       tags: tags.trim()
         ? tags
             .split(',')
@@ -193,6 +202,23 @@ export function TaskForm({ task, agents, onSave, onUpdate, onCancel }: Props) {
               onChange={(e) => setTags(e.target.value)}
               placeholder="市场, 日报"
             />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-muted mb-1">
+              每日最大运行次数（可选，0/留空 = 不限）
+            </label>
+            <input
+              type="number"
+              min={0}
+              className="w-full rounded-input border border-border bg-bg px-3 py-1.5 text-sm text-text placeholder:text-muted focus:outline-none focus:border-accent"
+              value={maxRunsPerDay}
+              onChange={(e) => setMaxRunsPerDay(e.target.value)}
+              placeholder="留空则不限制"
+            />
+            <div className="mt-1 text-xs text-muted">
+              超过限额后当日不再执行（记录为「已跳过」），防止无人值守任务失控。
+            </div>
           </div>
         </div>
 

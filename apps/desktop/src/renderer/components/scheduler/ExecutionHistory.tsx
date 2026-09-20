@@ -13,6 +13,7 @@ const STATUS_MAP: Record<string, { label: string; className: string }> = {
   completed: { label: '已完成', className: 'text-ok' },
   failed: { label: '失败', className: 'text-error' },
   timeout: { label: '超时', className: 'text-warn' },
+  skipped: { label: '已跳过', className: 'text-muted' },
 };
 
 function formatDuration(ms: number | undefined): string {

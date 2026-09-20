@@ -1,6 +1,7 @@
 # Workbench relay — 部署与使用
 
 简体中文。中继服务器 + 远程客户端让手机/另一台电脑经公网连接桌面端 Workbench。
+代码现状（角色/协议/房间机制）见 [`docs/architecture/04-remote.md`](../docs/architecture/04-remote.md)。
 
 > 独立项目：本仓库有**三个相互独立**的项目，只通过服务接口
 > （WebSocket/HTTP）连接，代码互不 import：
@@ -122,7 +123,7 @@ cd relay && pnpm install
 pnpm --filter @workbench/relay test
 
 # 本机端到端：relay + mock sidecar + OpenCodeClient（见仓库根 relay/）
-cd relay && pnpm tsx e2e-account.mjs   # 已由 vitest 覆盖
+cd relay && pnpm tsx e2e-account.ts   # 已由 vitest 覆盖
 
 # 构建管理界面（产物 → relay/admin-web）
 cd relay/admin && pnpm build

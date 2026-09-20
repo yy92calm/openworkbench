@@ -39,6 +39,7 @@ vi.mock('./tauri', () => ({
   setWorkspace: mocks.setWorkspace,
   newDatedWorkspace: mocks.newDatedWorkspace,
   runtimePassword: async () => 'pw-test',
+  sandboxStatus: async () => null,
 }));
 vi.mock('./kernel', () => ({ kernelReset: mocks.kernelReset }));
 vi.mock('@workbench/sdk', () => {

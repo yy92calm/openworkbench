@@ -49,6 +49,9 @@
   --warn: #d97706;
   --ok: #16a34a;
   --error: #dc2626;
+  /* A-share convention: red = up, green = down */
+  --rise: #dc2626;
+  --fall: #16a34a;
   /* Chat bubble tokens */
   --chat-user-bg: #f0f0f0;
   --chat-user-border: #e5e5e5;
@@ -92,6 +95,9 @@
   --warn: #c07000;
   --ok: #3d8c40;
   --error: #c53030;
+  /* A-share convention: red = up, green = down */
+  --rise: #c53030;
+  --fall: #3d8c40;
   /* Chat bubble tokens */
   --chat-user-bg: #f5f0ea;
   --chat-user-border: #e8e0d8;
@@ -135,6 +141,9 @@
   --warn: #d97706;
   --ok: #059669;
   --error: #dc2626;
+  /* A-share convention: red = up, green = down */
+  --rise: #dc2626;
+  --fall: #059669;
   /* Chat bubble tokens */
   --chat-user-bg: #eef2f8;
   --chat-user-border: #dde3ec;
@@ -178,6 +187,9 @@
   --warn: #f59e0b;
   --ok: #22c55e;
   --error: #ef4444;
+  /* A-share convention: red = up, green = down */
+  --rise: #ef4444;
+  --fall: #22c55e;
   /* Chat bubble tokens */
   --chat-user-bg: #242424;
   --chat-user-border: #2e2e2e;
@@ -221,6 +233,9 @@
   --warn: #f59e0b;
   --ok: #22c55e;
   --error: #ef4444;
+  /* A-share convention: red = up, green = down */
+  --rise: #ef4444;
+  --fall: #22c55e;
   /* Chat bubble tokens */
   --chat-user-bg: #1c1c1c;
   --chat-user-border: #2a2a2a;
@@ -441,4 +456,49 @@ body {
 }
 .hljs-strong {
   font-weight: bold;
+}
+
+/* ── Print (宏观洞察汇报) ─────────────────────────────────────────────────────
+   window.print() prints the whole web contents; this keeps only the marked
+   page root visible and relaxes the app shell's fixed-height clipping so the
+   dashboard paginates. Interactive controls never print. */
+@media print {
+  html,
+  body {
+    height: auto !important;
+    overflow: visible !important;
+    background: #fff !important;
+  }
+  body * {
+    visibility: hidden !important;
+    box-shadow: none !important;
+  }
+  [data-print-root],
+  [data-print-root] * {
+    visibility: visible !important;
+  }
+  [data-print-root] {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+  [data-print-root] .overflow-y-auto,
+  [data-print-root] .overflow-x-auto {
+    overflow: visible !important;
+    max-height: none !important;
+  }
+  [data-print-root] button,
+  [data-print-root] input {
+    display: none !important;
+  }
+  .layout-container {
+    height: auto !important;
+    overflow: visible !important;
+  }
+  .print-hide {
+    display: none !important;
+  }
 }

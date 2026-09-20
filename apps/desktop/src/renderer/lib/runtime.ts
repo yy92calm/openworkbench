@@ -17,9 +17,11 @@ import {
   type SkillInfo,
   type ToolCallStatus,
 } from '@workbench/sdk';
-import type { ArtifactBlock, RuntimeStatus, ThreadBlock } from '@workbench/shared';
+import type { ArtifactBlock, RuntimeStatus, SandboxStatus, ThreadBlock } from '@workbench/shared';
 import { create } from 'zustand';
 
+import { a2uiEngine, historyA2uiPartKey } from './a2ui/engine';
+import { extractA2ui } from './a2ui/parser';
 import { deriveArtifact } from './artifacts';
 import { kernelReset } from './kernel';
 import { provenanceInputFromEvent, recordProvenance } from './provenance';
@@ -30,6 +32,7 @@ import {
   logDebug,
   newDatedWorkspace,
   runtimePassword,
+  sandboxStatus,
   setWorkspace,
   startRuntime,
   type ToolStatus,
@@ -107,6 +110,9 @@ interface RuntimeState {
   panes: Record<string, PaneState>;
   /** Active permission mode preset. */
   permissionMode: PermissionMode;
+  /** Sandbox enforcement status from the main process (platform / mode /
+   *  effective). Null until the first refresh succeeds. */
+  sandbox: SandboxStatus | null;
   openArtifact: (a: ArtifactBlock) => void;
   closeArtifact: () => void;
   setShowFiles: (show: boolean) => void;
@@ -118,6 +124,7 @@ interface RuntimeState {
   replyPermission: (requestId: string, reply: PermissionReply) => Promise<void>;
   setPermissionMode: (mode: PermissionMode) => Promise<void>;
   setServerUrl: (url: string) => void;
+  refreshSandbox: () => Promise<void>;
   loadCatalog: () => Promise<void>;
   loadMcpServers: () => Promise<void>;
   toggleMcpServer: (name: string, enabled: boolean) => Promise<void>;
@@ -189,6 +196,10 @@ async function withRetry<T>(fn: () => Promise<T>): Promise<T> {
 }
 /** Tool calls already written to provenance — success events can repeat per callId. */
 const recordedProvenance = new Set<string>();
+
+/** Per-session compaction counter — the sidecar emits `session.compacted` with
+ *  no version number, so the app tracks its own for snapshot filenames. */
+const compactionVersions = new Map<string, number>();
 
 /** Sessions the user just interrupted: the thread already shows "Interrupted",
  *  so the abort's own trailing events (an "aborted" error, session.idle) must
@@ -420,9 +431,13 @@ export const CONFIG_PROMPT_PREFIX = `你正在帮助用户修改本应用的 Ope
 /** Send a turn that translates natural-language config requests into a
  *  structured patch. Runs in the current session (shared history); the reply
  *  is expected to carry a `workbench:config-patch` fence the UI will extract
- *  and validate before it is ever written. Returns the session id or null. */
+ *  and validate before it is ever written. The user request is wrapped in a
+ *  recognizable marker so injected config turns stay distinguishable from
+ *  organic user input when replaying history (soft convention, display-only).
+ *  Returns the session id or null. */
 export function sendConfigPrompt(text: string): Promise<string | null> {
-  return useRuntimeStore.getState().sendPrompt(`${CONFIG_PROMPT_PREFIX}\n\n${text}`);
+  const marked = `<workbench:config-request>\n${text}\n</workbench:config-request>`;
+  return useRuntimeStore.getState().sendPrompt(`${CONFIG_PROMPT_PREFIX}\n\n${marked}`);
 }
 
 export const useRuntimeStore = create<RuntimeState>((set, get) => ({
@@ -452,6 +467,7 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
   runningSessions: {},
   shellTurns: {},
   permissionMode: 'auto',
+  sandbox: null,
 
   // All three write the CURRENT session's pane (DRAFT_KEY on a draft), keeping
   // the artifact inspector and the Files browser mutually exclusive.
@@ -625,6 +641,12 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
   setServerUrl: (serverUrl) => {
     if (typeof window !== 'undefined') window.localStorage.setItem(URL_KEY, serverUrl);
     set({ serverUrl });
+  },
+
+  // Query the main process once per connection (the sidecar restart that a
+  // workspace switch triggers re-wraps spawns, so connect() re-fetches).
+  refreshSandbox: async () => {
+    set({ sandbox: (await sandboxStatus()) ?? null });
   },
 
   loadCatalog: async () => {
@@ -902,9 +924,39 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
             ),
           }));
           return;
+        case 'session.compacted':
+          // Audit trail: snapshot the transcript at each compaction boundary so
+          // the pre-compaction evidence survives (the sidecar only rewrites the
+          // model's history). Fire-and-forget — never block or fail the turn.
+          void (async () => {
+            if (!client) return;
+            const sid = event.sessionId;
+            if (!sid) return;
+            const historyVersion = (compactionVersions.get(sid) ?? 0) + 1;
+            compactionVersions.set(sid, historyVersion);
+            try {
+              const messages = await client.getMessages(sid);
+              await window.electronAPI.writeCompactionSnapshot({
+                sessionId: sid,
+                historyVersion,
+                triggeredAt: new Date().toISOString(),
+                messages,
+              });
+            } catch (err) {
+              void logDebug(
+                `compaction snapshot FAILED: ${err instanceof Error ? err.message : String(err)}`,
+              );
+            }
+          })();
+          break;
       }
       const sid = event.sessionId;
       if (!sid) return;
+      // A2UI: feed the engine before folding so a block's surfaces are
+      // claimed (and mountable) by the time React renders the block.
+      if (event.type === 'text.updated') {
+        a2uiEngine.feedText(sid, event.partId, event.text);
+      }
       // The idle after a user interrupt: the thread already ends with
       // "Interrupted" — consume the guard, keep the locks clear, skip the fold.
       if (event.type === 'session.idle' && interruptedSessions.delete(sid)) {
@@ -985,6 +1037,9 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
       set({ error: null });
       await get().refreshSessions();
       void get().refreshRemoteSessions();
+      // Sandbox status refreshes with every (re)connect — a workspace switch
+      // restarts the sidecar, and its spawn wrap decides enforcement.
+      void get().refreshSandbox();
       // Catalog (skills/agents/commands) fills in behind the page — a session
       // switch must not wait on it to show the conversation.
       void get().loadCatalog();
@@ -1218,6 +1273,9 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
     if (get().threads[id]?.loaded) return;
     try {
       const messages = await client.getMessages(id);
+      // Feed the A2UI engine before the thread commits so its surface claims
+      // are in place when historyToThread blocks first render.
+      a2uiEngine.ingestHistory(id, messages);
       set((s) => ({
         threads: {
           ...s.threads,
@@ -1303,6 +1361,9 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
     for (const sid of running) {
       try {
         const messages = await c.getMessages(sid);
+        // A2UI: keep the engine in step with the fresh history — feeding is
+        // exactly-once per part, so parts already fed live are skipped.
+        a2uiEngine.ingestHistory(sid, messages);
         // Still ours to answer for? The lock may have cleared while we fetched.
         if (!turnIsOver(messages) || !get().runningSessions[sid]) continue;
         void logDebug(`reconcile: missed idle for ${sid} — unlocking`);
@@ -1351,6 +1412,7 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
         currentId: s.currentId === id ? null : s.currentId,
       };
     });
+    a2uiEngine.dropSession(id);
   },
 
   hideExample: (id) => {
@@ -1472,9 +1534,18 @@ export function foldEvent(
   switch (event.type) {
     case 'text.updated': {
       const key = `text:${event.partId}`;
-      if (key in index) blocks[index[key]] = { kind: 'agent', markdown: event.text };
+      // A2UI fences never reach the markdown view — the JSON is consumed by
+      // the A2UI engine (fed separately, in applyEvent) and surfaces render
+      // as their own cards under this block. The part key rides along only
+      // when a fence is present (fence-less parts never own surfaces).
+      const parsed = extractA2ui(event.text);
+      const block: ThreadBlock =
+        parsed.markdown === event.text
+          ? { kind: 'agent', markdown: event.text }
+          : { kind: 'agent', markdown: parsed.markdown, a2uiPartKey: event.partId };
+      if (key in index) blocks[index[key]] = block;
       else {
-        blocks.push({ kind: 'agent', markdown: event.text });
+        blocks.push(block);
         index[key] = blocks.length - 1;
       }
       return { blocks, index, consecutiveTools: 0 };
@@ -1607,7 +1678,8 @@ export function historyToThread(messages: HistoryMessage[], commands?: CommandIn
   // tool part on the next assistant message. Render it like the live path:
   // the "! cmd" echo and the output inline — never the synthetic marker text.
   let shellTurn = false;
-  for (const m of messages) {
+  for (let mi = 0; mi < messages.length; mi++) {
+    const m = messages[mi];
     if (m.role === 'user') {
       shellTurn = m.parts.some((p) => p.type === 'text' && p.synthetic);
       if (shellTurn) continue;
@@ -1642,11 +1714,18 @@ export function historyToThread(messages: HistoryMessage[], commands?: CommandIn
           ...(remote ? { remote: true } : {}),
         });
     } else {
-      for (const p of m.parts) {
+      for (let pi = 0; pi < m.parts.length; pi++) {
+        const p = m.parts[pi];
         if (p.type === 'text' && p.text?.trim()) {
+          // A2UI fences are extracted the same way the live path does it;
+          // the synthetic key (present only when a fence exists) matches what
+          // the engine's history ingest feeds under, so surfaces remount on
+          // this block after a reload.
+          const parsed = extractA2ui(p.text);
           blocks.push({
             kind: 'agent',
-            markdown: p.text,
+            markdown: parsed.markdown,
+            ...(parsed.markdown === p.text ? {} : { a2uiPartKey: historyA2uiPartKey(mi, pi) }),
             ...(m.completed ? { timestamp: m.completed } : {}),
           });
         } else if (p.type === 'reasoning' && p.text?.trim()) {

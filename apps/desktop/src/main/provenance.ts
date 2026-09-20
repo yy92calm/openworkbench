@@ -1,10 +1,13 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { redactSensitive } from './redact';
 import { workspaceDir } from './server';
 
 const PROVENANCE_DIR = '.workbench';
 const PROVENANCE_FILE = 'provenance.jsonl';
+
+export { redactSensitive };
 
 function provenancePath(): string {
   const dir = join(workspaceDir(), PROVENANCE_DIR);
@@ -24,8 +27,8 @@ export function recordProvenance(
     sessionId,
     callId,
     tool,
-    input,
-    output,
+    input: redactSensitive(input),
+    output: redactSensitive(output),
     model,
     timestamp: new Date().toISOString(),
   };

@@ -3,9 +3,12 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
 import { join } from 'node:path';
 
+import type { MacroThemeId } from '@workbench/shared';
+import { buildMacroPrompt } from '@workbench/shared';
 import { Cron } from 'croner';
 
 import { getLogger } from './logging';
+import { shouldSkipDueToDailyLimit } from './schedulerGuards';
 import { getStore } from './store';
 
 const STORE_SCOPE = 'workbench.scheduler';
@@ -23,6 +26,10 @@ export interface ScheduledTask {
   lastRunAt?: string;
   nextRunAt?: string;
   tags?: string[];
+  /** Optional budget guard: skip firing once today's run count reaches this. */
+  maxRunsPerDay?: number;
+  /** Macro insight task: the fire path rebuilds the prompt from live data. */
+  macroTheme?: MacroThemeId;
 }
 
 export interface CreateTaskInput {
@@ -32,6 +39,8 @@ export interface CreateTaskInput {
   agent?: string;
   model?: string;
   tags?: string[];
+  maxRunsPerDay?: number;
+  macroTheme?: MacroThemeId;
 }
 
 export interface UpdateTaskInput {
@@ -41,6 +50,8 @@ export interface UpdateTaskInput {
   agent?: string;
   model?: string;
   tags?: string[];
+  maxRunsPerDay?: number;
+  macroTheme?: MacroThemeId;
 }
 
 export interface ExecutionRecord {
@@ -48,7 +59,7 @@ export interface ExecutionRecord {
   taskId: string;
   taskName: string;
   triggeredAt: string;
-  status: 'running' | 'completed' | 'failed' | 'timeout';
+  status: 'running' | 'completed' | 'failed' | 'timeout' | 'skipped';
   sessionId?: string;
   error?: string;
   durationMs?: number;
@@ -159,6 +170,11 @@ export class CronEngine {
     this.onFire = cb;
   }
 
+  /** True once the runtime connected and the fire callback is wired. */
+  canFire(): boolean {
+    return this.onFire !== null;
+  }
+
   start(): void {
     const tasks = this.listTasks().filter((t) => t.enabled);
     for (const task of tasks) {
@@ -179,7 +195,35 @@ export class CronEngine {
   }
 
   addTask(input: CreateTaskInput): ScheduledTask {
-    const log = getLogger();
+    const task = this.buildTask(input);
+    const tasks = this.listTasks();
+    tasks.push(task);
+    this.saveTasks(tasks);
+
+    this.scheduleOne(task);
+    getLogger().info(`[scheduler] task created: ${task.name} (${task.id})`);
+    return task;
+  }
+
+  /**
+   * Create the task only when no task for the same macro theme exists.
+   * Does not schedule: persisted tasks are scheduled by start() when the
+   * runtime connects; provisioning happens before that on purpose.
+   */
+  ensureTask(input: CreateTaskInput): ScheduledTask {
+    if (input.macroTheme) {
+      const existing = this.listTasks().find((t) => t.macroTheme === input.macroTheme);
+      if (existing) return existing;
+    }
+    const task = this.buildTask(input);
+    const tasks = this.listTasks();
+    tasks.push(task);
+    this.saveTasks(tasks);
+    getLogger().info(`[scheduler] task ensured: ${task.name} (${task.id})`);
+    return task;
+  }
+
+  private buildTask(input: CreateTaskInput): ScheduledTask {
     const now = new Date().toISOString();
     const task: ScheduledTask = {
       id: randomUUID(),
@@ -192,6 +236,8 @@ export class CronEngine {
       createdAt: now,
       updatedAt: now,
       tags: input.tags,
+      maxRunsPerDay: input.maxRunsPerDay,
+      macroTheme: input.macroTheme,
     };
 
     // Validate cron expression and compute next run
@@ -201,18 +247,12 @@ export class CronEngine {
       task.nextRunAt = next?.toISOString() ?? undefined;
       cron.stop(); // don't keep this instance — scheduleOne creates the real one
     } catch (err) {
-      log.error(
+      getLogger().error(
         `[scheduler] invalid cron expression "${input.cron}": ${err instanceof Error ? err.message : String(err)}`,
       );
       throw new Error(`Invalid cron expression: ${input.cron}`);
     }
 
-    const tasks = this.listTasks();
-    tasks.push(task);
-    this.saveTasks(tasks);
-
-    this.scheduleOne(task);
-    log.info(`[scheduler] task created: ${task.name} (${task.id})`);
     return task;
   }
 
@@ -234,6 +274,8 @@ export class CronEngine {
     if (patch.agent !== undefined) task.agent = patch.agent;
     if (patch.model !== undefined) task.model = patch.model;
     if (patch.tags !== undefined) task.tags = patch.tags;
+    if (patch.maxRunsPerDay !== undefined) task.maxRunsPerDay = patch.maxRunsPerDay;
+    if (patch.macroTheme !== undefined) task.macroTheme = patch.macroTheme;
     task.updatedAt = new Date().toISOString();
 
     try {
@@ -351,6 +393,9 @@ export class CronEngine {
   }
 
   private scheduleOne(task: ScheduledTask): void {
+    // Idempotent: start() may see tasks that addTask/ensureTask already knew
+    // about; doubling a job would fire the same task twice.
+    this.unscheduleOne(task.id);
     try {
       const cron = new Cron(task.cron, async () => {
         const log = getLogger();
@@ -384,6 +429,25 @@ export class CronEngine {
       triggeredAt: new Date().toISOString(),
       status: 'running',
     };
+
+    // Budget guard: an unattended task that hits its daily limit must not fire
+    // (avoids runaway token/cost loops on a mis-configured cron).
+    if (
+      shouldSkipDueToDailyLimit(
+        { taskId: task.id, maxRunsPerDay: task.maxRunsPerDay },
+        this.getHistory(task.id, 200),
+      )
+    ) {
+      record.status = 'skipped';
+      record.error = 'daily run limit reached';
+      record.durationMs = 0;
+      record.completedAt = new Date().toISOString();
+      this.saveExecution(record);
+      this.updateExecution(record.id, record);
+      this.touchTaskRun(task.id, record.triggeredAt);
+      return record;
+    }
+
     this.saveExecution(record);
 
     const startedAt = Date.now();
@@ -399,24 +463,78 @@ export class CronEngine {
     record.completedAt = new Date().toISOString();
     this.updateExecution(record.id, record);
 
-    const tasks = this.listTasks();
-    const idx = tasks.findIndex((t) => t.id === task.id);
-    if (idx !== -1) {
-      tasks[idx].lastRunAt = record.triggeredAt;
-      try {
-        const next = new Cron(task.cron).nextRun();
-        tasks[idx].nextRunAt = next?.toISOString() ?? undefined;
-      } catch {
-        /* keep existing */
-      }
-      this.saveTasks(tasks);
-    }
+    this.touchTaskRun(task.id, record.triggeredAt);
 
     return record;
+  }
+
+  /** Refresh a task's lastRunAt/nextRunAt after an execution attempt. */
+  private touchTaskRun(taskId: string, triggeredAt: string): void {
+    const tasks = this.listTasks();
+    const idx = tasks.findIndex((t) => t.id === taskId);
+    if (idx === -1) return;
+    tasks[idx].lastRunAt = triggeredAt;
+    try {
+      const next = new Cron(tasks[idx].cron).nextRun();
+      tasks[idx].nextRunAt = next?.toISOString() ?? undefined;
+    } catch {
+      /* keep existing */
+    }
+    this.saveTasks(tasks);
   }
 }
 
 export const cronEngine = new CronEngine();
+
+// ── Default macro insight tasks (provisioned once, then user-managed) ────
+
+/** Daily before the open, weekly on Monday morning, review after Friday close. */
+export const DEFAULT_MACRO_TASKS: readonly CreateTaskInput[] = [
+  {
+    name: '宏观洞察 · 轮动日报',
+    cron: '30 8 * * 1-5',
+    prompt: buildMacroPrompt('rotation-daily', null, null),
+    macroTheme: 'rotation-daily',
+    tags: ['macro'],
+    maxRunsPerDay: 1,
+  },
+  {
+    name: '宏观洞察 · 轮动周报',
+    cron: '0 9 * * 1',
+    prompt: buildMacroPrompt('rotation-weekly', null, null),
+    macroTheme: 'rotation-weekly',
+    tags: ['macro'],
+    maxRunsPerDay: 1,
+  },
+  {
+    name: '宏观洞察 · 复盘周报',
+    cron: '0 16 * * 5',
+    prompt: buildMacroPrompt('review-weekly', null, null),
+    macroTheme: 'review-weekly',
+    tags: ['macro'],
+    maxRunsPerDay: 1,
+  },
+];
+
+/** The default template for one theme (used by provisioning + regenerate). */
+export function defaultMacroTask(themeId: MacroThemeId): CreateTaskInput {
+  const input = DEFAULT_MACRO_TASKS.find((t) => t.macroTheme === themeId);
+  if (!input) throw new Error(`Unknown macro theme: ${themeId}`);
+  return input;
+}
+
+/**
+ * Provision the default macro tasks once per install: create the missing ones
+ * and remember it. Later user changes (delete / disable / re-schedule) are
+ * never overwritten — a deleted task stays deleted across restarts.
+ */
+export function ensureMacroTasks(): void {
+  const store = getStore(STORE_SCOPE);
+  if (store.get('macroProvisioned')) return;
+  for (const input of DEFAULT_MACRO_TASKS) cronEngine.ensureTask(input);
+  store.set('macroProvisioned', true);
+  getLogger().info('[scheduler] default macro tasks provisioned');
+}
 
 // ── Internal HTTP API for the MCP server ─────────────────────────────────
 

@@ -3,6 +3,7 @@ import type { Project } from '@workbench/shared';
 import {
   CalendarClock,
   FolderTree,
+  LineChart,
   PanelLeft,
   PanelLeftClose,
   Plus,
@@ -21,6 +22,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { cn } from '@/lib/cn';
 import { isDesktop } from '@/lib/electron';
 import { useI18n } from '@/lib/i18n';
+import { useMacroStore } from '@/lib/macroStore';
 import { useRuntimeStore } from '@/lib/runtime';
 import { useUiStore } from '@/lib/store';
 
@@ -64,6 +66,7 @@ export function Sidebar({ project }: { project: Project }) {
   const sidebarCollapsed = useUiStore((s) => s.sidebarCollapsed);
   const toggleSidebar = useUiStore((s) => s.toggleSidebar);
   const openSessionTab = useUiStore((s) => s.openSessionTab);
+  const macroUnread = useMacroStore((s) => s.unread);
 
   // Subscribe to remote-session-set changes so the "远端" badge appears as
   // soon as a guest creates a session via relay. Desktop only.
@@ -137,6 +140,12 @@ export function Sidebar({ project }: { project: Project }) {
           icon={<CalendarClock size={15} />}
           label={t('sidebar.tasks')}
           onClick={() => navigate('/tasks')}
+        />
+        <NavRow
+          icon={<LineChart size={15} />}
+          label={t('sidebar.macro')}
+          badge={macroUnread}
+          onClick={() => navigate('/macro')}
         />
         <NavRow
           icon={<FolderTree size={15} />}
@@ -238,10 +247,12 @@ export function Sidebar({ project }: { project: Project }) {
 function NavRow({
   icon,
   label,
+  badge,
   onClick,
 }: {
   icon: React.ReactNode;
   label: string;
+  badge?: number;
   onClick: () => void;
 }) {
   return (
@@ -250,7 +261,12 @@ function NavRow({
       className="flex items-center gap-2 rounded-input px-2.5 py-1.5 text-[13px] text-text-dim transition-colors hover:bg-surface-2 hover:text-text"
     >
       <span className="text-muted">{icon}</span>
-      <span>{label}</span>
+      <span className="flex-1 text-left">{label}</span>
+      {badge !== undefined && badge > 0 && (
+        <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] leading-none text-white">
+          {badge > 9 ? '9+' : badge}
+        </span>
+      )}
     </button>
   );
 }

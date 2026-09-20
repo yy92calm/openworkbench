@@ -1,6 +1,8 @@
-import { useMemo } from 'react';
+import { ChevronRight } from 'lucide-react';
+import { useMemo, useState } from 'react';
 
 import { cn } from '@/lib/cn';
+import { buildTurns, cleanSummary, type TurnEntry } from '@/lib/messageTurns';
 import { DRAFT_KEY, useRuntimeStore } from '@/lib/runtime';
 
 /** Conservative fallback when the provider reports no window for the model. */
@@ -35,6 +37,86 @@ function formatCost(cost: number): string {
   if (cost < 0.0001) return '$' + cost.toExponential(2);
   if (cost < 1) return `$${cost.toFixed(4)}`;
   return `$${cost.toFixed(2)}`;
+}
+
+/** One history line: role chip + cleaned single-line summary. */
+function TurnRow({ label, chipClass, text }: { label: string; chipClass: string; text: string }) {
+  return (
+    <div className="flex items-start gap-1.5 px-1.5 py-0.5">
+      <span className={cn('shrink-0 rounded px-1 py-px text-[10px] font-medium', chipClass)}>
+        {label}
+      </span>
+      <span
+        className="truncate text-muted"
+        title={text.length > 400 ? `${text.slice(0, 400)}…` : text}
+      >
+        {text}
+      </span>
+    </div>
+  );
+}
+
+/**
+ * The conversation as request turns: one user row + one AI row per turn, tool
+ * calls folded behind a collapsible counter (they are noise as top-level rows
+ * in tool-heavy sessions). Summaries go through cleanSummary so no markdown /
+ * fence syntax leaks into the preview.
+ */
+function RequestHistory({ turns }: { turns: TurnEntry[] }) {
+  const [open, setOpen] = useState<Record<number, boolean>>({});
+  return (
+    <div className="max-h-48 space-y-1 overflow-y-auto">
+      {turns.map((t, i) => (
+        <div key={i}>
+          {t.user !== undefined && (
+            <TurnRow
+              label="用户"
+              chipClass="bg-accent/15 text-accent"
+              text={cleanSummary(t.user)}
+            />
+          )}
+          {t.agent !== undefined && (
+            <TurnRow label="AI" chipClass="bg-ok/15 text-ok" text={cleanSummary(t.agent)} />
+          )}
+          {t.tools.length > 0 && (
+            <div>
+              <button
+                type="button"
+                onClick={() => setOpen((o) => ({ ...o, [i]: !o[i] }))}
+                aria-expanded={!!open[i]}
+                className="flex w-full items-center gap-1 rounded px-1.5 py-0.5 text-left text-[11px] text-muted transition-colors hover:bg-surface-2/60 hover:text-text"
+              >
+                <ChevronRight
+                  size={11}
+                  className={cn(
+                    'shrink-0 transition-transform duration-150',
+                    open[i] && 'rotate-90',
+                  )}
+                />
+                <span>工具调用 ×{t.tools.length}</span>
+              </button>
+              {open[i] && (
+                <div className="pb-0.5">
+                  {t.tools.map((tool, j) => (
+                    <div
+                      key={j}
+                      className="flex items-center gap-1.5 py-px pl-7 pr-1.5 text-[11px] text-muted"
+                    >
+                      <span className="h-1 w-1 shrink-0 rounded-full bg-link/60" />
+                      <span className="truncate font-mono" title={tool.name}>
+                        {tool.name}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+          {i < turns.length - 1 && <div className="my-1 ml-1.5 mr-1 h-px bg-border-soft" />}
+        </div>
+      ))}
+    </div>
+  );
 }
 
 /** Thresholds for the ring color (fraction of the context window). */
@@ -129,17 +211,8 @@ export function TokenUsage() {
   const tone =
     safePct >= DANGER_AT ? 'text-error' : safePct >= WARNING_AT ? 'text-warn' : 'text-ok';
 
-  // Message history from thread blocks
-  const messages = useMemo(() => {
-    const msgs: { role: string; summary: string }[] = [];
-    for (const b of thread?.blocks ?? []) {
-      if (b.kind === 'user') msgs.push({ role: 'user', summary: b.text.slice(0, 80) });
-      else if (b.kind === 'agent')
-        msgs.push({ role: 'assistant', summary: b.markdown.slice(0, 80) });
-      else if (b.kind === 'tool-call') msgs.push({ role: 'tool', summary: b.title ?? b.tool });
-    }
-    return msgs;
-  }, [thread?.blocks]);
+  // Conversation as request turns: user + agent replies grouped, tools folded
+  const turns = useMemo(() => buildTurns(thread?.blocks ?? []), [thread?.blocks]);
 
   return (
     <div className="flex flex-col gap-4 p-4">
@@ -160,8 +233,8 @@ export function TokenUsage() {
           </div>
         )}
         <div className="flex items-center justify-between text-[11px]">
-          <span className="text-muted">消息数</span>
-          <span className="text-text">{messages.length}</span>
+          <span className="text-muted">轮次</span>
+          <span className="text-text">{turns.length}</span>
         </div>
       </div>
 
@@ -220,36 +293,15 @@ export function TokenUsage() {
         </div>
       )}
 
-      {/* Message / request history */}
-      {messages.length > 0 && (
+      {/* Conversation / request history, one row set per turn */}
+      {turns.length > 0 && (
         <div className="w-full">
           <div className="mb-1 text-[11px] font-medium text-muted">请求报文</div>
-          <div className="max-h-48 space-y-1 overflow-y-auto">
-            {messages.map((m, i) => (
-              <div
-                key={i}
-                className="flex items-start gap-1.5 rounded px-1.5 py-1 text-[11px] odd:bg-surface-2"
-              >
-                <span
-                  className={cn(
-                    'shrink-0 rounded px-1 py-px text-[10px] font-medium',
-                    m.role === 'user' && 'bg-accent/15 text-accent',
-                    m.role === 'assistant' && 'bg-ok/15 text-ok',
-                    m.role === 'tool' && 'bg-link/15 text-link',
-                  )}
-                >
-                  {m.role === 'user' ? '用户' : m.role === 'assistant' ? 'AI' : '工具'}
-                </span>
-                <span className="truncate text-muted" title={m.summary}>
-                  {m.summary}
-                </span>
-              </div>
-            ))}
-          </div>
+          <RequestHistory turns={turns} />
         </div>
       )}
 
-      {displayTotal === 0 && messages.length === 0 && (
+      {displayTotal === 0 && turns.length === 0 && (
         <div className="py-8 text-center text-[12px] text-muted">
           暂无消息。开始对话后将显示 Token 用量。
         </div>

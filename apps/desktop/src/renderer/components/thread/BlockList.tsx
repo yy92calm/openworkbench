@@ -1,4 +1,5 @@
 import type {
+  AgentMessageBlock,
   ArtifactBlock,
   FigureAnnotation,
   ReasoningBlock,
@@ -8,9 +9,12 @@ import type {
 import { Brain, Check, ChevronDown, ChevronRight, Loader2, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
+import { a2uiEngine } from '@/lib/a2ui/engine';
 import { cn } from '@/lib/cn';
 import { useUiStore } from '@/lib/store';
+import { groupIsStreaming, isGroupableWorkBlock } from '@/lib/threadGroups';
 
+import { A2uiSurfaceCard } from './A2uiSurfaceCard';
 import { ArtifactCard } from './ArtifactCard';
 import { AgentMessage, DataTable, RunningJobsOverlay, StatusLine, UserMessage } from './atoms';
 import { FigureBlock } from './FigureBlock';
@@ -29,6 +33,9 @@ export interface BlockHandlers {
   subagentActivity?: (childSessionId: string) => string | undefined;
   /** User clicked edit on a user message. */
   onUserMessageEdit?: (text: string) => void;
+  /** Session owning these blocks — enables A2UI surfaces under agent blocks
+   *  (the engine is keyed per session). Absent on sample/static threads. */
+  sessionId?: string;
 }
 
 /** A renderable item: either a single block or a merged group of consecutive
@@ -45,13 +52,9 @@ function prepareItems(blocks: ThreadBlock[]): RenderItem[] {
   let i = 0;
   while (i < blocks.length) {
     const b = blocks[i];
-    if (b.kind === 'reasoning' || b.kind === 'tool-call') {
+    if (isGroupableWorkBlock(b)) {
       const start = i;
-      while (
-        i < blocks.length &&
-        (blocks[i].kind === 'reasoning' || blocks[i].kind === 'tool-call')
-      )
-        i++;
+      while (i < blocks.length && isGroupableWorkBlock(blocks[i])) i++;
       const run = blocks.slice(start, i);
       if (run.length >= 2) {
         items.push({ type: 'step-group', blocks: run, key: start });
@@ -85,6 +88,14 @@ function spacingBefore(kind: ThreadBlock['kind']): string {
   }
 }
 
+/** A2UI surfaces this agent block owns in the session engine. A surface
+ *  created in one part but updated by later parts still renders here — the
+ *  engine claims each surface under the part whose createSurface made it. */
+function a2uiSurfacesFor(block: AgentMessageBlock, handlers?: BlockHandlers) {
+  if (!block.a2uiPartKey || !handlers?.sessionId) return [];
+  return a2uiEngine.claimedSurfaces(handlers.sessionId, block.a2uiPartKey);
+}
+
 export function renderBlock(
   block: ThreadBlock,
   i: number,
@@ -110,6 +121,11 @@ export function renderBlock(
             streaming={!block.timestamp}
             onOpenArtifact={handlers?.onArtifactOpen}
           />
+          {a2uiSurfacesFor(block, handlers).map((s) => (
+            <div key={s.id} className="mt-2">
+              <A2uiSurfaceCard surface={s} />
+            </div>
+          ))}
         </div>
       );
     case 'reasoning':
@@ -284,9 +300,7 @@ function ReasoningInline({ block }: { block: ReasoningBlock }) {
  *  row (which still has its own detail fold). Auto-expands while streaming so
  *  live thinking/running tools stay visible. */
 function StepGroup({ blocks, handlers }: { blocks: ThreadBlock[]; handlers?: BlockHandlers }) {
-  const isStreaming =
-    blocks.some((b) => b.kind === 'reasoning' && b.streaming) ||
-    blocks.some((b) => b.kind === 'tool-call' && b.status === 'running');
+  const isStreaming = groupIsStreaming(blocks);
   // Default fold follows the global setting; streaming does NOT auto-expand -
   // the user opted into collapsed, so a live indicator on the header is enough
   // and they can expand by hand. Setting changes apply immediately (re-folds

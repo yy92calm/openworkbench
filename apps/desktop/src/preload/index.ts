@@ -14,6 +14,7 @@ const api = {
   runtimePassword: () => ipcRenderer.invoke('runtime-password'),
   stopRuntime: () => ipcRenderer.invoke('stop-runtime'),
   serverUrl: () => ipcRenderer.invoke('server-url'),
+  sandboxStatus: () => ipcRenderer.invoke('sandbox-status'),
 
   // Workspace
   workspacePath: () => ipcRenderer.invoke('workspace-path'),
@@ -57,6 +58,14 @@ const api = {
   listProvenance: (path: string) => ipcRenderer.invoke('list-provenance', path),
   readEnvLockfile: (hash: string) => ipcRenderer.invoke('read-env-lockfile', hash),
 
+  // Compaction audit snapshots
+  writeCompactionSnapshot: (payload: {
+    sessionId: string;
+    historyVersion: number;
+    triggeredAt: string;
+    messages: unknown[];
+  }) => ipcRenderer.invoke('write-compaction-snapshot', payload),
+
   // Preview
   previewUrl: (rel: string, root?: string) => ipcRenderer.invoke('preview-url', rel, root),
 
@@ -79,8 +88,10 @@ const api = {
   // Profile patch overlay
   profileManifest: () => ipcRenderer.invoke('profile-manifest'),
   profileInteraction: () => ipcRenderer.invoke('profile-interaction'),
+  profileExplainConfig: () => ipcRenderer.invoke('profile-explain-config'),
   profileValidatePatch: (raw: string) => ipcRenderer.invoke('profile-validate-patch', raw),
-  profileWritePatch: (raw: string) => ipcRenderer.invoke('profile-write-patch', raw),
+  profileWritePatch: (raw: string, expectedBaseHash?: string) =>
+    ipcRenderer.invoke('profile-write-patch', raw, expectedBaseHash),
 
   // Remote relay (host side)
   relayStatus: () => ipcRenderer.invoke('relay-status'),
@@ -160,6 +171,42 @@ const api = {
     ipcRenderer.invoke('scheduler:history', taskId, limit),
   schedulerDeleteExecution: (id: string) => ipcRenderer.invoke('scheduler:delete-execution', id),
   schedulerClearHistory: (taskId?: string) => ipcRenderer.invoke('scheduler:clear-history', taskId),
+
+  // Macro insights (宏观洞察) — snapshot reads never wait on the network.
+  macroDashboard: (opts?: { force?: boolean }) => ipcRenderer.invoke('macro-dashboard', opts),
+  macroSeries: (secid: string, days?: number) => ipcRenderer.invoke('macro-series', secid, days),
+  macroNotifications: () => ipcRenderer.invoke('macro-notifications'),
+  macroNotificationsRead: (id?: string) => ipcRenderer.invoke('macro-notifications-read', id),
+  macroIndustry: (board: unknown) => ipcRenderer.invoke('macro-industry', board),
+  researchDecisions: () => ipcRenderer.invoke('research-decisions'),
+  researchAddDecision: (input: unknown) => ipcRenderer.invoke('research-add-decision', input),
+  researchAttribute: (id: string, outcome: string, note: string) =>
+    ipcRenderer.invoke('research-attribute', id, outcome, note),
+  researchUpdateDecision: (id: string, patch: unknown) =>
+    ipcRenderer.invoke('research-update-decision', id, patch),
+  researchDeleteDecision: (id: string) => ipcRenderer.invoke('research-delete-decision', id),
+  researchExport: () => ipcRenderer.invoke('research-export'),
+  researchDigest: () => ipcRenderer.invoke('research-digest'),
+  macroExportReport: (markdown: string) => ipcRenderer.invoke('macro-export-report', markdown),
+  macroReports: () => ipcRenderer.invoke('macro-reports'),
+  macroReportRead: (file: string) => ipcRenderer.invoke('macro-report-read', file),
+  macroRegenerate: (themeId: string) => ipcRenderer.invoke('macro-regenerate', themeId),
+  onMacroReports: (callback: () => void) => {
+    const handler = () => callback();
+    ipcRenderer.on('macro-reports-updated', handler);
+    return () => ipcRenderer.removeListener('macro-reports-updated', handler);
+  },
+  onMacroDashboard: (callback: (snapshot: unknown) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, snapshot: unknown) => callback(snapshot);
+    ipcRenderer.on('macro-dashboard-updated', handler);
+    return () => ipcRenderer.removeListener('macro-dashboard-updated', handler);
+  },
+  onMacroNotification: (callback: (notification: unknown) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, notification: unknown) =>
+      callback(notification);
+    ipcRenderer.on('macro-notification', handler);
+    return () => ipcRenderer.removeListener('macro-notification', handler);
+  },
 
   // Window
   openExternal: (url: string) => ipcRenderer.invoke('open-url', url),

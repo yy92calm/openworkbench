@@ -110,6 +110,69 @@ describe('applyProfilePatch', () => {
     expect(JSON.parse(BASE).model).toBe('ali/qwen3.8-max-preview');
     expect(merged).toBe(JSON.stringify(JSON.parse(merged), null, 2));
   });
+
+  it('rejects a path listed in requirements.forbiddenPaths', () => {
+    expect(() =>
+      applyProfilePatch(
+        BASE,
+        { target: 'opencode.json', patch: [{ op: 'remove', path: '/provider' }] },
+        { forbiddenPaths: ['/provider'] },
+      ),
+    ).toThrow(PatchPolicyError);
+  });
+
+  it('rejects a permission value above the requirements ceiling', () => {
+    // The ceiling governs what a patch may SET. Setting bash to "allow"
+    // (level 3) when the ceiling is "ask" (level 2) is rejected...
+    expect(() =>
+      applyProfilePatch(
+        BASE,
+        {
+          target: 'opencode.json',
+          patch: [{ op: 'replace', path: '/permission/bash', value: 'allow' }],
+        },
+        { permissionCeiling: { bash: 'ask' } },
+      ),
+    ).toThrow(/exceeds the allowed ceiling/);
+    // ...but tightening to the ceiling value itself is fine.
+    expect(() =>
+      applyProfilePatch(
+        BASE,
+        {
+          target: 'opencode.json',
+          patch: [{ op: 'replace', path: '/permission/bash', value: 'ask' }],
+        },
+        { permissionCeiling: { bash: 'ask' } },
+      ),
+    ).not.toThrow();
+  });
+
+  it('ceiling does not reject inherited base values the patch never touches', () => {
+    // base bash=allow violates the ceiling already; a model-only patch must
+    // still go through (a too-loose base is the packager's problem).
+    const merged = applyProfilePatch(
+      BASE,
+      { target: 'opencode.json', patch: [{ op: 'replace', path: '/model', value: 'y' }] },
+      { permissionCeiling: { bash: 'deny' } },
+    );
+    expect(JSON.parse(merged).model).toBe('y');
+  });
+
+  it('buckets a ceiling violation as a permission rejection', () => {
+    try {
+      applyProfilePatch(
+        BASE,
+        {
+          target: 'opencode.json',
+          patch: [{ op: 'replace', path: '/permission/bash', value: 'allow' }],
+        },
+        { permissionCeiling: { bash: 'ask' } },
+      );
+      expect.unreachable();
+    } catch (err) {
+      expect(humanizePatchError(err)).toMatchObject({ kind: 'permission' });
+    }
+  });
 });
 
 describe('humanizePatchError', () => {

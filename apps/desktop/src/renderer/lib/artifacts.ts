@@ -161,6 +161,38 @@ export function extOf(filename: string): string {
   return dot >= 0 ? filename.slice(dot + 1).toLowerCase() : '';
 }
 
+/** What an inline artifact-card preview should render (see
+ *  docs/20260909-01-artifact-rich-cards.md). Null = keep the plain text card. */
+export type ArtifactCardPreviewKind = 'image' | 'svg' | 'table' | 'html';
+
+export interface ArtifactCardPreviewPlan {
+  kind: ArtifactCardPreviewKind;
+  /** True when block.content (tool-carried text) can feed the preview
+   *  directly; false = the file must be read from disk (binary images). */
+  useInlineContent: boolean;
+}
+
+const IMAGE_EXTS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp']);
+
+/** Pure routing for the rich artifact card: figure → image/svg, csv/tsv →
+ *  mini table, html report → sandboxed iframe; everything else keeps the
+ *  existing two-line text card. */
+export function artifactPreviewPlan(block: ArtifactBlock): ArtifactCardPreviewPlan | null {
+  const ext = extOf(block.filename);
+  if (block.artifact === 'figure') {
+    if (IMAGE_EXTS.has(ext)) return { kind: 'image', useInlineContent: false };
+    if (ext === 'svg') return { kind: 'svg', useInlineContent: false };
+    return null;
+  }
+  if (block.artifact === 'table' && (ext === 'csv' || ext === 'tsv')) {
+    return { kind: 'table', useInlineContent: true };
+  }
+  if (block.artifact === 'report' && ext === 'html') {
+    return { kind: 'html', useInlineContent: true };
+  }
+  return null;
+}
+
 export function mimeForExt(ext: string): string {
   return MIME[ext.toLowerCase()] ?? 'application/octet-stream';
 }

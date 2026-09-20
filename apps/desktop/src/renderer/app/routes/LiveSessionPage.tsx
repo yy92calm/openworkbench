@@ -137,6 +137,9 @@ export function LiveSessionPage() {
     // its child's latest step from there.
     subagentActivity: (childId) => subagentActivity(threads[childId]?.blocks),
     onUserMessageEdit: (text) => setComposerDraft(text),
+    // A2UI surfaces are claimed per session in the engine — the draft thread
+    // has no session yet, so agent blocks there never carry surfaces.
+    sessionId: currentId ?? undefined,
   };
   const onEvaluate = (expr: string) =>
     void sendPrompt(`Evaluate in the notebook kernel:\n\`\`\`python\n${expr}\n\`\`\``);

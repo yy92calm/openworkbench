@@ -3,10 +3,20 @@ import { existsSync, readFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 
 import {
+  type AgentHistoryMessage,
   type AgentRuntime,
   type AgentRuntimeEvent,
   createAgentRuntime,
 } from '@workbench/sdk/agent-runtime';
+import {
+  buildMacroPrompt,
+  type MacroBoard,
+  type MacroReportMeta,
+  macroTheme,
+  type MacroThemeId,
+  type ResearchOutcome,
+  type ResearchStance,
+} from '@workbench/shared';
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
 
 import * as artifactFile from './artifact_file';
@@ -14,21 +24,45 @@ import { extractText, fetchPageContent } from './browser';
 import { APP_IDS, CHANNEL } from './constants';
 import * as kernel from './kernel';
 import { exportDebugLogs, getLogger } from './logging';
+import { macroStore } from './macro';
+import { listNotifications, markRead, pushBriefing } from './macroNotify';
 import { previewUrl } from './preview_server';
 import {
+  explainConfig,
   readDeployedManifest,
   readInteractionConfig,
   validateUserPatch,
-  writeUserPatch,
+  writeUserPatchChecked,
 } from './profilePatch';
 import * as provenance from './provenance';
 import { RelayHost, type RelayHostConfig } from './relayHost';
+import {
+  addDecision,
+  attributeDecision,
+  deleteDecision,
+  exportDecisionsCsv,
+  exportMacroReport,
+  getResearchContext,
+  listDecisions,
+  listMacroReports,
+  readKnowledgeDigest,
+  readMacroReport,
+  saveMacroReport,
+  updateDecision,
+} from './research';
 import { roomPeer } from './roomPeer';
-import { type CreateTaskInput, cronEngine, type UpdateTaskInput } from './scheduler';
+import { getSandboxStatus } from './sandbox/manager';
+import {
+  type CreateTaskInput,
+  cronEngine,
+  defaultMacroTask,
+  type UpdateTaskInput,
+} from './scheduler';
 import {
   type AgentRuntimeKind,
   baseWorkspaceDir,
   deployedProfileDir,
+  effectiveSandboxConfig,
   getServerPassword,
   getServerUrl,
   setActiveWorkspace,
@@ -38,6 +72,7 @@ import {
   workspaceDir,
 } from './server';
 import { detectShells, detectTools, enrichedPath } from './shell_env';
+import * as snapshot from './snapshot';
 import { getStore } from './store';
 import { registerTerminalHandlers } from './terminal';
 import { checkForUpdates } from './updater';
@@ -46,6 +81,52 @@ import { getMainWindow } from './windows';
 
 /** Host-side relay instance (shared by IPC handlers). */
 export const relayHost = new RelayHost();
+
+/** Push a payload to every renderer window (macro snapshot / notifications). */
+function broadcast(channel: string, payload?: unknown): void {
+  for (const win of BrowserWindow.getAllWindows()) win.webContents.send(channel, payload);
+}
+
+/**
+ * One message's own text (runtime-generated markers like the "tool executed"
+ * note are not part of the answer).
+ */
+function messageText(message: AgentHistoryMessage): string {
+  return message.parts
+    .filter((p) => p.type === 'text' && !p.synthetic)
+    .map((p) => (p.text ?? '').trim())
+    .filter(Boolean)
+    .join('\n\n');
+}
+
+/**
+ * Save the finished macro session's final answer as a workspace report and
+ * tell the renderers. Runs in the background task path, so failures only log —
+ * the briefing notification still goes out either way.
+ */
+async function captureMacroReport(
+  client: AgentRuntime,
+  themeId: MacroThemeId,
+  sessionId: string,
+): Promise<MacroReportMeta | null> {
+  try {
+    const messages = await client.getMessages(sessionId);
+    const answers = messages
+      .filter((m) => m.role === 'assistant')
+      .map(messageText)
+      .filter(Boolean);
+    const markdown = answers[answers.length - 1];
+    if (!markdown) return null;
+    const meta = saveMacroReport({ themeId, sessionId, markdown });
+    if (meta) broadcast('macro-reports-updated');
+    return meta;
+  } catch (err) {
+    getLogger().warn(
+      `[macro] report capture failed for ${themeId}: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    return null;
+  }
+}
 
 export function registerIpcHandlers(): void {
   const log = getLogger();
@@ -98,6 +179,15 @@ export function registerIpcHandlers(): void {
         }
         if (lastErr) throw lastErr;
         cronEngine.setFireCallback(async (task) => {
+          // Macro insight tasks rebuild their prompt from the live snapshot so
+          // each run analyses today's data, not the data from creation time.
+          // The refresh falls back to the last known snapshot on network failure.
+          let prompt = task.prompt;
+          if (task.macroTheme) {
+            const snapshot = await macroStore.refreshAndWait();
+            const built = buildMacroPrompt(task.macroTheme, snapshot, getResearchContext());
+            if (built) prompt = built;
+          }
           const sessionId = await client.createSession();
           const idlePromise = new Promise<void>((resolve) => {
             const unsubscribe = client.onEvent((event: AgentRuntimeEvent) => {
@@ -114,8 +204,20 @@ export function registerIpcHandlers(): void {
               10 * 60 * 1000,
             );
           });
-          await client.sendPrompt(sessionId, task.prompt);
+          await client.sendPrompt(sessionId, prompt);
           await idlePromise;
+          if (task.macroTheme) {
+            // Persist the report first: the page lists it and the briefing
+            // notification points back at the session it was generated in.
+            const saved = await captureMacroReport(client, task.macroTheme, sessionId);
+            const theme = macroTheme(task.macroTheme);
+            const notification = pushBriefing({
+              themeId: task.macroTheme,
+              sessionId,
+              title: `${theme?.title ?? '宏观洞察'} · ${saved ? '报告已生成' : '简报已生成'}`,
+            });
+            broadcast('macro-notification', notification);
+          }
           return sessionId;
         });
         cronEngine.start();
@@ -365,6 +467,11 @@ export function registerIpcHandlers(): void {
     return result.url;
   });
 
+  // Sandbox status for the runtime UI (platform, effective mode/detail).
+  ipcMain.handle('sandbox-status', async () => {
+    return getSandboxStatus(effectiveSandboxConfig());
+  });
+
   // ---- Workspace ----
   ipcMain.handle('workspace-path', () => workspaceDir());
   ipcMain.handle('workspace-base', () => baseWorkspaceDir());
@@ -457,6 +564,11 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('list-provenance', (_e, path: string) => provenance.listProvenance(path));
   ipcMain.handle('read-env-lockfile', (_e, hash: string) => provenance.readEnvLockfile(hash));
 
+  // ---- Compaction audit snapshots ----
+  ipcMain.handle('write-compaction-snapshot', (_e, payload: snapshot.CompactionSnapshot) =>
+    snapshot.writeCompactionSnapshot(workspaceDir(), payload),
+  );
+
   // ---- Preview ----
   ipcMain.handle('preview-url', (_e, rel: string, root?: string) => previewUrl(rel, root));
 
@@ -503,19 +615,15 @@ export function registerIpcHandlers(): void {
   // ---- Profile patch overlay ----
   ipcMain.handle('profile-manifest', () => readDeployedManifest());
   ipcMain.handle('profile-interaction', () => readInteractionConfig(deployedProfileDir()));
+  ipcMain.handle('profile-explain-config', () => explainConfig(deployedProfileDir()));
   ipcMain.handle('profile-validate-patch', (_e, raw: string) => {
     const file = join(deployedProfileDir(), 'opencode.json');
     const base = existsSync(file) ? readFileSync(file, 'utf-8') : '{}';
     return validateUserPatch(base, raw);
   });
-  ipcMain.handle('profile-write-patch', (_e, raw: string) => {
-    try {
-      writeUserPatch(raw);
-      return { ok: true };
-    } catch (err) {
-      return { ok: false, error: err instanceof Error ? err.message : String(err) };
-    }
-  });
+  ipcMain.handle('profile-write-patch', (_e, raw: string, expectedBaseHash?: string) =>
+    writeUserPatchChecked(deployedProfileDir(), raw, expectedBaseHash),
+  );
 
   // ---- Logging ----
   ipcMain.handle('log-debug', (_e, message: string) => {
@@ -561,6 +669,84 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('scheduler:clear-history', (_e, taskId?: string) =>
     cronEngine.clearHistory(taskId),
   );
+
+  // ---- Macro insights (宏观洞察) ----
+  // The renderer reads the cached snapshot (microseconds) and never waits on
+  // the network; refreshes run in the background and push updates below.
+  ipcMain.handle('macro-dashboard', (_e, opts?: { force?: boolean }) => {
+    if (opts?.force) void macroStore.refresh(true);
+    else macroStore.refreshIfStale();
+    return macroStore.getSnapshot();
+  });
+  ipcMain.handle('macro-series', (_e, secid: string, days?: number) =>
+    macroStore.getSeries(secid, days),
+  );
+  ipcMain.handle('macro-notifications', () => listNotifications());
+  ipcMain.handle('macro-notifications-read', (_e, id?: string) => markRead(id));
+  // Industry model: on-demand board detail (constituent valuation + history).
+  ipcMain.handle('macro-industry', (_e, board: MacroBoard) => macroStore.getIndustry(board));
+  // Research loop: decision ledger + knowledge asset digest.
+  ipcMain.handle('research-decisions', () => listDecisions());
+  ipcMain.handle(
+    'research-add-decision',
+    (
+      _e,
+      input: {
+        model: 'rotation' | 'industry';
+        target: string;
+        stance: 'overweight' | 'neutral' | 'underweight' | 'watch';
+        thesis: string;
+        sessionId?: string;
+      },
+    ) => addDecision(input),
+  );
+  ipcMain.handle('research-attribute', (_e, id: string, outcome: ResearchOutcome, note: string) =>
+    attributeDecision(id, outcome, note),
+  );
+  ipcMain.handle(
+    'research-update-decision',
+    (_e, id: string, patch: { target?: string; stance?: ResearchStance; thesis?: string }) =>
+      updateDecision(id, patch),
+  );
+  ipcMain.handle('research-delete-decision', (_e, id: string) => deleteDecision(id));
+  ipcMain.handle('research-export', () => exportDecisionsCsv());
+  // Leadership report markdown: the renderer composes it, main writes it.
+  ipcMain.handle('macro-export-report', (_e, markdown: string) => exportMacroReport(markdown));
+  // Background-generated reports: the page lists the latest one per theme and
+  // can re-run a theme's task (fire and forget — completion arrives as a
+  // briefing notification plus a `macro-reports-updated` broadcast).
+  ipcMain.handle('macro-reports', () => listMacroReports());
+  ipcMain.handle('macro-report-read', (_e, file: string) => {
+    const markdown = readMacroReport(file);
+    return markdown === null ? null : { file, markdown };
+  });
+  ipcMain.handle(
+    'macro-regenerate',
+    (_e, themeId: MacroThemeId): { ok: true; taskId: string } | { ok: false; reason: string } => {
+      if (!cronEngine.canFire()) return { ok: false, reason: 'runtime-not-ready' };
+      let task = cronEngine.listTasks().find((t) => t.macroTheme === themeId);
+      if (!task) {
+        try {
+          // Explicit re-run of a theme the user deleted: recreate the task
+          // paused (the delete is respected) and run it once, right now.
+          task = cronEngine.ensureTask(defaultMacroTask(themeId));
+          cronEngine.toggleTask(task.id, false);
+        } catch {
+          return { ok: false, reason: 'unknown-theme' };
+        }
+      }
+      void cronEngine.fireNow(task.id).then((record) => {
+        if (!record) log.warn(`[macro] regenerate ${themeId}: task was not executed`);
+      });
+      return { ok: true, taskId: task.id };
+    },
+  );
+  ipcMain.handle('research-digest', () => readKnowledgeDigest());
+  // Snapshot pushes (dashboard refresh) + created alerts (threshold moves).
+  macroStore.onChange((snapshot, alerts) => {
+    broadcast('macro-dashboard-updated', snapshot);
+    for (const alert of alerts) broadcast('macro-notification', alert);
+  });
 
   // ---- Whisper STT ----
   ipcMain.handle('whisper-available', () => isWhisperAvailable());

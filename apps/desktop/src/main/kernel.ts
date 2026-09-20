@@ -1,6 +1,8 @@
 import { ChildProcess, spawn } from 'node:child_process';
 
-import { workspaceDir } from './server';
+import { getLogger } from './logging';
+import { wrapSpawn } from './sandbox/manager';
+import { effectiveSandboxConfig, sandboxPathsFor, workspaceDir } from './server';
 import { enrichedPath } from './shell_env';
 
 interface KernelEntry {
@@ -14,27 +16,45 @@ function kernelKey(lang: string, notebook?: string): string {
   return `${lang}:${notebook ?? 'default'}`;
 }
 
-export function kernelExecute(
+export async function kernelExecute(
   code: string,
   language: string,
   notebook?: string,
 ): Promise<{ stdout: string; stderr: string; exitCode: number | null }> {
-  return new Promise((resolve, reject) => {
-    const key = kernelKey(language, notebook);
-    let entry = kernelMap.get(key);
+  const key = kernelKey(language, notebook);
+  let entry = kernelMap.get(key);
 
-    if (!entry) {
-      const cmd = language === 'python3' ? 'python3' : language;
-      const child = spawn(cmd, ['-c', code], {
-        env: { ...process.env, PATH: enrichedPath(), HOME: process.env.HOME ?? '' },
-        cwd: workspaceDir(),
-        stdio: ['pipe', 'pipe', 'pipe'],
-      });
-      entry = { child, language };
-      kernelMap.set(key, entry);
+  if (!entry) {
+    const cmd = language === 'python3' ? 'python3' : language;
+    const cwd = workspaceDir();
+    let file = cmd;
+    let args: string[] = ['-c', code];
+    try {
+      const wrapped = await wrapSpawn(
+        { file: cmd, args, cwd },
+        { config: effectiveSandboxConfig(), paths: sandboxPathsFor(cwd) },
+      );
+      file = wrapped.file;
+      args = wrapped.args;
+      if (!wrapped.wrapped) {
+        getLogger().warn(`[kernel] ${wrapped.detail} — kernel runs unsandboxed`);
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      getLogger().error(`[kernel] sandbox required but unavailable: ${msg}`);
+      throw err;
     }
+    const child = spawn(file, args, {
+      env: { ...process.env, PATH: enrichedPath(), HOME: process.env.HOME ?? '' },
+      cwd,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    entry = { child, language };
+    kernelMap.set(key, entry);
+  }
 
-    const { child } = entry;
+  return new Promise((resolve, reject) => {
+    const { child } = entry!;
     let stdout = '';
     let stderr = '';
     child.stdout!.on('data', (d: Buffer) => {
@@ -43,9 +63,9 @@ export function kernelExecute(
     child.stderr!.on('data', (d: Buffer) => {
       stderr += d.toString();
     });
-    child.on('exit', (code) => {
+    child.on('exit', (exitCode) => {
       kernelMap.delete(key);
-      resolve({ stdout, stderr, exitCode: code });
+      resolve({ stdout, stderr, exitCode });
     });
     child.on('error', reject);
     child.stdin!.write(code);

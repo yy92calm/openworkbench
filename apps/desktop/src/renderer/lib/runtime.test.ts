@@ -209,6 +209,34 @@ describe('foldEvent', () => {
       { kind: 'status-line', text: '上下文已压缩（cache 已重置）', tone: 'done' },
     ]);
   });
+
+  it('strips a2ui fences from markdown and keys the block to the part', () => {
+    const fence =
+      '```a2ui\n{"version":"v0.9","createSurface":{"surfaceId":"s1","catalogId":"basic"}}\n```';
+    const s = foldAll([
+      { type: 'text.updated', sessionId: S, partId: 'p1', text: `See:\n\n${fence}\n\nDone.` },
+    ]);
+    expect(s.blocks).toEqual([{ kind: 'agent', markdown: 'See:\n\n\nDone.', a2uiPartKey: 'p1' }]);
+  });
+
+  it('keeps fence-less text parts without an a2ui part key', () => {
+    const s = foldAll([
+      { type: 'text.updated', sessionId: S, partId: 'p1', text: '```json\n{"a":1}\n```' },
+    ]);
+    expect(s.blocks).toEqual([{ kind: 'agent', markdown: '```json\n{"a":1}\n```' }]);
+  });
+
+  it('hides an a2ui fence while it is still streaming', () => {
+    const s = foldAll([
+      {
+        type: 'text.updated',
+        sessionId: S,
+        partId: 'p1',
+        text: 'Lead\n```a2ui\n{"version":"v0.9","createSurface":',
+      },
+    ]);
+    expect(s.blocks).toEqual([{ kind: 'agent', markdown: 'Lead\n', a2uiPartKey: 'p1' }]);
+  });
 });
 
 describe('subagent activity', () => {
@@ -426,5 +454,31 @@ describe('historyToThread', () => {
     ];
     const t = historyToThread(msgs);
     expect(t.blocks.every((b) => b.kind !== 'status-line')).toBe(true);
+  });
+
+  it('strips a2ui fences from history agent text and stamps a synthetic part key', () => {
+    const fence =
+      '```a2ui\n{"version":"v0.9","createSurface":{"surfaceId":"s1","catalogId":"basic"}}\n```';
+    const msgs: HistoryMessage[] = [
+      { role: 'user', parts: [{ type: 'text', text: 'make a card' }] },
+      { role: 'assistant', parts: [{ type: 'text', text: `Here:\n\n${fence}` }] },
+    ];
+    const t = historyToThread(msgs);
+    expect(t.blocks[2]).toEqual({
+      kind: 'agent',
+      markdown: 'Here:\n\n',
+      a2uiPartKey: 'h1-p0',
+    });
+  });
+
+  it('keeps fence-less history agent text unkeyed', () => {
+    const msgs: HistoryMessage[] = [
+      {
+        role: 'assistant',
+        parts: [{ type: 'text', text: '```json\n{"a":1}\n```' }],
+      },
+    ];
+    const t = historyToThread(msgs);
+    expect(t.blocks[0]).toEqual({ kind: 'agent', markdown: '```json\n{"a":1}\n```' });
   });
 });

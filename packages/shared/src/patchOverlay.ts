@@ -29,6 +29,9 @@ export interface DeployedManifest {
   appliedAt: string;
   /** File-path overrides laid over the base before the JSON patch. */
   fileOverrides: string[];
+  /** True when the base fingerprint differs from the previous deploy —
+   *  the bundled profile source was modified since the last start. */
+  sourceChanged?: boolean;
 }
 
 /** Deterministic short content hash without Node crypto (FNV-1a 32, hex). */
@@ -130,6 +133,18 @@ function permissionLevel(v: unknown): number {
   return 2;
 }
 
+/** Admin-set red lines for the patch overlay (the "requirements" layer in
+ *  Codex terms): paths no user patch may touch, and a per-key ceiling for
+ *  permission values. Optional — the built-in invariant floor (instructions
+ *  forbidden, opencode.json-only target, tighten-only permission) always
+ *  applies on top. */
+export interface ProfileRequirements {
+  /** JSON Pointers (e.g. "/instructions", "/provider") no patch may address. */
+  forbiddenPaths?: string[];
+  /** Per-key maximum permission level, e.g. { "bash": "ask" }. */
+  permissionCeiling?: Record<string, string>;
+}
+
 /** Keys on opencode.json that must never be touched by a user overlay. */
 const FORBIDDEN_ROOTS = new Set(['/instructions']);
 
@@ -140,18 +155,28 @@ export class PatchPolicyError extends Error {}
  * - `/instructions` is never patchable.
  * - `permission` may only tighten (never widen to a more permissive level);
  *   an absent base key defaults to "ask".
+ * - When `requirements` is given, its forbiddenPaths and permissionCeiling
+ *   are hard red lines on top (violations reject the patch outright).
  * Returns a deep copy; the input is never mutated.
  */
-export function applyProfilePatch(base: string, spec: UserPatchSpec): string {
+export function applyProfilePatch(
+  base: string,
+  spec: UserPatchSpec,
+  requirements?: ProfileRequirements,
+): string {
   const baseDoc: unknown = JSON.parse(base);
   if (spec.target !== 'opencode.json') {
     throw new PatchPolicyError(`target ${spec.target} is not patchable`);
   }
+  const adminForbidden = new Set(requirements?.forbiddenPaths ?? []);
   const ops = spec.patch ?? [];
   for (const op of ops) {
-    if (FORBIDDEN_ROOTS.has(op.path))
+    if (FORBIDDEN_ROOTS.has(op.path) || adminForbidden.has(op.path))
       throw new PatchPolicyError(`path ${op.path} is not patchable`);
-    if ((op.op === 'move' || op.op === 'copy') && FORBIDDEN_ROOTS.has(op.from))
+    if (
+      (op.op === 'move' || op.op === 'copy') &&
+      (FORBIDDEN_ROOTS.has(op.from) || adminForbidden.has(op.from))
+    )
       throw new PatchPolicyError(`path ${op.from} is not patchable`);
   }
   const doc: unknown = JSON.parse(JSON.stringify(baseDoc));
@@ -161,6 +186,15 @@ export function applyProfilePatch(base: string, spec: UserPatchSpec): string {
   const docObj = doc as Record<string, unknown>;
   const basePerm = (baseObj.permission ?? {}) as Record<string, unknown>;
   const mergedPerm = (docObj.permission ?? {}) as Record<string, unknown>;
+  const ceiling = requirements?.permissionCeiling ?? {};
+  // Permission keys the patch itself touches — the ceiling governs what a
+  // patch may SET, not inherited base values (a too-loose base is the
+  // packager's problem, reported via the sourceChanged warning instead).
+  const touchedPerm = new Set(
+    ops
+      .map((op) => (op.path.split('/')[1] === 'permission' ? op.path.split('/')[2] : undefined))
+      .filter((k): k is string => !!k),
+  );
   for (const [k, v] of Object.entries(mergedPerm)) {
     const baseLevel = hasOwn(basePerm, k) ? permissionLevel(basePerm[k]) : PERMISSION_LEVELS.ask;
     if (permissionLevel(v) > baseLevel) {
@@ -168,12 +202,26 @@ export function applyProfilePatch(base: string, spec: UserPatchSpec): string {
         `permission "${k}" would widen from ${JSON.stringify(basePerm[k] ?? 'ask')} to ${JSON.stringify(v)}`,
       );
     }
+    if (
+      touchedPerm.has(k) &&
+      hasOwn(ceiling, k) &&
+      typeof ceiling[k] === 'string' &&
+      permissionLevel(v) > permissionLevel(ceiling[k])
+    ) {
+      throw new PatchPolicyError(
+        `permission "${k}" exceeds the allowed ceiling ${JSON.stringify(ceiling[k])} (got ${JSON.stringify(v)})`,
+      );
+    }
   }
   return JSON.stringify(doc, null, 2);
 }
 
 /** Validate a patch file (parse + dry-run against a base content string). */
-export function validateProfilePatch(base: string, rawPatch: string): PatchOp[] {
+export function validateProfilePatch(
+  base: string,
+  rawPatch: string,
+  requirements?: ProfileRequirements,
+): PatchOp[] {
   let spec: UserPatchSpec;
   try {
     spec = JSON.parse(rawPatch) as UserPatchSpec;
@@ -181,7 +229,7 @@ export function validateProfilePatch(base: string, rawPatch: string): PatchOp[] 
     throw new PatchPolicyError('patch.json is not valid JSON');
   }
   if (!Array.isArray(spec.patch)) throw new PatchPolicyError('patch.json has no patch array');
-  applyProfilePatch(base, spec);
+  applyProfilePatch(base, spec, requirements);
   return spec.patch ?? [];
 }
 
@@ -198,7 +246,8 @@ export type PatchRejection =
 export function humanizePatchError(err: unknown): PatchRejection {
   if (err instanceof PatchPolicyError) {
     const msg = err.message;
-    if (msg.includes('would widen')) return { kind: 'permission', detail: msg };
+    if (msg.includes('would widen') || msg.includes('exceeds the allowed ceiling'))
+      return { kind: 'permission', detail: msg };
     if (msg.includes('not patchable')) return { kind: 'forbidden-path', detail: msg };
     if (msg.includes('not valid JSON') || msg.includes('no patch array'))
       return { kind: 'syntax', detail: msg };

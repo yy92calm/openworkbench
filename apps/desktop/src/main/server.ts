@@ -15,12 +15,16 @@ import {
 import { get as httpGet } from 'node:http';
 import { createServer } from 'node:net';
 import { homedir } from 'node:os';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { type BrowserMcpPlugin, createBrowserMcp } from '@fafawork/browser-mcp';
 import { app } from 'electron';
 
 import { applyUserOverlay } from './profilePatch';
+import { wrapSpawn } from './sandbox/manager';
+import { readSandboxConfig } from './sandbox/policy';
+import { DEFAULT_SANDBOX_CONFIG, type SandboxPaths } from './sandbox/types';
 import { deploySchedulerProfile, startSchedulerApi } from './scheduler';
 import { enrichedPath } from './shell_env';
 import { getStore } from './store';
@@ -69,6 +73,29 @@ function xdgConfigHome(): string {
 /** Where the bundled OpenCode profile is deployed on each sidecar start. */
 export function deployedProfileDir(): string {
   return join(xdgConfigHome(), 'opencode');
+}
+
+/** Filesystem inputs for the sandbox policy: the active workspace plus the
+ *  XDG runtime dirs the sidecar must be able to write. Shared by the sidecar
+ *  and kernel spawn sites so both run under the same policy. */
+export function sandboxPathsFor(workspace: string): SandboxPaths {
+  const root = runtimeRoot();
+  return {
+    workspace,
+    writableRoots: [
+      join(root, 'xdg-config'),
+      join(root, 'xdg-data'),
+      join(root, 'xdg-cache'),
+      join(root, 'xdg-state'),
+    ],
+    tmpDir: tmpdir(),
+  };
+}
+
+/** Effective sandbox config: deployed profile's sandbox.json (base + user
+ *  overlay), falling back to the defaults when absent or invalid. */
+export function effectiveSandboxConfig() {
+  return readSandboxConfig(deployedProfileDir()) ?? DEFAULT_SANDBOX_CONFIG;
 }
 
 function activeWorkspaceFile(): string {
@@ -379,7 +406,28 @@ export async function startSidecar(): Promise<string> {
     throw new Error(msg);
   }
 
-  const cmd = spawn(sidecarPath, ['serve', '--hostname', '127.0.0.1', '--port', String(port)], {
+  const sandboxConfig = effectiveSandboxConfig();
+  const sandboxPaths = sandboxPathsFor(workspace);
+  const serveArgs = ['serve', '--hostname', '127.0.0.1', '--port', String(port)];
+  let command = { file: sidecarPath, args: serveArgs, wrapped: false, detail: 'sandbox skipped' };
+  try {
+    command = await wrapSpawn(
+      { file: sidecarPath, args: serveArgs, cwd: workspace },
+      { config: sandboxConfig, paths: sandboxPaths },
+    );
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    log('server', 'sandbox', `refusing to start sidecar: ${msg}`, 'error');
+    throw err;
+  }
+  log(
+    'server',
+    'sandbox',
+    command.wrapped ? command.detail : `${command.detail} — running unsandboxed`,
+    command.wrapped ? 'info' : 'warn',
+  );
+
+  const cmd = spawn(command.file, command.args, {
     env: { ...process.env, ...env },
     cwd: workspace,
     stdio: ['ignore', 'pipe', 'pipe'],

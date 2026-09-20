@@ -1,16 +1,18 @@
 import { PanelLeft } from 'lucide-react';
 import { useEffect, useMemo, useRef } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet, useNavigate } from 'react-router-dom';
 
 import { CommandPalette } from '@/components/command-palette/CommandPalette';
 import { Sidebar } from '@/components/sidebar/Sidebar';
 import { StatusBar } from '@/components/sidebar/StatusBar';
 import { Toaster } from '@/components/ui/Toaster';
 import { cn } from '@/lib/cn';
-import { openExternal } from '@/lib/electron';
+import { onMacroNotification, openExternal } from '@/lib/electron';
+import { useMacroStore } from '@/lib/macroStore';
 import { mockProject } from '@/lib/mock';
 import { useRuntimeStore } from '@/lib/runtime';
 import { useUiStore } from '@/lib/store';
+import { toast } from '@/lib/toast';
 
 export function AppShell() {
   const sidebarWidth = useUiStore((s) => s.sidebarWidth);
@@ -18,10 +20,27 @@ export function AppShell() {
   const sidebarCollapsed = useUiStore((s) => s.sidebarCollapsed);
   const toggleSidebar = useUiStore((s) => s.toggleSidebar);
   const resizingRef = useRef(false);
+  const navigate = useNavigate();
 
   useEffect(() => {
     void useRuntimeStore.getState().bootstrap();
   }, []);
+
+  // Macro insight notifications: unread badge + a toast whose click jumps to
+  // the briefing session (or the dashboard for indicator alerts).
+  useEffect(() => {
+    void useMacroStore.getState().load();
+    const off = onMacroNotification((n) => {
+      useMacroStore.getState().add(n);
+      toast.success(
+        n.title,
+        n.kind === 'briefing' && n.sessionId
+          ? () => navigate(`/live/${n.sessionId}`)
+          : () => navigate('/macro'),
+      );
+    });
+    return off;
+  }, [navigate]);
 
   // External links open in the system browser.
   useEffect(() => {

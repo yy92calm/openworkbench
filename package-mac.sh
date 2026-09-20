@@ -20,6 +20,10 @@ note "已清理 node_modules / out / release / dist"
 
 step "2/6" "重新安装依赖"
 pnpm install
+# relay / client 是独立 workspace（有自己的 lockfile），主 pnpm install 不覆盖；
+# 清理步骤删除了它们的 node_modules，typecheck 需要它们就位。
+(cd relay && pnpm install)
+(cd client && pnpm install)
 note "依赖安装完成"
 
 step "3/6" "准备 OpenCode sidecar"

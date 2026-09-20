@@ -37,6 +37,7 @@ import {
   workspaceBase,
 } from '@/lib/tauri';
 import {
+  profileExplainConfig,
   profileInteraction,
   profileManifest,
   profileValidatePatch,
@@ -476,7 +477,11 @@ export function SettingsPage() {
  *  the agent via the config-prompt contract, extracts the `workbench:config-patch`
  *  fence from the reply, and runs it through the main-process validator BEFORE
  *  touching the patch editor. The agent never writes anything directly. */
-function ConfigConversation({ onPatchGenerated }: { onPatchGenerated: (patch: string) => void }) {
+function ConfigConversation({
+  onPatchGenerated,
+}: {
+  onPatchGenerated: (patch: string, baseHash: string) => void;
+}) {
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<
@@ -513,7 +518,7 @@ function ConfigConversation({ onPatchGenerated }: { onPatchGenerated: (patch: st
           if (res.ok) {
             setStatus('validated');
             setDetail(`patch 合法（${res.ops} 个操作），已填入编辑器。`);
-            onPatchRef.current(fence);
+            onPatchRef.current(fence, res.baseHash);
           } else {
             setStatus('rejected');
             const r = res.rejection;
@@ -598,13 +603,20 @@ function ProfileSection() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [interaction, setInteraction] = useState<InteractionConfig | null>(null);
+  const [baseHash, setBaseHash] = useState<string | null>(null);
+  const [origins, setOrigins] = useState<Record<string, string> | null>(null);
+  const [patchApplied, setPatchApplied] = useState<boolean | null>(null);
 
   useEffect(() => {
     void load();
   }, []);
 
   async function load() {
-    const [m, itx] = await Promise.all([profileManifest(), profileInteraction()]);
+    const [m, itx, ex] = await Promise.all([
+      profileManifest(),
+      profileInteraction(),
+      profileExplainConfig(),
+    ]);
     if (m) {
       setManifest(m as DeployedManifest);
       setInteraction(itx as InteractionConfig);
@@ -615,20 +627,31 @@ function ProfileSection() {
         /* not editable in web build */
       }
     }
+    if (ex && typeof ex === 'object') {
+      const e = ex as { origins?: Record<string, string>; patchApplied?: boolean };
+      setOrigins(e.origins ?? null);
+      setPatchApplied(e.patchApplied ?? null);
+    }
   }
 
   async function onSave() {
     setBusy(true);
     setMsg(null);
-    const result = await profileWritePatch(raw);
+    const result = await profileWritePatch(raw, baseHash ?? undefined);
     if (!result.ok) {
-      setMsg(result.error ?? '保存失败');
-      toast.error(result.error ?? 'patch 格式有误');
+      if (result.stale) {
+        setMsg('配置在校验后已被修改（如重启或编辑器保存），请重新校验后再保存。');
+        toast.error('基线已变化，保存被拒绝');
+      } else {
+        setMsg(result.error ?? '保存失败');
+        toast.error(result.error ?? 'patch 格式有误');
+      }
       setBusy(false);
       return;
     }
     await window.electronAPI?.storeSet('profile-patch-raw', raw);
     setDirty(false);
+    setBaseHash(null);
     setMsg('已保存。重启运行时（设置 → 运行时 → 重启）后生效。');
     toast.success('patch 已保存');
     setBusy(false);
@@ -649,16 +672,47 @@ function ProfileSection() {
             label="文件覆盖"
             value={manifest?.fileOverrides?.length ? manifest.fileOverrides.join(', ') : '无'}
           />
+          <Row
+            label="出厂 profile 变更"
+            value={manifest?.sourceChanged ? '是（请人工确认）' : '否'}
+          />
         </dl>
+        {manifest?.sourceChanged && (
+          <p className="mt-3 rounded-input border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning">
+            出厂 profile
+            自上次部署后被改动过。运行时篡改不会持久（每次启动重新镜像），但源侧改动建议人工审阅。
+          </p>
+        )}
       </Card>
 
       <ConfigConversation
-        onPatchGenerated={(p) => {
+        onPatchGenerated={(p, hash) => {
           setRaw(p);
+          setBaseHash(hash);
           setDirty(true);
           setMsg('对话已生成 patch，已填入下方编辑器。点击「保存 patch」生效。');
         }}
       />
+
+      <Card
+        title="生效来源"
+        hint="当前合并配置中每个顶层键来自哪一层（base = 出厂 profile，patch = 用户覆盖）。patch 不生效时先看这里。"
+      >
+        {origins && Object.keys(origins).length > 0 ? (
+          <dl className="space-y-2.5">
+            {Object.entries(origins).map(([k, v]) => (
+              <Row key={k} label={k} value={v === 'patch' ? 'patch（用户覆盖）' : 'base（出厂）'} />
+            ))}
+          </dl>
+        ) : (
+          <p className="text-xs text-muted">尚未部署或配置为空。</p>
+        )}
+        {patchApplied === false && raw.trim() && (
+          <p className="mt-3 text-xs text-warning">
+            patch.json 存在但未生效（对当前 base 无效），重启部署时会以校验结果为准。
+          </p>
+        )}
+      </Card>
 
       <Card
         title="启用渲染器"

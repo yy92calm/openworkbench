@@ -46,7 +46,24 @@ export interface RelayGuest {
 export function makeGuestTransport(opts: RelayGuestOptions = {}): RelayGuest {
   const Ws = opts.WebSocketImpl ?? WsClient;
   let ws: InstanceType<typeof Ws> | null = null;
+  /** (relayUrl, deviceId, token) the current socket was opened with. */
+  let connectedTo: string | null = null;
   const pending = new Map<string, Pending>();
+
+  const rejectAll = (err: Error): void => {
+    for (const [id, p] of pending) {
+      pending.delete(id);
+      try {
+        p.controller?.error(err);
+      } catch {
+        /* closed */
+      }
+      p.headReject(err);
+      // Attach a noop to avoid unhandled rejections when the caller does not
+      // await the head promise (e.g. expecting a failed pairing).
+      Promise.resolve(p.headPromise).catch(() => {});
+    }
+  };
 
   const handleMessage = (raw: unknown): void => {
     let msg: RelayMessage | null = null;
@@ -96,38 +113,55 @@ export function makeGuestTransport(opts: RelayGuestOptions = {}): RelayGuest {
 
   return {
     async connect(relayUrl, deviceId, token) {
-      this.close?.();
       const url = new URL(relayUrl);
       url.searchParams.set('role', 'guest');
       url.searchParams.set('device', deviceId);
       url.searchParams.set('token', token);
-      ws = new Ws(url.toString());
-      ws.on('open', () => {});
-      ws.on('message', (data) => handleMessage(data));
-      ws.on('error', (e) => {
-        const err = new Error(`relay connection failed: ${(e as Error).message}`);
-        for (const [, p] of pending) p.headReject(err);
-      });
-      ws.on('close', () => {
-        const err = new Error('relay connection closed');
-        for (const [id, p] of pending) {
-          pending.delete(id);
-          try {
-            p.controller?.error(err);
-          } catch {
-            /* closed */
-          }
-          // Attach a noop to avoid unhandled rejections when the caller does not
-          // await the head promise (e.g. expecting a failed pairing).
-          p.headReject(err);
-          Promise.resolve(p.headPromise).catch(() => {});
+      const target = url.toString();
+      // Same parameters on a live socket — reuse it (mirrors the real
+      // RelayHttpTransport; a second socket for the same device would race
+      // the first one's teardown and reject in-flight requests).
+      if (ws && ws.readyState === Ws.OPEN && connectedTo === target) return;
+      // Replacing the connection: reject in-flight requests and detach the
+      // old socket BEFORE closing it, so its late 'close' event cannot reject
+      // requests that belong to the new socket (shared pending map). The
+      // handlers stay registered but every one is a no-op on a stale socket
+      // (`ws !== socket` check), so nothing else is needed.
+      const old = ws;
+      ws = null;
+      connectedTo = null;
+      if (old) {
+        rejectAll(new Error('relay connection replaced'));
+        try {
+          old.close();
+        } catch {
+          /* already closed */
         }
+      }
+      const socket = new Ws(target);
+      ws = socket;
+      socket.on('open', () => {});
+      socket.on('message', (data) => {
+        if (ws !== socket) return; // stale socket — its teardown already ran
+        handleMessage(data);
+      });
+      socket.on('error', (e) => {
+        const err = new Error(`relay connection failed: ${(e as Error).message}`);
+        if (ws !== socket) return; // stale socket — its teardown already ran
+        rejectAll(err);
+      });
+      socket.on('close', () => {
+        if (ws !== socket) return; // stale socket — its teardown already ran
+        ws = null;
+        connectedTo = null;
+        rejectAll(new Error('relay connection closed'));
       });
       await new Promise<void>((resolve, reject) => {
-        ws!.once('open', () => resolve());
-        ws!.once('error', (e) => reject(new Error((e as Error).message)));
-        ws!.once('close', () => reject(new Error('relay connection closed before open')));
+        socket.once('open', () => resolve());
+        socket.once('error', (e) => reject(new Error((e as Error).message)));
+        socket.once('close', () => reject(new Error('relay connection closed before open')));
       });
+      connectedTo = target;
     },
     async fetchImpl(input, init) {
       const url =
@@ -178,8 +212,17 @@ export function makeGuestTransport(opts: RelayGuestOptions = {}): RelayGuest {
     },
     close() {
       if (ws) {
-        ws.close();
+        const socket = ws;
         ws = null;
+        connectedTo = null;
+        // The socket's own close event is a no-op now (stale check) — reject
+        // in-flight requests here instead.
+        rejectAll(new Error('relay connection closed'));
+        try {
+          socket.close();
+        } catch {
+          /* already closed */
+        }
       }
     },
   };

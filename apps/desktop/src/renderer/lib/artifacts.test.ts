@@ -3,7 +3,9 @@ import type { ArtifactInspector } from '@workbench/shared';
 import { describe, expect, it } from 'vitest';
 
 import {
+  type ArtifactBlock,
   artifactBlockToInspector,
+  artifactPreviewPlan,
   deriveArtifact,
   extractArtifactRefs,
   extToKind,
@@ -211,5 +213,63 @@ describe('artifactBlockToInspector', () => {
     });
     expect(insp.code).toContain('Binary artifact');
     expect(insp.code).toContain('figures/atlas.png');
+  });
+});
+
+describe('artifactPreviewPlan', () => {
+  const block = (over: Partial<ArtifactBlock>): ArtifactBlock => ({
+    kind: 'artifact',
+    path: 'out/x',
+    filename: 'x',
+    artifact: 'data',
+    tool: 'write',
+    ...over,
+  });
+
+  it('routes raster figures to image previews (disk read)', () => {
+    for (const ext of ['png', 'jpg', 'jpeg', 'gif', 'webp']) {
+      expect(artifactPreviewPlan(block({ filename: `f.${ext}`, artifact: 'figure' }))).toEqual({
+        kind: 'image',
+        useInlineContent: false,
+      });
+    }
+  });
+
+  it('routes svg figures to svg previews', () => {
+    expect(artifactPreviewPlan(block({ filename: 'chart.svg', artifact: 'figure' }))).toEqual({
+      kind: 'svg',
+      useInlineContent: false,
+    });
+  });
+
+  it('routes csv/tsv tables to mini-table previews with inline content', () => {
+    expect(artifactPreviewPlan(block({ filename: 'a.csv', artifact: 'table' }))).toEqual({
+      kind: 'table',
+      useInlineContent: true,
+    });
+    expect(artifactPreviewPlan(block({ filename: 'a.tsv', artifact: 'table' }))).toMatchObject({
+      kind: 'table',
+    });
+  });
+
+  it('routes html reports to iframe previews', () => {
+    expect(artifactPreviewPlan(block({ filename: 'report.html', artifact: 'report' }))).toEqual({
+      kind: 'html',
+      useInlineContent: true,
+    });
+  });
+
+  it('returns null for everything else', () => {
+    expect(artifactPreviewPlan(block({ filename: 'model.py', artifact: 'script' }))).toBeNull();
+    expect(artifactPreviewPlan(block({ filename: 'nb.ipynb', artifact: 'notebook' }))).toBeNull();
+    expect(artifactPreviewPlan(block({ filename: 'notes.md', artifact: 'report' }))).toBeNull();
+    expect(artifactPreviewPlan(block({ filename: 'data.xlsx', artifact: 'table' }))).toBeNull();
+    expect(artifactPreviewPlan(block({ filename: 'raw.bin', artifact: 'figure' }))).toBeNull();
+  });
+
+  it('is extension-case insensitive', () => {
+    expect(artifactPreviewPlan(block({ filename: 'PHOTO.PNG', artifact: 'figure' }))).toMatchObject(
+      { kind: 'image' },
+    );
   });
 });

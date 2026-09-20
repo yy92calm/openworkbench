@@ -7,9 +7,10 @@ import { APP_IDS, APP_NAMES, CHANNEL } from './constants';
 import { registerIpcHandlers, relayHost } from './ipc';
 import { killAllKernels } from './kernel';
 import { getLogger } from './logging';
+import { macroStore } from './macro';
 import { startPreviewServer, stopPreviewServer } from './preview_server';
 import type { RelayHostConfig } from './relayHost';
-import { cronEngine, stopSchedulerApi } from './scheduler';
+import { cronEngine, ensureMacroTasks, stopSchedulerApi } from './scheduler';
 import { deployBundledProfile, getBrowserMcp, stopSidecar } from './server';
 import { getStore } from './store';
 import { setupAutoUpdater } from './updater';
@@ -83,6 +84,15 @@ void app.whenReady().then(async () => {
   registerIpcHandlers();
   getBrowserMcp().start();
   setDockIcon();
+
+  // Macro insights: load the cached snapshot (instant cold start) and
+  // prefetch in the background — never blocks startup.
+  macroStore.init();
+
+  // First launch only: create the default macro background tasks (轮动日报 /
+  // 轮动周报 / 复盘周报) so generation does not depend on the interface.
+  // Afterwards they are user-managed in the tasks page (delete = stays deleted).
+  ensureMacroTasks();
 
   deployBundledProfile();
 

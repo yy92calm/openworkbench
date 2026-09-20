@@ -11,6 +11,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { CodeViewer } from '@/components/code-viewer/CodeViewer';
+import { stripAnsi } from '@/lib/ansi';
 import { cn } from '@/lib/cn';
 import { listProvenance, readEnvLockfile } from '@/lib/provenance';
 import { useUiStore } from '@/lib/store';
@@ -203,7 +204,10 @@ export function ProvenancePanel({ path, language }: { path: string; language?: s
                   </div>
                 )}
                 {r.content ? (
-                  <CodeViewer code={r.content} language={language} />
+                  // Display-layer ANSI cleanup: recorded content may carry
+                  // escape sequences from colored tool output (raw stays in
+                  // the JSONL store, per the codex convention).
+                  <CodeViewer code={stripAnsi(r.content)} language={language} />
                 ) : (
                   <div className={cn('text-xs text-muted')}>
                     Content not captured for this version (binary or produced by running code).

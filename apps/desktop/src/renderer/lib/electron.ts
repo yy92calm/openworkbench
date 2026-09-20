@@ -1,3 +1,17 @@
+import type {
+  MacroBoard,
+  MacroDashboardSnapshot,
+  MacroIndustryDetail,
+  MacroKlinePoint,
+  MacroNotification,
+  MacroReportMeta,
+  MacroThemeId,
+  ResearchDecision,
+  ResearchOutcome,
+  ResearchStance,
+  SandboxStatus,
+} from '@workbench/shared';
+
 import type { ElectronAPI } from '../electron';
 
 function api(): ElectronAPI {
@@ -26,6 +40,16 @@ export async function restartRuntime(kind?: 'opencode' | 'claude-code'): Promise
     return await api().restartRuntime(kind);
   } catch (err) {
     console.error('[restartRuntime] failed:', err);
+    return null;
+  }
+}
+
+/** Sandbox enforcement status from the main process — null outside Electron
+ *  (browser dev), where no sandbox exists to report. */
+export async function sandboxStatus(): Promise<SandboxStatus | null> {
+  try {
+    return await api().sandboxStatus();
+  } catch {
     return null;
   }
 }
@@ -192,6 +216,10 @@ export interface ScheduledTask {
   lastRunAt?: string;
   nextRunAt?: string;
   tags?: string[];
+  /** Optional budget guard: skip firing once today's run count reaches this. */
+  maxRunsPerDay?: number;
+  /** Macro insight task: the fire path rebuilds the prompt from live data. */
+  macroTheme?: MacroThemeId;
 }
 
 export interface CreateTaskInput {
@@ -201,6 +229,8 @@ export interface CreateTaskInput {
   agent?: string;
   model?: string;
   tags?: string[];
+  maxRunsPerDay?: number;
+  macroTheme?: MacroThemeId;
 }
 
 export interface UpdateTaskInput {
@@ -210,6 +240,8 @@ export interface UpdateTaskInput {
   agent?: string;
   model?: string;
   tags?: string[];
+  maxRunsPerDay?: number;
+  macroTheme?: MacroThemeId;
 }
 
 export interface ExecutionRecord {
@@ -217,7 +249,7 @@ export interface ExecutionRecord {
   taskId: string;
   taskName: string;
   triggeredAt: string;
-  status: 'running' | 'completed' | 'failed' | 'timeout';
+  status: 'running' | 'completed' | 'failed' | 'timeout' | 'skipped';
   sessionId?: string;
   error?: string;
   durationMs?: number;
@@ -229,6 +261,195 @@ export async function schedulerList(): Promise<ScheduledTask[]> {
     return (await api().schedulerList()) as ScheduledTask[];
   } catch {
     return [];
+  }
+}
+
+// ---- Macro insights (宏观洞察) ----
+
+/** Cached dashboard snapshot; resolves immediately (never waits on network). */
+export async function macroDashboard(force = false): Promise<MacroDashboardSnapshot | null> {
+  try {
+    return (await api().macroDashboard({ force })) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** On-demand daily closes for a detail dialog (cached in the main process). */
+export async function macroSeries(secid: string, days?: number): Promise<MacroKlinePoint[]> {
+  try {
+    return (await api().macroSeries(secid, days)) ?? [];
+  } catch {
+    return [];
+  }
+}
+
+export async function macroNotifications(): Promise<{
+  items: MacroNotification[];
+  unread: number;
+}> {
+  try {
+    return (await api().macroNotifications()) ?? { items: [], unread: 0 };
+  } catch {
+    return { items: [], unread: 0 };
+  }
+}
+
+export async function macroNotificationsRead(id?: string): Promise<{
+  items: MacroNotification[];
+  unread: number;
+}> {
+  try {
+    return (await api().macroNotificationsRead(id)) ?? { items: [], unread: 0 };
+  } catch {
+    return { items: [], unread: 0 };
+  }
+}
+
+export function onMacroDashboard(cb: (snapshot: MacroDashboardSnapshot) => void): () => void {
+  try {
+    return api().onMacroDashboard(cb);
+  } catch {
+    return () => {};
+  }
+}
+
+export function onMacroNotification(cb: (notification: MacroNotification) => void): () => void {
+  try {
+    return api().onMacroNotification(cb);
+  } catch {
+    return () => {};
+  }
+}
+
+// ---- Background-generated reports (workspace research/reports) ----
+
+/** Latest report per theme (the page shows one row per theme). */
+export async function macroReports(): Promise<MacroReportMeta[]> {
+  try {
+    return (await api().macroReports()) ?? [];
+  } catch {
+    return [];
+  }
+}
+
+export async function macroReportRead(
+  file: string,
+): Promise<{ file: string; markdown: string } | null> {
+  try {
+    return (await api().macroReportRead(file)) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export type MacroRegenerateResult = { ok: true; taskId: string } | { ok: false; reason: string };
+
+/** Re-run a theme's background task; resolves as soon as it is triggered. */
+export async function macroRegenerate(themeId: MacroThemeId): Promise<MacroRegenerateResult> {
+  try {
+    return (await api().macroRegenerate(themeId)) as MacroRegenerateResult;
+  } catch {
+    return { ok: false, reason: 'ipc-failed' };
+  }
+}
+
+export function onMacroReports(cb: () => void): () => void {
+  try {
+    return api().onMacroReports(cb);
+  } catch {
+    return () => {};
+  }
+}
+
+/** Industry model: on-demand board detail (constituent valuation + history). */
+export async function macroIndustry(board: MacroBoard): Promise<MacroIndustryDetail | null> {
+  try {
+    return (await api().macroIndustry(board)) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+// ---- Research loop (decision ledger + knowledge asset) ----
+
+export async function researchDecisions(): Promise<ResearchDecision[]> {
+  try {
+    return (await api().researchDecisions()) ?? [];
+  } catch {
+    return [];
+  }
+}
+
+export async function researchAddDecision(input: {
+  model: 'rotation' | 'industry';
+  target: string;
+  stance: 'overweight' | 'neutral' | 'underweight' | 'watch';
+  thesis: string;
+  sessionId?: string;
+}): Promise<ResearchDecision | null> {
+  try {
+    return (await api().researchAddDecision(input)) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function researchAttribute(
+  id: string,
+  outcome: ResearchOutcome,
+  note: string,
+): Promise<ResearchDecision | null> {
+  try {
+    return (await api().researchAttribute(id, outcome, note)) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function researchDigest(): Promise<string | null> {
+  try {
+    return (await api().researchDigest()) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Edit a ledger entry (target / stance / thesis); null on failure. */
+export async function researchUpdateDecision(
+  id: string,
+  patch: { target?: string; stance?: ResearchStance; thesis?: string },
+): Promise<ResearchDecision | null> {
+  try {
+    return (await api().researchUpdateDecision(id, patch)) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function researchDeleteDecision(id: string): Promise<boolean> {
+  try {
+    return (await api().researchDeleteDecision(id)) ?? false;
+  } catch {
+    return false;
+  }
+}
+
+/** Write the ledger CSV into the workspace; null when the ledger is empty. */
+export async function researchExport(): Promise<{ path: string; count: number } | null> {
+  try {
+    return (await api().researchExport()) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Write the leadership report markdown into the workspace. */
+export async function macroExportReport(markdown: string): Promise<{ path: string } | null> {
+  try {
+    return (await api().macroExportReport(markdown)) ?? null;
+  } catch {
+    return null;
   }
 }
 
@@ -250,17 +471,33 @@ export async function profileInteraction(): Promise<unknown> {
   }
 }
 
+/** Per-key config origin replay ("who said this value": base vs patch). */
+export async function profileExplainConfig(): Promise<unknown> {
+  try {
+    return await api().profileExplainConfig();
+  } catch {
+    return { merged: {}, origins: {}, patchApplied: false };
+  }
+}
+
 /** Dry-run a patch against the deployed opencode.json. Never writes. */
 export async function profileValidatePatch(
   raw: string,
-): Promise<{ ok: true; ops: number } | { ok: false; rejection: { kind: string; detail: string } }> {
+): Promise<
+  | { ok: true; ops: number; baseHash: string }
+  | { ok: false; rejection: { kind: string; detail: string } }
+> {
   return await api().profileValidatePatch(raw);
 }
 
-/** Validate + persist the user patch overlay (patch.json). */
-export async function profileWritePatch(raw: string): Promise<{ ok: boolean; error?: string }> {
+/** Validate + persist the user patch overlay (patch.json). Pass
+ *  `expectedBaseHash` (from a prior validate) for CAS-stale protection. */
+export async function profileWritePatch(
+  raw: string,
+  expectedBaseHash?: string,
+): Promise<{ ok: boolean; error?: string; stale?: boolean }> {
   try {
-    return await api().profileWritePatch(raw);
+    return await api().profileWritePatch(raw, expectedBaseHash);
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }

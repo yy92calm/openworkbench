@@ -3,6 +3,7 @@ import { createHashRouter, Navigate, type RouteObject } from 'react-router-dom';
 import { AppShell } from './layout/AppShell';
 import { FilesPage } from './routes/FilesPage';
 import { LiveSessionPage } from './routes/LiveSessionPage';
+import { MacroInsightsPage } from './routes/MacroInsightsPage';
 import { NotFound } from './routes/NotFound';
 import { RoomsPage } from './routes/RoomsPage';
 import { SessionPage } from './routes/SessionPage';
@@ -20,6 +21,7 @@ export const routes: RouteObject[] = [
       { path: 'live/:sessionId', element: <LiveSessionPage /> },
       { path: 'example/:sessionId', element: <SessionPage /> },
       { path: 'skills', element: <SkillsPage /> },
+      { path: 'macro', element: <MacroInsightsPage /> },
       { path: 'tasks', element: <TasksPage /> },
       { path: 'files', element: <FilesPage /> },
       { path: 'rooms', element: <RoomsPage /> },

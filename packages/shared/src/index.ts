@@ -5,7 +5,13 @@ export type RuntimeStatus = 'connecting' | 'ready' | 'error' | 'offline';
 
 // ---- User-level patch overlay (OpenCode profile) ----
 
-export type { DeployedManifest, PatchOp, PatchRejection, UserPatchSpec } from './patchOverlay';
+export type {
+  DeployedManifest,
+  PatchOp,
+  PatchRejection,
+  ProfileRequirements,
+  UserPatchSpec,
+} from './patchOverlay';
 export {
   applyProfilePatch,
   contentHash,
@@ -18,6 +24,75 @@ export {
 
 export type { InteractionConfig, RendererManifest, UiDefaults } from './interaction';
 export { parseRenderersJson, parseUiDefaultsJson } from './interaction';
+
+// ---- Macro insights (宏观洞察) ----
+
+export type {
+  MacroBoard,
+  MacroConstituent,
+  MacroDashboardSnapshot,
+  MacroFundRankItem,
+  MacroFundsData,
+  MacroFxQuote,
+  MacroIndicator,
+  MacroIndustryDetail,
+  MacroKlinePoint,
+  MacroNotification,
+  MacroNotificationKind,
+  MacroPoint,
+  MacroQuote,
+  MacroReportMeta,
+  MacroSnapshotData,
+  MacroSourceId,
+  MacroSourceState,
+  MacroSourceStatus,
+  MacroThemeId,
+  MacroThemeMeta,
+  MacroYieldPoint,
+  ResearchAttribution,
+  ResearchContext,
+  ResearchDecision,
+  ResearchModel,
+  ResearchOutcome,
+  ResearchStance,
+  RotationRow,
+  RotationSignal,
+} from './macro';
+export {
+  applyCanonicalIndexNames,
+  attachRotationDeltas,
+  boardPePercentile,
+  buildCoreIndicatorLines,
+  buildIndicatorLine,
+  buildIndustryPrompt,
+  buildMacroConclusion,
+  buildMacroContextLines,
+  buildMacroPrompt,
+  buildMacroReportMarkdown,
+  buildMacroSummarySentence,
+  buildReviewPrompt,
+  buildRotationPrompt,
+  computeRotation,
+  CSI_INDUSTRY_NAMES,
+  CSI_INDUSTRY_SECIDS,
+  digestCharCount,
+  emptyMacroSnapshot,
+  formatResearchContext,
+  FUND_INDEX_NAMES,
+  FUND_INDEX_SECIDS,
+  MACRO_THEMES,
+  macroTheme,
+} from './macro';
+
+// ---- Sandbox runtime status (main-process DTO shared with the renderer) ----
+
+export type {
+  SandboxConfig,
+  SandboxMode,
+  SandboxNetwork,
+  SandboxPlatform,
+  SandboxStatus,
+} from './sandbox';
 
 export type ModelStatus = 'connected' | 'disconnected' | 'error';
 
@@ -69,10 +144,15 @@ export interface UserMessageBlock {
 
 export interface AgentMessageBlock {
   kind: 'agent';
-  /** Markdown; inline `code` tokens are rendered as blue mono. */
+  /** Markdown; inline `code` tokens are rendered as blue mono. A2UI fences
+   *  (```a2ui) are extracted before this is set — the raw JSON never shows. */
   markdown: string;
   /** Epoch ms when the message finished streaming. */
   timestamp?: number;
+  /** Key linking agent-emitted A2UI surfaces to this block: the opencode
+   *  part id while streaming, `h<message>-p<part>` when rebuilt from history.
+   *  The A2UI engine claims surfaces under the same key it was fed with. */
+  a2uiPartKey?: string;
 }
 
 export interface StepSummaryBlock {

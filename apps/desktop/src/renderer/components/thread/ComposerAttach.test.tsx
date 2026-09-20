@@ -8,6 +8,7 @@ vi.mock('@/lib/tauri', () => ({
   isTauri: true,
   addFilesToWorkspace: vi.fn(async () => ['data.csv']),
   addTextToWorkspace: vi.fn(async () => 'pasted.txt'),
+  sandboxStatus: async () => null,
 }));
 
 describe('Composer attachments (desktop)', () => {

@@ -94,6 +94,11 @@ const TOOLS = [
         agent: { type: 'string', description: 'Optional agent name' },
         model: { type: 'string', description: 'Optional model name' },
         tags: { type: 'array', items: { type: 'string' }, description: 'Optional tags' },
+        maxRunsPerDay: {
+          type: 'number',
+          description:
+            'Optional budget guard: skip firing once today run count reaches this (0/unset = unlimited)',
+        },
       },
       required: ['name', 'cron', 'prompt'],
     },
@@ -111,6 +116,11 @@ const TOOLS = [
         agent: { type: 'string' },
         model: { type: 'string' },
         tags: { type: 'array', items: { type: 'string' } },
+        maxRunsPerDay: {
+          type: 'number',
+          description:
+            'Optional budget guard: skip firing once today run count reaches this (0/unset = unlimited)',
+        },
       },
       required: ['id'],
     },

@@ -78,3 +78,36 @@ describe('ToolCallRow', () => {
     expect(screen.getByText('/ws/2026-07-04-1030')).toBeInTheDocument();
   });
 });
+
+describe('ToolCallRow ANSI cleanup', () => {
+  it('strips escape sequences from the error preview of a failed tool', () => {
+    render(
+      <ToolCallRow
+        block={{
+          kind: 'tool-call',
+          title: 'flake',
+          status: 'failed',
+          outputSummary: '\x1b[31merror: boom\x1b[0m',
+        }}
+      />,
+    );
+    expect(screen.getByText('boom')).toBeInTheDocument();
+    expect(screen.queryByText((t) => t.includes('\u001b'))).not.toBeInTheDocument();
+  });
+
+  it('strips escape sequences from expanded output while keeping plain text', async () => {
+    render(
+      <ToolCallRow
+        block={{
+          kind: 'tool-call',
+          title: 'colored',
+          status: 'success',
+          outputSummary: '\x1b[32mok\x1b[0m · plain',
+        }}
+      />,
+    );
+    await userEvent.click(screen.getByRole('button', { name: /colored/ }));
+    expect(screen.getByText('ok · plain')).toBeInTheDocument();
+    expect(screen.queryByText((t) => t.includes('\u001b'))).not.toBeInTheDocument();
+  });
+});

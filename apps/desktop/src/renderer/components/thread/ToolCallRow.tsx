@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
+import { stripAnsi } from '@/lib/ansi';
 import { cn } from '@/lib/cn';
 import { useUiStore } from '@/lib/store';
 
@@ -47,8 +48,12 @@ export function ToolCallRow({ block, activity }: { block: ToolCallBlock; activit
   const isDone =
     block.status === 'success' || block.status === 'failed' || block.status === 'warning';
 
-  // Error display: show first line, expand for full error
-  const errorOutput = isError && block.outputSummary ? block.outputSummary : null;
+  // Error display: show first line, expand for full error. Tool output may
+  // carry ANSI escapes from the underlying command — strip at display time
+  // (storage keeps raw bytes, per the codex display-layer convention).
+  const inputText = stripAnsi(block.inputSummary ?? '');
+  const outputText = stripAnsi(block.outputSummary ?? '');
+  const errorOutput = isError && outputText ? outputText : null;
   const errorPreview = errorOutput
     ? errorOutput
         .split('\n')[0]
@@ -111,25 +116,23 @@ export function ToolCallRow({ block, activity }: { block: ToolCallBlock; activit
       )}
 
       {/* Input summary when collapsed */}
-      {!expanded && !errorPreview && block.inputSummary && (
-        <div className="truncate px-3 pb-2 pl-[34px] text-[12px] text-muted">
-          {block.inputSummary}
-        </div>
+      {!expanded && !errorPreview && inputText && (
+        <div className="truncate px-3 pb-2 pl-[34px] text-[12px] text-muted">{inputText}</div>
       )}
 
       {expanded && (
         <div className="border-t border-border-soft px-3 pb-3 pt-2">
-          {block.inputSummary && (
+          {inputText && (
             <div className="mb-2">
               <div className="mb-1 text-[11px] font-medium uppercase tracking-wider text-muted">
                 Input
               </div>
               <pre className="max-h-48 overflow-y-auto whitespace-pre-wrap break-all rounded-md bg-bg-soft px-3 py-2 font-mono text-[12px] leading-5 text-text-dim">
-                {block.inputSummary}
+                {inputText}
               </pre>
             </div>
           )}
-          {block.outputSummary && (
+          {outputText && (
             <div>
               <div className="mb-1 text-[11px] font-medium uppercase tracking-wider text-muted">
                 Output
@@ -140,7 +143,7 @@ export function ToolCallRow({ block, activity }: { block: ToolCallBlock; activit
                   isError ? 'bg-error/8 text-error' : 'bg-bg-soft text-text-dim',
                 )}
               >
-                {block.outputSummary}
+                {outputText}
               </pre>
             </div>
           )}

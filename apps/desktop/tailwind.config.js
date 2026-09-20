@@ -25,6 +25,9 @@ export default {
         warn: 'var(--warn)',
         ok: 'var(--ok)',
         error: 'var(--error)',
+        // A-share convention: rise (red) = up, fall (green) = down.
+        rise: 'var(--rise)',
+        fall: 'var(--fall)',
         'chat-user-bg': 'var(--chat-user-bg)',
         'chat-user-border': 'var(--chat-user-border)',
         'chat-user-fg': 'var(--chat-user-fg)',
