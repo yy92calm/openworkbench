@@ -12,13 +12,13 @@ function tone(v: number | null): string {
   return v >= 0 ? 'text-rise' : 'text-fall';
 }
 
-const SIGNAL_STYLE: Record<RotationSignal, string> = {
+export const SIGNAL_STYLE: Record<RotationSignal, string> = {
   overweight: 'bg-rise/10 text-rise ring-1 ring-rise/30',
   neutral: 'bg-surface-2 text-muted ring-1 ring-border',
   underweight: 'bg-fall/10 text-fall ring-1 ring-fall/30',
 };
 
-const SIGNAL_LABEL: Record<RotationSignal, string> = {
+export const SIGNAL_LABEL: Record<RotationSignal, string> = {
   overweight: '超配',
   neutral: '中性',
   underweight: '低配',
@@ -31,6 +31,21 @@ function fmtVol(v: number | null): string {
   return v === null ? '—' : `${(v * 100).toFixed(1)}%`;
 }
 
+/** 0–100 score bar, colored by the signal bucket (same language as the SW table). */
+function ScoreBar({ score, signal }: { score: number; signal: RotationSignal | null }) {
+  const color =
+    signal === 'overweight'
+      ? 'bg-rise/60'
+      : signal === 'underweight'
+        ? 'bg-fall/60'
+        : 'bg-muted/50';
+  return (
+    <span className="h-1 w-8 overflow-hidden rounded-full bg-surface-2 ring-1 ring-border/60">
+      <span className={cn('block h-full rounded-full', color)} style={{ width: `${score}%` }} />
+    </span>
+  );
+}
+
 function ScoreCell({ row }: { row: RotationRow }) {
   if (row.score === null) {
     return <span className="text-[12px] text-muted">—</span>;
@@ -38,7 +53,8 @@ function ScoreCell({ row }: { row: RotationRow }) {
   // Snapshots cached before scoreDelta existed carry undefined; treat as null.
   const delta = row.scoreDelta ?? null;
   return (
-    <span className="inline-flex items-baseline justify-end gap-1">
+    <span className="inline-flex items-center justify-end gap-1.5">
+      <ScoreBar score={row.score} signal={row.signal} />
       <span className="font-mono text-[13px] text-text">{row.score}</span>
       {delta !== null && delta !== 0 && (
         <span
@@ -106,7 +122,19 @@ export function RotationTable({
               )}
             </span>
             <span className="text-right text-[12px] text-muted">
-              {r.trend === null ? '—' : r.trend ? '线上' : '线下'}
+              {r.trend === null ? (
+                '—'
+              ) : (
+                <span className="inline-flex items-center gap-1">
+                  <span
+                    className={cn(
+                      'h-1.5 w-1.5 rounded-full',
+                      r.trend ? 'bg-rise/70' : 'bg-fall/70',
+                    )}
+                  />
+                  {r.trend ? '线上' : '线下'}
+                </span>
+              )}
             </span>
             <span className="text-right">
               <ScoreCell row={r} />

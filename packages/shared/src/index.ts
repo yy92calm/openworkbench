@@ -42,6 +42,7 @@ export type {
   MacroPoint,
   MacroQuote,
   MacroReportMeta,
+  MacroSignalView,
   MacroSnapshotData,
   MacroSourceId,
   MacroSourceState,
@@ -57,6 +58,7 @@ export type {
   ResearchStance,
   RotationRow,
   RotationSignal,
+  SwIndustryRow,
 } from './macro';
 export {
   applyCanonicalIndexNames,
@@ -69,9 +71,11 @@ export {
   buildMacroContextLines,
   buildMacroPrompt,
   buildMacroReportMarkdown,
+  buildMacroSignalView,
   buildMacroSummarySentence,
   buildReviewPrompt,
   buildRotationPrompt,
+  buildSwConclusion,
   computeRotation,
   CSI_INDUSTRY_NAMES,
   CSI_INDUSTRY_SECIDS,

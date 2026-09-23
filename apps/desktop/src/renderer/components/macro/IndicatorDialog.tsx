@@ -6,7 +6,7 @@ export interface MacroSeriesPoint {
   y: number;
 }
 
-function TrendChart({ points }: { points: MacroSeriesPoint[] }) {
+export function TrendChart({ points }: { points: MacroSeriesPoint[] }) {
   const w = 520;
   const h = 150;
   const pad = 10;

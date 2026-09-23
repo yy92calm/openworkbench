@@ -3,6 +3,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  commonCutoff,
   medianOf,
   parseBoards,
   parseConstituents,
@@ -11,6 +12,8 @@ import {
   parseIndexQuotes,
   parseKline,
   parseMacroIndicators,
+  parseSwAnalysis,
+  parseSwRealtime,
   parseTreasury,
 } from './macroData';
 
@@ -243,5 +246,117 @@ describe('medianOf', () => {
     expect(medianOf([4, 1, 3, 2])).toBe(2.5);
     expect(medianOf([null, 5, null])).toBe(5);
     expect(medianOf([])).toBeNull();
+  });
+});
+
+describe('parseSwRealtime', () => {
+  it('maps the index-publish fields and converts 百万元 → 亿元', () => {
+    const raw = JSON.stringify({
+      data: {
+        results: [
+          {
+            swindexcode: '801010',
+            swindexname: '农林牧渔',
+            l3: '2632.57',
+            l4: '2623.10',
+            l5: '30011.47',
+            l8: '2619.63',
+          },
+          { swindexcode: '801030' }, // malformed row is skipped
+        ],
+      },
+    });
+    expect(parseSwRealtime(raw)).toEqual([
+      { code: '801010', name: '农林牧渔', close: 2619.63, prevClose: 2632.57, amount: 300.1147 },
+    ]);
+  });
+
+  it('returns an empty list for a payload without rows', () => {
+    expect(parseSwRealtime(JSON.stringify({ data: null }))).toEqual([]);
+    expect(parseSwRealtime('not json')).toEqual([]);
+  });
+});
+
+describe('parseSwAnalysis', () => {
+  const row = (
+    code: string,
+    name: string,
+    date: string,
+    close: string,
+    pe: string,
+    share: string,
+  ) => ({
+    swindexcode: code,
+    swindexname: name,
+    bargaindate: `${date}T08:00:00+08:00`,
+    closeindex: close,
+    turnoverrate: '5.66',
+    pe,
+    pb: '2.51',
+    dp: '1.76',
+    bargainsumrate: share,
+    negotiablessharesum1: '6019.93',
+  });
+
+  it('groups rows by industry, oldest first, with percent-unit fields', () => {
+    const raw = JSON.stringify({
+      data: {
+        results: [
+          row('801010', '农林牧渔', '2026-09-21', '2632.57', '83.73', '1.48'),
+          row('801010', '农林牧渔', '2026-09-18', '2578.44', '81.20', '1.30'),
+          row('801080', '电子', '2026-09-18', '9011.67', '-', '28.46'),
+        ],
+      },
+    });
+    const out = parseSwAnalysis(raw);
+    expect(out.size).toBe(2);
+    const agri = out.get('801010');
+    expect(agri?.name).toBe('农林牧渔');
+    expect(agri?.rows.map((r) => r.date)).toEqual(['2026-09-18', '2026-09-21']);
+    expect(agri?.rows[1]).toMatchObject({ close: 2632.57, pe: 83.73, amountShare: 1.48 });
+    expect(agri?.rows[1].turnover).toBe(5.66);
+    expect(out.get('801080')?.rows[0].pe).toBeNull();
+  });
+});
+
+describe('commonCutoff', () => {
+  const series = (dates: string[]) => ({
+    name: 'x',
+    rows: dates.map((date) => ({
+      date,
+      close: 1,
+      turnover: null,
+      pe: null,
+      pb: null,
+      dividend: null,
+      amountShare: null,
+      mcap: null,
+    })),
+  });
+
+  it('falls back to the newest date covered by enough industries', () => {
+    const codes = Array.from({ length: 30 }, (_, i) => `8010${10 + i}`);
+    const byCode = new Map(
+      codes.map((code, i) => [
+        code,
+        series(i < 14 ? ['2026-09-18', '2026-09-21'] : ['2026-09-18']),
+      ]),
+    );
+    expect(commonCutoff(byCode)).toBe('2026-09-18');
+  });
+
+  it('keeps the newest date when coverage is sufficient', () => {
+    const codes = Array.from({ length: 30 }, (_, i) => `8010${10 + i}`);
+    const byCode = new Map(
+      codes.map((code, i) => [
+        code,
+        series(i < 29 ? ['2026-09-18', '2026-09-21'] : ['2026-09-18']),
+      ]),
+    );
+    expect(commonCutoff(byCode)).toBe('2026-09-21');
+  });
+
+  it('returns null without data', () => {
+    expect(commonCutoff(new Map())).toBeNull();
   });
 });

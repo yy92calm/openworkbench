@@ -140,8 +140,15 @@ export function DecisionLedger({
     <div>
       <div className="group mb-2 flex flex-wrap items-center gap-2">
         <h2 className="text-[13px] font-medium text-text">决策台账 · 记录 → 归因 → 再训练</h2>
-        <span className="text-[11px] text-muted">
-          共 {decisions.length} 条 · 已归因 {reviewed}（{rate}%）· 工作区 decisions.jsonl
+        <span className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted">
+          共 {decisions.length} 条 · 已归因 {reviewed}（{rate}%）
+          <span className="h-1 w-12 overflow-hidden rounded-full bg-surface-2 ring-1 ring-border/60">
+            <span
+              className="block h-full rounded-full bg-accent/60"
+              style={{ width: `${rate}%` }}
+            />
+          </span>
+          · 工作区 decisions.jsonl
         </span>
         <span className="flex-1" />
         <span className="hidden items-center gap-2 group-hover:flex">

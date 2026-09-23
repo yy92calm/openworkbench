@@ -10,15 +10,17 @@ import type {
   MacroYieldPoint,
   ResearchContext,
   ResearchDecision,
+  SwIndustryRow,
 } from '@workbench/shared';
 import {
   buildCoreIndicatorLines,
   buildIndicatorLine,
   buildIndustryPrompt,
-  buildMacroConclusion,
   buildMacroReportMarkdown,
+  buildMacroSignalView,
   buildReviewPrompt,
   buildRotationPrompt,
+  buildSwConclusion,
   digestCharCount,
 } from '@workbench/shared';
 import { ChevronDown, RefreshCw } from 'lucide-react';
@@ -29,11 +31,13 @@ import { DecisionLedger } from '@/components/macro/DecisionLedger';
 import { ExportMenu } from '@/components/macro/ExportMenu';
 import { IndicatorCard } from '@/components/macro/IndicatorCard';
 import { IndicatorDialog } from '@/components/macro/IndicatorDialog';
-import { IndustryPanel } from '@/components/macro/IndustryPanel';
+import { IndustryDialog } from '@/components/macro/IndustryDialog';
+import { IndustryTreemap } from '@/components/macro/IndustryTreemap';
 import { NotificationsMenu } from '@/components/macro/NotificationsMenu';
 import { RecordDecisionDialog } from '@/components/macro/RecordDecisionDialog';
 import { ReportSection } from '@/components/macro/ReportSection';
 import { RotationTable } from '@/components/macro/RotationTable';
+import { SwIndustryTable, swMetricsText } from '@/components/macro/SwIndustryTable';
 import { cn } from '@/lib/cn';
 import {
   macroExportReport,
@@ -86,17 +90,7 @@ function quoteLine(q: MacroQuote): string {
 }
 
 /** KPI tile used by the executive overview. */
-function Kpi({
-  label,
-  value,
-  sub,
-  tone,
-}: {
-  label: string;
-  value: string;
-  sub?: string;
-  tone?: 'rise' | 'fall';
-}) {
+function Kpi({ label, value, tone }: { label: string; value: string; tone?: 'rise' | 'fall' }) {
   return (
     <div className="rounded-card border border-border-soft bg-bg/40 px-3 py-2">
       <div className="text-[11px] text-muted">{label}</div>
@@ -108,7 +102,44 @@ function Kpi({
       >
         {value}
       </div>
-      {sub && <div className="mt-0.5 text-[10px] text-muted/80">{sub}</div>}
+    </div>
+  );
+}
+
+/** One signal row of the overview: a bucket label plus industry chips. */
+function SignalChips({
+  label,
+  tone,
+  names,
+}: {
+  label: string;
+  tone: 'rise' | 'fall';
+  names: string[];
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <span
+        className={cn(
+          'shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ring-1',
+          tone === 'rise'
+            ? 'bg-rise/10 text-rise ring-rise/30'
+            : 'bg-fall/10 text-fall ring-fall/30',
+        )}
+      >
+        {label}
+      </span>
+      {names.length === 0 ? (
+        <span className="text-[12px] text-muted">暂无</span>
+      ) : (
+        names.map((name) => (
+          <span
+            key={name}
+            className="rounded-full bg-surface-2 px-2 py-0.5 text-[12px] text-text ring-1 ring-border"
+          >
+            {name}
+          </span>
+        ))
+      )}
     </div>
   );
 }
@@ -253,6 +284,17 @@ export function MacroInsightsPage() {
     }
   };
 
+  // ---- Shenwan level-1 panorama: quote / hand off to the conversation ----
+
+  const quoteSw = (r: SwIndustryRow) => {
+    quote([buildIndicatorLine(`申万一级 ${r.name}`, `${swMetricsText(r)}（截止 ${r.asOf}）`)]);
+  };
+
+  const analyzeSw = (r: SwIndustryRow) => {
+    const focused = `请特别关注申万一级行业「${r.name}」（${r.code}）：${swMetricsText(r)}。\n\n`;
+    void openSession(focused + buildRotationPrompt(snapshot, researchCtx()));
+  };
+
   // ---- Leadership report exports (same markdown for copy and file) ----
   const reportMarkdown = () => buildMacroReportMarkdown(snapshot, decisions, digest);
 
@@ -345,15 +387,14 @@ export function MacroInsightsPage() {
   const latestYield = yields.length > 0 ? yields[yields.length - 1] : null;
   const fx = snapshot?.data.fx ?? null;
   const rotation = snapshot?.data.rotation ?? [];
+  const swRows = snapshot?.data.swIndustries ?? [];
+  const swConclusion = buildSwConclusion(swRows);
   const boards = snapshot?.data.boards ?? [];
   const flowTop = [...boards]
     .sort((a, b) => (b.mainInflow ?? -Infinity) - (a.mainInflow ?? -Infinity))
     .slice(0, 10);
 
   // ---- Executive overview numbers ----
-  const reviewedCount = decisions.filter((d) => d.status === 'reviewed').length;
-  const attributionRate =
-    decisions.length > 0 ? Math.round((reviewedCount / decisions.length) * 100) : 0;
   const readySources = Object.values(snapshot?.sources ?? {}).filter(
     (s) => s.status === 'ready',
   ).length;
@@ -364,7 +405,7 @@ export function MacroInsightsPage() {
     under: rotation.filter((r) => r.signal === 'underweight').length,
   };
   const digestChars = digestCharCount(digest);
-  const conclusion = buildMacroConclusion(snapshot);
+  const signalView = buildMacroSignalView(snapshot);
 
   // ---- Collapsed data-base summary (one glance instead of 23 cards) ----
   const quoteBrief = (secid: string): string | null => {
@@ -484,43 +525,38 @@ export function MacroInsightsPage() {
               <NotificationsMenu onOpen={handleNotification} />
             </span>
           </div>
-          <p className="mt-1.5 text-[11px] leading-relaxed text-muted">
-            轮动模型回答何时配什么行业，行业模型回答行业内如何定价 · 数据 → 信号 → 模型 → 决策 →
-            归因 → 再训练
-          </p>
-          <p className="mt-2 text-[13px] font-medium leading-relaxed text-text">
-            {conclusion.action}
-          </p>
-          {conclusion.change && (
-            <p className="mt-1 text-[12px] leading-relaxed text-muted">{conclusion.change}</p>
+          {rotation.length > 0 && rotation.some((r) => r.score !== null) ? (
+            <>
+              <div className="mt-3 flex flex-col gap-1.5">
+                <SignalChips label="超配" tone="rise" names={signalView.over} />
+                <SignalChips label="低配" tone="fall" names={signalView.under} />
+              </div>
+              {signalView.change && (
+                <p className="mt-1.5 text-[11px] leading-relaxed text-muted">{signalView.change}</p>
+              )}
+            </>
+          ) : (
+            <p className="mt-2 text-[12px] leading-relaxed text-muted">
+              {rotation.length === 0 ? '轮动信号加载中…' : '轮动历史数据不足，等待行情补齐…'}
+            </p>
           )}
 
           <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-5">
             <Kpi
               label="行业覆盖"
-              value={`${rotation.length} 指数 · ${boards.length} 板块`}
-              sub="中证十行业 + 东财细分"
+              value={
+                swRows.length > 0
+                  ? `${swRows.length} 申万 · ${rotation.length} 中证 · ${boards.length} 板块`
+                  : `${rotation.length} 指数 · ${boards.length} 板块`
+              }
             />
             <Kpi
               label="轮动信号"
               value={`超配 ${signalCounts.over} · 中性 ${signalCounts.neutral} · 低配 ${signalCounts.under}`}
-              sub="透明评分口径"
             />
-            <Kpi
-              label="决策台账"
-              value={`${decisions.length} 条`}
-              sub={`归因率 ${attributionRate}% · 待归因 ${decisions.length - reviewedCount}`}
-            />
-            <Kpi
-              label="知识资产"
-              value={digestChars > 0 ? `${digestChars} 字` : '待沉淀'}
-              sub="工作区 knowledge.md"
-            />
-            <Kpi
-              label="数据时效"
-              value={`${readySources}/${totalSources} 源`}
-              sub={snapshot?.refreshing ? '刷新中' : '公开数据源'}
-            />
+            <Kpi label="决策台账" value={`${decisions.length} 条`} />
+            <Kpi label="知识资产" value={digestChars > 0 ? `${digestChars} 字` : '待沉淀'} />
+            <Kpi label="数据时效" value={`${readySources}/${totalSources} 源`} />
           </div>
         </div>
 
@@ -530,7 +566,7 @@ export function MacroInsightsPage() {
           onOpenSession={(sessionId) => navigate(`/live/${sessionId}`)}
         />
 
-        <div className="order-6 mt-6">
+        <div className="order-7 mt-6">
           <div className="group flex flex-wrap items-center gap-2 rounded-card border border-border bg-surface px-3 py-2">
             <h2 className="text-[13px] font-medium text-text">数据底座 · 模型输入</h2>
             <span className="min-w-0 truncate font-mono text-[11px] text-muted">{baseSummary}</span>
@@ -872,23 +908,73 @@ export function MacroInsightsPage() {
 
         <section className="order-4 mt-6">
           <div className="mb-2 flex flex-wrap items-center gap-2">
-            <h2 className="text-[13px] font-medium text-text">行业模型 · 行业内如何定价</h2>
-            <span className="text-[11px] text-muted">盈利 / 估值 / 情绪三要素</span>
+            <h2 className="text-[13px] font-medium text-text">申万行业 · 一级全景</h2>
+            <span className="text-[11px] text-muted">
+              {swRows.length > 0
+                ? `${swRows.length} 个一级行业 · 行情 / 估值 / 评分`
+                : '31 个一级行业 · 行情 / 估值 / 评分'}
+            </span>
           </div>
-          <IndustryPanel
-            boards={boards}
-            selected={selectedBoard}
-            detail={industry}
-            loading={industryLoading}
-            onSelect={(b) => void selectIndustry(b)}
-            onAnalyze={() => void generateIndustry()}
-            onDecision={() =>
-              selectedBoard && setRecord({ model: 'industry', target: selectedBoard.name })
-            }
-          />
+          {swRows.length > 0 && (
+            <>
+              <p className="mt-2 text-[13px] font-medium leading-relaxed text-text">
+                {swConclusion.ranks}
+              </p>
+              {swConclusion.focus && (
+                <p className="mt-1 text-[12px] leading-relaxed text-muted">{swConclusion.focus}</p>
+              )}
+            </>
+          )}
+          <div className="mt-2">
+            {swRows.length === 0 ? (
+              <div className="rounded-card border border-border bg-surface px-3 py-6 text-center text-[12px] text-muted">
+                {sourceState(['sw']).status === 'error'
+                  ? '申万数据源暂不可用，稍后刷新重试。'
+                  : '申万行业数据加载中…'}
+              </div>
+            ) : (
+              <SwIndustryTable
+                rows={swRows}
+                onDecision={(r) => setRecord({ model: 'rotation', target: `申万·${r.name}` })}
+                onQuote={(r) => quoteSw(r)}
+                onAnalyze={(r) => void analyzeSw(r)}
+              />
+            )}
+            {swRows.length > 0 && (
+              <div className="mt-1.5 text-[11px] leading-relaxed text-muted">
+                {`口径：评分沿用轮动模型（0.45×相对强度 + 0.35×动量 + 0.20×趋势，申万一级行业内百分位）；行情为申万官网实时，估值 / 换手 / 成交占比为截止日（${swRows[0].asOf.slice(5)}）收盘数据；点击行查看约 85 个交易日走势与明细。`}
+              </div>
+            )}
+          </div>
         </section>
 
         <section className="order-5 mt-6">
+          <div className="mb-2 flex flex-wrap items-center gap-2">
+            <h2 className="text-[13px] font-medium text-text">行业模型 · 行业内如何定价</h2>
+            <span className="text-[11px] text-muted">
+              盈利 / 估值 / 情绪三要素 · 全部板块热力图（面积 = 市值，颜色 = 涨跌）
+            </span>
+          </div>
+          {boards.length === 0 ? (
+            <div className="rounded-card border border-border bg-surface px-3 py-6 text-center text-[12px] text-muted">
+              {sourceState(['industries']).status === 'error'
+                ? '行业数据源暂不可用，稍后刷新重试。'
+                : sourceState(['industries']).status === 'ready'
+                  ? '板块列表数据源暂不可用（东财板块接口异常）；行情与轮动数据不受影响，稍后自动重试。'
+                  : '板块数据加载中…'}
+            </div>
+          ) : (
+            <IndustryTreemap boards={boards} onSelect={(b) => void selectIndustry(b)} />
+          )}
+          {boards.length > 0 && (
+            <div className="mt-1.5 text-[11px] leading-relaxed text-muted">
+              口径：面积为东财板块总市值（TOP100
+              按市值去重）；红涨绿跌、颜色深浅随涨跌幅；点击方块查看估值、走势与成分股明细。
+            </div>
+          )}
+        </section>
+
+        <section className="order-6 mt-6">
           <DecisionLedger
             decisions={decisions}
             onChanged={() => void reloadResearch()}
@@ -897,7 +983,7 @@ export function MacroInsightsPage() {
           />
         </section>
 
-        <div className="order-7 mt-6 border-t border-border-soft pt-3 text-[11px] leading-relaxed text-muted">
+        <div className="order-8 mt-6 border-t border-border-soft pt-3 text-[11px] leading-relaxed text-muted">
           数据来自公开接口，可能存在延迟或误差；评分是透明规则模型，仅供研究参考，不构成投资建议。
           {snapshot?.errors && snapshot.errors.length > 0 && (
             <span className="ml-1 text-error">部分数据源异常：{snapshot.errors.join('；')}</span>
@@ -923,6 +1009,20 @@ export function MacroInsightsPage() {
             closeDialog();
             void openSession(focused + buildRotationPrompt(snapshot, researchCtx()));
           }}
+        />
+      )}
+
+      {selectedBoard && (
+        <IndustryDialog
+          board={selectedBoard}
+          detail={industry}
+          loading={industryLoading}
+          onClose={() => {
+            setSelectedBoard(null);
+            setIndustry(null);
+          }}
+          onAnalyze={() => void generateIndustry()}
+          onDecision={() => setRecord({ model: 'industry', target: selectedBoard.name })}
         />
       )}
 

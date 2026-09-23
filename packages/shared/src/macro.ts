@@ -6,7 +6,7 @@
 
 // ---- Data sources ----
 
-export type MacroSourceId = 'indices' | 'yields' | 'macro' | 'fx' | 'funds' | 'industries';
+export type MacroSourceId = 'indices' | 'yields' | 'macro' | 'fx' | 'funds' | 'industries' | 'sw';
 
 export type MacroSourceStatus = 'idle' | 'loading' | 'ready' | 'error';
 
@@ -191,6 +191,43 @@ export interface RotationRow {
   scoreDelta: number | null;
 }
 
+/**
+ * Shenwan level-1 industry row: live quote + fundamentals + the same
+ * transparent rotation metrics. Fundamentals/valuation come from the daily
+ * analysis report as of `asOf` (the newest cutoff published for enough
+ * industries); `changePct`/`amount`/`amountShare` are today's live values.
+ */
+export interface SwIndustryRow {
+  /** Shenwan index code, e.g. "801010". */
+  code: string;
+  name: string;
+  /** Live change today, percent. */
+  changePct: number | null;
+  /** Live turnover today, 亿元. */
+  amount: number | null;
+  /** Share of the 31-industry live turnover, percent. */
+  amountShare: number | null;
+  /** Date of the fundamentals / scoring data (daily analysis report). */
+  asOf: string;
+  close: number | null;
+  turnover: number | null;
+  pe: number | null;
+  pb: number | null;
+  /** Dividend yield, percent. */
+  dividend: number | null;
+  /** Free-float market cap, 亿元. */
+  mcap: number | null;
+  ret60: number | null;
+  rs60: number | null;
+  trend: boolean | null;
+  vol60: number | null;
+  score: number | null;
+  signal: RotationSignal | null;
+  scoreDelta: number | null;
+  /** Daily closes up to `asOf` for the drill-down chart. */
+  history: MacroKlinePoint[];
+}
+
 export interface MacroSnapshotData {
   indices: MacroQuote[];
   /** Prefetched daily closes keyed by secid (mini charts / detail dialog). */
@@ -201,6 +238,8 @@ export interface MacroSnapshotData {
   funds: MacroFundsData;
   /** Rotation model rows (computed at refresh). */
   rotation: RotationRow[];
+  /** Shenwan level-1 industry panorama (quotes + valuation + rotation score). */
+  swIndustries: SwIndustryRow[];
   /** Eastmoney industry boards, top by market cap (industry-model picker). */
   boards: MacroBoard[];
 }
@@ -228,6 +267,7 @@ export function emptyMacroSnapshot(): MacroDashboardSnapshot {
       fx: { status: 'idle' },
       funds: { status: 'idle' },
       industries: { status: 'idle' },
+      sw: { status: 'idle' },
     },
     data: {
       indices: [],
@@ -237,6 +277,7 @@ export function emptyMacroSnapshot(): MacroDashboardSnapshot {
       fx: null,
       funds: { indices: [], top: [] },
       rotation: [],
+      swIndustries: [],
       boards: [],
     },
     errors: [],
@@ -598,16 +639,18 @@ export function digestCharCount(digest: string | null): number {
  * Ledger / knowledge numbers live in the KPI row (and the report) instead of
  * repeating here.
  */
-export function buildMacroConclusion(snapshot: MacroDashboardSnapshot | null): {
-  action: string;
+/** The overview's industry-signal view (chips + change line). */
+export interface MacroSignalView {
+  /** Overweight industries in score-descending order (full list). */
+  over: string[];
+  /** Underweight industries in score-descending order (full list). */
+  under: string[];
+  /** `较上一交易日：X 走强、Y 走弱。`, or null when nothing moved. */
   change: string | null;
-} {
-  const rotation = snapshot?.data.rotation ?? [];
-  if (rotation.length === 0) return { action: '数据加载中，等待轮动信号生成…', change: null };
-  const scored = rotation.filter((r) => r.score !== null);
-  if (scored.length === 0) return { action: '轮动历史数据不足，等待行情补齐…', change: null };
-  const names = (signal: RotationSignal) =>
-    scored.filter((r) => r.signal === signal).map((r) => r.name);
+}
+
+/** Strongest day-over-day riser / faller as one line. */
+function rotationChangeLine(scored: readonly RotationRow[]): string | null {
   const moved = scored.flatMap((r) =>
     typeof r.scoreDelta === 'number' ? [{ name: r.name, delta: r.scoreDelta }] : [],
   );
@@ -616,11 +659,43 @@ export function buildMacroConclusion(snapshot: MacroDashboardSnapshot | null): {
   const moves = [riser && `${riser.name}走强`, faller && `${faller.name}走弱`].filter(
     (s): s is string => Boolean(s),
   );
+  return moves.length > 0 ? `较上一交易日：${moves.join('、')}。` : null;
+}
+
+/** Industry signal view for the overview chips (rotation model, CSI names). */
+export function buildMacroSignalView(snapshot: MacroDashboardSnapshot | null): MacroSignalView {
+  const scored = (snapshot?.data.rotation ?? []).filter((r) => r.score !== null);
+  const names = (signal: RotationSignal) =>
+    scored.filter((r) => r.signal === signal).map((r) => r.name);
   return {
-    action: `建议超配：${names('overweight').join('、') || '暂无'}；建议低配：${
-      names('underweight').join('、') || '暂无'
+    over: names('overweight'),
+    under: names('underweight'),
+    change: rotationChangeLine(scored),
+  };
+}
+
+/**
+ * CEO-facing conclusion sentence (report / clipboard): the recommended
+ * actions (full overweight / underweight name lists, never truncated) and the
+ * strongest day-over-day score mover in each direction. The page renders the
+ * chip view instead; the exported report joins the two strings via
+ * buildMacroSummarySentence. Ledger / knowledge numbers live in the KPI row.
+ */
+export function buildMacroConclusion(snapshot: MacroDashboardSnapshot | null): {
+  action: string;
+  change: string | null;
+} {
+  const rotation = snapshot?.data.rotation ?? [];
+  if (rotation.length === 0) return { action: '数据加载中，等待轮动信号生成…', change: null };
+  if (rotation.filter((r) => r.score !== null).length === 0) {
+    return { action: '轮动历史数据不足，等待行情补齐…', change: null };
+  }
+  const view = buildMacroSignalView(snapshot);
+  return {
+    action: `建议超配：${view.over.join('、') || '暂无'}；建议低配：${
+      view.under.join('、') || '暂无'
     }。`,
-    change: moves.length > 0 ? `较上一交易日：${moves.join('、')}。` : null,
+    change: view.change,
   };
 }
 
@@ -630,6 +705,38 @@ export function buildMacroSummarySentence(snapshot: MacroDashboardSnapshot | nul
   return change ? `${action} ${change}` : action;
 }
 
+/**
+ * Shenwan panorama conclusion (CEO lines): the strongest / weakest scored
+ * industries and where the live turnover concentrates. The page renders the
+ * two strings as separate lines.
+ */
+export function buildSwConclusion(rows: readonly SwIndustryRow[]): {
+  ranks: string;
+  focus: string | null;
+} {
+  if (rows.length === 0) return { ranks: '申万行业数据加载中…', focus: null };
+  const scored = rows.filter((r): r is SwIndustryRow & { score: number } => r.score !== null);
+  if (scored.length === 0) return { ranks: '申万行业评分数据不足，等待行情补齐…', focus: null };
+  const byScore = [...scored].sort((a, b) => b.score - a.score);
+  const label = (r: SwIndustryRow & { score: number }) => `${r.name} ${r.score}`;
+  const ranks = `评分领先：${byScore.slice(0, 3).map(label).join('、')}；评分垫底：${byScore
+    .slice(-3)
+    .reverse()
+    .map(label)
+    .join('、')}。`;
+  const byShare = rows
+    .filter((r) => r.amountShare !== null)
+    .sort((a, b) => (b.amountShare ?? 0) - (a.amountShare ?? 0))
+    .slice(0, 2);
+  const focus =
+    byShare.length > 0
+      ? `成交聚焦：${byShare
+          .map((r) => `${r.name} ${(r.amountShare ?? 0).toFixed(1)}%`)
+          .join('、')}。`
+      : null;
+  return { ranks, focus };
+}
+
 const SOURCE_LABELS: Record<MacroSourceId, string> = {
   indices: '市场行情',
   yields: '利率与汇率',
@@ -637,6 +744,7 @@ const SOURCE_LABELS: Record<MacroSourceId, string> = {
   fx: '汇率',
   funds: '基金市场',
   industries: '行业轮动 / 板块',
+  sw: '申万行业',
 };
 
 const SOURCE_STATUS_LABELS: Record<MacroSourceStatus, string> = {
@@ -790,6 +898,22 @@ function rotationRowLine(r: RotationRow): string {
   )}）${deltaText}`;
 }
 
+function swIndustryLine(r: SwIndustryRow): string {
+  const head =
+    r.score === null || r.signal === null
+      ? `${r.name}：未参与评分`
+      : `${r.name}：评分 ${r.score}（${signalLabel(r.signal)}）`;
+  return `- ${[
+    head,
+    `PE ${fmtNum(r.pe)}`,
+    `PB ${fmtNum(r.pb)}`,
+    `股息率 ${fmtPct(r.dividend)}`,
+    `换手 ${fmtPct(r.turnover)}`,
+    `成交占比 ${fmtPct(r.amountShare)}`,
+    `60 日 ${fmtPct01(r.ret60)}`,
+  ].join('，')}`;
+}
+
 function rotationBody(
   title: string,
   snapshot: MacroDashboardSnapshot | null,
@@ -797,6 +921,8 @@ function rotationBody(
 ): string {
   const rows = snapshot?.data.rotation ?? [];
   const table = rows.length > 0 ? rows.map(rotationRowLine).join('\n') : '（轮动数据未就绪）';
+  const sw = snapshot?.data.swIndustries ?? [];
+  const swTable = sw.length > 0 ? sw.map(swIndustryLine).join('\n') : '（申万行业数据未就绪）';
   const flows = [...(snapshot?.data.boards ?? [])]
     .sort((a, b) => (b.mainInflow ?? -Infinity) - (a.mainInflow ?? -Infinity))
     .slice(0, 10)
@@ -807,13 +933,14 @@ function rotationBody(
   const parts = [
     `请生成一份「${title}」。`,
     `【轮动评分】（中证十大行业；评分 = 0.45×相对强度 + 0.35×动量 + 0.20×趋势，行业内百分位；较上一交易日 = 评分变化，历史不足的行不参与评分）\n${table}`,
+    `【申万一级行业 · 31 个】（评分降序；评分口径同上，百分位在申万一级行业内计算；估值 / 换手 / 成交占比为最近收盘数据）\n${swTable}`,
     `【资金流 TOP10（东财细分行业）】\n${flows || '（资金流数据未就绪）'}`,
     macro.length > 0 ? `【宏观输入】\n${macro.join('\n')}` : '【宏观输入】（未就绪）',
     researchBlock,
     [
       '【要求】',
       '1. 明确回答「何时配什么行业」：超配/低配行业、触发条件与失效条件；',
-      '2. 引用评分与资金流数据；信号冲突时说明取舍；',
+      '2. 引用中证十行业与申万一级两个粒度的评分、资金流与估值数据；信号冲突时说明取舍；',
       '3. 与最近决策及知识摘要保持口径一致，冲突处说明理由；',
       '4. 输出结构：结论摘要 → 信号解读 → 配置建议（含风险）→ 跟踪指标；',
       '5. 优先使用 finance-core / equity-research 等技能，篇幅约 500–800 字。',

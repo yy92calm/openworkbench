@@ -181,6 +181,118 @@ export function parseFundRank(raw: string): MacroFundRankItem[] {
 
 // ---- Industry boards (rotation universe + industry model picker) ----
 
+// ---- Shenwan level-1 industries (index-publish API) ----
+
+/** Live quote pieces from `index_publish/current/` (l3/l5/l8 fields). */
+export interface SwRealtimeQuote {
+  code: string;
+  name: string;
+  /** Latest index value. */
+  close: number | null;
+  /** Previous close (for the live change). */
+  prevClose: number | null;
+  /** Turnover in 亿元 (the API reports 百万元). */
+  amount: number | null;
+}
+
+/** One daily analysis row (index_analysis_report). */
+export interface SwAnalysisRow {
+  date: string;
+  close: number | null;
+  /** 换手率, percent. */
+  turnover: number | null;
+  pe: number | null;
+  pb: number | null;
+  /** 股息率, percent. */
+  dividend: number | null;
+  /** 成交额占比 (of all level-1 industries), percent. */
+  amountShare: number | null;
+  /** 流通市值, 亿元. */
+  mcap: number | null;
+}
+
+export interface SwAnalysisSeries {
+  name: string;
+  /** Oldest → newest. */
+  rows: SwAnalysisRow[];
+}
+
+/** Live level-1 industry quotes; empty when the payload has no rows. */
+export function parseSwRealtime(raw: string): SwRealtimeQuote[] {
+  const json = parseJson(raw);
+  const data = json?.data as { results?: unknown } | undefined;
+  if (!Array.isArray(data?.results)) return [];
+  const out: SwRealtimeQuote[] = [];
+  for (const row of data.results) {
+    if (!row || typeof row !== 'object') continue;
+    const r = row as Record<string, unknown>;
+    const code = asString(r.swindexcode);
+    const name = asString(r.swindexname);
+    if (!code || !name) continue;
+    const amount = asNumber(r.l5);
+    out.push({
+      code,
+      name,
+      close: asNumber(r.l8),
+      prevClose: asNumber(r.l3),
+      amount: amount === null ? null : amount / 100, // 百万元 → 亿元
+    });
+  }
+  return out;
+}
+
+/** Daily analysis rows grouped by industry (oldest → newest). */
+export function parseSwAnalysis(raw: string): Map<string, SwAnalysisSeries> {
+  const json = parseJson(raw);
+  const data = json?.data as { results?: unknown } | undefined;
+  if (!Array.isArray(data?.results)) return new Map();
+  const byCode = new Map<string, SwAnalysisSeries>();
+  for (const row of data.results) {
+    if (!row || typeof row !== 'object') continue;
+    const r = row as Record<string, unknown>;
+    const code = asString(r.swindexcode);
+    const date = asString(r.bargaindate)?.slice(0, 10);
+    if (!code || !date) continue;
+    const entry = byCode.get(code) ?? { name: asString(r.swindexname) ?? code, rows: [] };
+    entry.rows.push({
+      date,
+      close: asNumber(r.closeindex),
+      turnover: asNumber(r.turnoverrate),
+      pe: asNumber(r.pe),
+      pb: asNumber(r.pb),
+      dividend: asNumber(r.dp),
+      amountShare: asNumber(r.bargainsumrate),
+      mcap: asNumber(r.negotiablessharesum1),
+    });
+    byCode.set(code, entry);
+  }
+  for (const series of byCode.values()) {
+    series.rows.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+  }
+  return byCode;
+}
+
+const SW_CUTOFF_COVERAGE = 28;
+
+/**
+ * The newest date published for enough industries. The daily analysis report
+ * lags for some names (a handful only arrive the next day), so the valuation /
+ * scoring cutoff must not pick a date only a few industries have.
+ */
+export function commonCutoff(byCode: Map<string, SwAnalysisSeries>): string | null {
+  const counts = new Map<string, number>();
+  for (const series of byCode.values()) {
+    for (const row of series.rows) counts.set(row.date, (counts.get(row.date) ?? 0) + 1);
+  }
+  const dates = [...counts.keys()].sort();
+  for (let i = dates.length - 1; i >= 0; i--) {
+    if ((counts.get(dates[i]) ?? 0) >= Math.min(SW_CUTOFF_COVERAGE, byCode.size)) return dates[i];
+  }
+  return dates.length > 0 ? dates[dates.length - 1] : null;
+}
+
+// ---- Industry boards (rotation universe + industry model picker) ----
+
 function hasLevelSuffix(name: string): boolean {
   return /[ⅠⅡⅢ]$/.test(name);
 }

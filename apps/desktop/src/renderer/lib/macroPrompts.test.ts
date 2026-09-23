@@ -10,9 +10,11 @@ import {
   buildMacroConclusion,
   buildMacroPrompt,
   buildMacroReportMarkdown,
+  buildMacroSignalView,
   buildMacroSummarySentence,
   buildReviewPrompt,
   buildRotationPrompt,
+  buildSwConclusion,
   computeRotation,
   emptyMacroSnapshot,
   type MacroBoard,
@@ -22,6 +24,8 @@ import {
   type MacroQuote,
   type ResearchContext,
   type RotationRow,
+  type RotationSignal,
+  type SwIndustryRow,
 } from '@workbench/shared';
 import { describe, expect, it } from 'vitest';
 
@@ -201,6 +205,52 @@ function filledSnapshot(): MacroDashboardSnapshot {
       pe: 7.26,
     },
   ];
+  s.data.swIndustries = [
+    {
+      code: '801080',
+      name: '电子',
+      changePct: 0.86,
+      amount: 1399.2,
+      amountShare: 28.46,
+      asOf: '2026-09-18',
+      close: 9011.67,
+      turnover: 6.04,
+      pe: 64.13,
+      pb: 6.56,
+      dividend: 0.34,
+      mcap: 99692.82,
+      ret60: 0.12,
+      rs60: 0.08,
+      trend: true,
+      vol60: 0.22,
+      score: 88,
+      signal: 'overweight',
+      scoreDelta: 5,
+      history: [{ date: '2026-09-18', close: 9011.67 }],
+    },
+    {
+      code: '801180',
+      name: '房地产',
+      changePct: -1.2,
+      amount: 200,
+      amountShare: 4.1,
+      asOf: '2026-09-18',
+      close: 2200,
+      turnover: 2.5,
+      pe: 15.2,
+      pb: 1.1,
+      dividend: 3.2,
+      mcap: 15000,
+      ret60: -0.08,
+      rs60: -0.1,
+      trend: false,
+      vol60: 0.18,
+      score: 22,
+      signal: 'underweight',
+      scoreDelta: -3,
+      history: [{ date: '2026-09-18', close: 2200 }],
+    },
+  ];
   return s;
 }
 
@@ -247,6 +297,11 @@ describe('buildRotationPrompt', () => {
     expect(prompt).toContain('电子');
     expect(prompt).toContain('【宏观输入】');
     expect(prompt).toContain('中债 10Y 收益率 1.682%');
+    expect(prompt).toContain('【申万一级行业 · 31 个】');
+    expect(prompt).toContain(
+      '- 电子：评分 88（超配），PE 64.13，PB 6.56，股息率 0.34%，换手 6.04%，成交占比 28.46%，60 日 12.00%',
+    );
+    expect(prompt).toContain('- 房地产：评分 22（低配）');
     expect(prompt).toContain('【知识资产摘要】');
     expect(prompt).toContain('轮动口径');
     expect(prompt).toContain('【未归因决策】');
@@ -311,6 +366,25 @@ describe('buildMacroConclusion', () => {
   });
 });
 
+describe('buildMacroSignalView', () => {
+  it('lists the overweight / underweight names and the change line', () => {
+    const s = filledSnapshot();
+    s.data.rotation[0].scoreDelta = 8;
+    expect(buildMacroSignalView(s)).toEqual({
+      over: ['中证信息'],
+      under: ['中证金融'],
+      change: '较上一交易日：中证信息走强。',
+    });
+  });
+
+  it('degrades without scores', () => {
+    const s = filledSnapshot();
+    s.data.rotation = [];
+    expect(buildMacroSignalView(s)).toEqual({ over: [], under: [], change: null });
+    expect(buildMacroSignalView(null).change).toBeNull();
+  });
+});
+
 describe('buildMacroSummarySentence', () => {
   it('joins the conclusion and change for the report', () => {
     const s = filledSnapshot();
@@ -324,6 +398,38 @@ describe('buildMacroSummarySentence', () => {
 
   it('degrades without rotation data', () => {
     expect(buildMacroSummarySentence(null)).toContain('数据加载中');
+  });
+});
+
+describe('buildSwConclusion', () => {
+  const base = filledSnapshot().data.swIndustries[0];
+  const mk = (
+    name: string,
+    score: number | null,
+    share: number | null,
+    signal: RotationSignal | null = 'neutral',
+  ): SwIndustryRow => ({ ...base, name, score, signal, amountShare: share });
+
+  it('names the strongest / weakest scored industries and the turnover focus', () => {
+    const rows = [
+      mk('电子', 88, 28.5, 'overweight'),
+      mk('电力设备', 76, 7.3, 'overweight'),
+      mk('计算机', 71, 6.1, 'overweight'),
+      mk('公用事业', 52, 2.2),
+      mk('银行', 24, 3.0, 'underweight'),
+      mk('房地产', 18, 4.1, 'underweight'),
+      mk('煤炭', 12, 2.0, 'underweight'),
+    ];
+    const c = buildSwConclusion(rows);
+    expect(c.ranks).toBe(
+      '评分领先：电子 88、电力设备 76、计算机 71；评分垫底：煤炭 12、房地产 18、银行 24。',
+    );
+    expect(c.focus).toBe('成交聚焦：电子 28.5%、电力设备 7.3%。');
+  });
+
+  it('degrades without rows or without scores', () => {
+    expect(buildSwConclusion([]).ranks).toContain('数据加载中');
+    expect(buildSwConclusion([mk('电子', null, null, null)]).ranks).toContain('数据不足');
   });
 });
 
