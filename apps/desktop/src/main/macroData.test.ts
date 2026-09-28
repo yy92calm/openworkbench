@@ -12,6 +12,7 @@ import {
   parseIndexQuotes,
   parseKline,
   parseMacroIndicators,
+  parseMargin,
   parseSwAnalysis,
   parseSwRealtime,
   parseTreasury,
@@ -60,6 +61,42 @@ describe('parseKline', () => {
 
   it('skips malformed rows', () => {
     expect(parseKline('{"data":{"klines":["bad"]}}')).toEqual([]);
+  });
+});
+
+describe('parseMargin', () => {
+  const row = (date: string, balance: number, netBuy: number) => ({
+    DIM_DATE: `${date} 00:00:00`,
+    RZRQYE: balance,
+    RZJME: netBuy,
+  });
+
+  it('maps fields and sorts oldest first', () => {
+    const raw = JSON.stringify({
+      result: {
+        data: [row('2026-09-24', 2637303296082, -17442717603), row('2026-09-23', 2.61e12, 5e10)],
+      },
+    });
+    const out = parseMargin(raw);
+    expect(out).toHaveLength(2);
+    expect(out[0]).toEqual({ date: '2026-09-23', balance: 2.61e12, netBuy: 5e10 });
+    expect(out[1]).toMatchObject({
+      date: '2026-09-24',
+      balance: 2637303296082,
+      netBuy: -17442717603,
+    });
+  });
+
+  it('skips rows without a date and tolerates null balances', () => {
+    const raw = JSON.stringify({
+      result: { data: [{ RZRQYE: 1, RZJME: 2 }, { DIM_DATE: '2026-09-24 00:00:00' }] },
+    });
+    expect(parseMargin(raw)).toEqual([{ date: '2026-09-24', balance: null, netBuy: null }]);
+  });
+
+  it('returns [] for invalid input', () => {
+    expect(parseMargin('not json')).toEqual([]);
+    expect(parseMargin('{"result":{"data":null}}')).toEqual([]);
   });
 });
 

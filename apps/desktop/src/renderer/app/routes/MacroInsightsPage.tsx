@@ -22,6 +22,7 @@ import {
   buildRotationPrompt,
   buildSwConclusion,
   digestCharCount,
+  researchStats,
 } from '@workbench/shared';
 import { ChevronDown, RefreshCw } from 'lucide-react';
 import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
@@ -390,6 +391,8 @@ export function MacroInsightsPage() {
   const swRows = snapshot?.data.swIndustries ?? [];
   const swConclusion = buildSwConclusion(swRows);
   const boards = snapshot?.data.boards ?? [];
+  const globalQuotes = snapshot?.data.global ?? [];
+  const margin = snapshot?.data.margin ?? [];
   const flowTop = [...boards]
     .sort((a, b) => (b.mainInflow ?? -Infinity) - (a.mainInflow ?? -Infinity))
     .slice(0, 10);
@@ -406,6 +409,7 @@ export function MacroInsightsPage() {
   };
   const digestChars = digestCharCount(digest);
   const signalView = buildMacroSignalView(snapshot);
+  const ledgerStats = researchStats(decisions);
 
   // ---- Collapsed data-base summary (one glance instead of 23 cards) ----
   const quoteBrief = (secid: string): string | null => {
@@ -491,6 +495,33 @@ export function MacroInsightsPage() {
     });
   };
 
+  /** Margin (两融) detail: balance or net-buy trend over the fetched window. */
+  const openMarginDialog = (kind: 'balance' | 'netBuy') => {
+    if (margin.length === 0) return;
+    const last = margin[margin.length - 1];
+    const val = last[kind];
+    const series = margin.flatMap((p) => {
+      const v = p[kind];
+      return typeof v === 'number' ? [{ x: p.date, y: v }] : [];
+    });
+    const title = kind === 'balance' ? '两融余额' : '融资净买入';
+    const fmt = (v: number) =>
+      kind === 'balance'
+        ? `${(v / 1e12).toFixed(2)}万亿`
+        : `${v >= 0 ? '+' : ''}${(v / 1e8).toFixed(0)}亿`;
+    openDialog({
+      title,
+      value: typeof val === 'number' ? fmt(val) : '—',
+      sub: last.date,
+      meta: '来源：东财数据中心（沪深两融合计，T+1 披露）',
+      quoteLine:
+        typeof val === 'number'
+          ? buildIndicatorLine(title, fmt(val), last.date)
+          : buildIndicatorLine(title, '暂无数据'),
+      series,
+    });
+  };
+
   return (
     <div className="h-full overflow-y-auto" data-print-root>
       <div className="mx-auto flex max-w-6xl flex-col px-8 py-8">
@@ -534,6 +565,11 @@ export function MacroInsightsPage() {
               {signalView.change && (
                 <p className="mt-1.5 text-[11px] leading-relaxed text-muted">{signalView.change}</p>
               )}
+              {signalView.flips.length > 0 && (
+                <p className="mt-1 text-[11px] leading-relaxed text-muted">
+                  近 5 日信号翻转：{signalView.flips.join('；')}
+                </p>
+              )}
             </>
           ) : (
             <p className="mt-2 text-[12px] leading-relaxed text-muted">
@@ -554,7 +590,14 @@ export function MacroInsightsPage() {
               label="轮动信号"
               value={`超配 ${signalCounts.over} · 中性 ${signalCounts.neutral} · 低配 ${signalCounts.under}`}
             />
-            <Kpi label="决策台账" value={`${decisions.length} 条`} />
+            <Kpi
+              label="决策台账"
+              value={
+                ledgerStats.winRate === null
+                  ? `${decisions.length} 条`
+                  : `${decisions.length} 条 · 胜率 ${ledgerStats.winRate}%`
+              }
+            />
             <Kpi label="知识资产" value={digestChars > 0 ? `${digestChars} 字` : '待沉淀'} />
             <Kpi label="数据时效" value={`${readySources}/${totalSources} 源`} />
           </div>
@@ -606,6 +649,26 @@ export function MacroInsightsPage() {
                       value={quoteValue(q)}
                       changePct={q.changePct}
                       spark={snapshot?.data.klines[q.secid]?.map((p) => p.close)}
+                      onOpen={() => openIndexDialog(q)}
+                      onQuote={() => quote([quoteLine(q)])}
+                    />
+                  ))}
+                </div>
+              </Section>
+
+              <Section
+                title="全球市场"
+                state={sourceState(['global'])}
+                hasData={globalQuotes.length > 0}
+                onQuoteAll={() => quote(globalQuotes.map(quoteLine))}
+              >
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4">
+                  {globalQuotes.map((q) => (
+                    <IndicatorCard
+                      key={q.secid}
+                      label={q.name}
+                      value={quoteValue(q)}
+                      changePct={q.changePct}
                       onOpen={() => openIndexDialog(q)}
                       onQuote={() => quote([quoteLine(q)])}
                     />
@@ -735,6 +798,103 @@ export function MacroInsightsPage() {
               </Section>
 
               <Section
+                title="资金面（两融）"
+                state={sourceState(['margin'])}
+                hasData={margin.some((p) => p.balance !== null || p.netBuy !== null)}
+                onQuoteAll={() => {
+                  const last = margin[margin.length - 1];
+                  if (!last) return;
+                  const lines: string[] = [];
+                  if (typeof last.balance === 'number') {
+                    const prev = margin[Math.max(0, margin.length - 6)]?.balance;
+                    const chg =
+                      typeof prev === 'number'
+                        ? `（较 5 日 ${
+                            last.balance >= prev ? '+' : ''
+                          }${((last.balance - prev) / 1e8).toFixed(0)}亿）`
+                        : '';
+                    lines.push(
+                      buildIndicatorLine(
+                        '两融余额',
+                        `${(last.balance / 1e12).toFixed(2)}万亿${chg}`,
+                        last.date,
+                      ),
+                    );
+                  }
+                  if (typeof last.netBuy === 'number') {
+                    lines.push(
+                      buildIndicatorLine(
+                        '融资净买入',
+                        `${last.netBuy >= 0 ? '+' : ''}${(last.netBuy / 1e8).toFixed(0)}亿`,
+                        last.date,
+                      ),
+                    );
+                  }
+                  quote(lines);
+                }}
+              >
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5">
+                  {(() => {
+                    const last = margin[margin.length - 1];
+                    if (!last) return null;
+                    const balance = typeof last.balance === 'number' ? last.balance : null;
+                    const netBuy = typeof last.netBuy === 'number' ? last.netBuy : null;
+                    const prevBalance = margin[Math.max(0, margin.length - 6)]?.balance;
+                    const balanceSub =
+                      balance !== null && typeof prevBalance === 'number'
+                        ? `${last.date} · 较 5 日 ${
+                            balance >= prevBalance ? '+' : ''
+                          }${((balance - prevBalance) / 1e8).toFixed(0)}亿`
+                        : last.date;
+                    return (
+                      <>
+                        <IndicatorCard
+                          label="两融余额"
+                          value={balance === null ? '—' : `${(balance / 1e12).toFixed(2)}万亿`}
+                          sub={balanceSub}
+                          onOpen={() => openMarginDialog('balance')}
+                          onQuote={
+                            balance === null
+                              ? undefined
+                              : () =>
+                                  quote([
+                                    buildIndicatorLine(
+                                      '两融余额',
+                                      `${(balance / 1e12).toFixed(2)}万亿`,
+                                      last.date,
+                                    ),
+                                  ])
+                          }
+                        />
+                        <IndicatorCard
+                          label="融资净买入"
+                          value={
+                            netBuy === null
+                              ? '—'
+                              : `${netBuy >= 0 ? '+' : ''}${(netBuy / 1e8).toFixed(0)}亿`
+                          }
+                          sub={last.date}
+                          onOpen={() => openMarginDialog('netBuy')}
+                          onQuote={
+                            netBuy === null
+                              ? undefined
+                              : () =>
+                                  quote([
+                                    buildIndicatorLine(
+                                      '融资净买入',
+                                      `${netBuy >= 0 ? '+' : ''}${(netBuy / 1e8).toFixed(0)}亿`,
+                                      last.date,
+                                    ),
+                                  ])
+                          }
+                        />
+                      </>
+                    );
+                  })()}
+                </div>
+              </Section>
+
+              <Section
                 title="基金市场"
                 state={sourceState(['funds'])}
                 hasData={funds.indices.length > 0 || funds.top.length > 0}
@@ -850,7 +1010,8 @@ export function MacroInsightsPage() {
           {rotation.length > 0 && (
             <div className="mt-1.5 text-[11px] leading-relaxed text-muted">
               口径：评分 = 0.45×相对强度 + 0.35×动量 + 0.20×趋势（行业内百分位）；
-              评分旁数字为较上一交易日变化；年化波动 ≥45% 标注高波动；历史不足的行不计分。
+              评分旁数字为较上一交易日变化；年化波动 ≥45% 标注高波动；历史不足的行不计分。 「近 20
+              日」为每日综合评分走势（本地留存 60 个交易日，首日为空）。
             </div>
           )}
 

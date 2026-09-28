@@ -37,6 +37,7 @@ export type {
   MacroIndicator,
   MacroIndustryDetail,
   MacroKlinePoint,
+  MacroMarginPoint,
   MacroNotification,
   MacroNotificationKind,
   MacroPoint,
@@ -56,13 +57,16 @@ export type {
   ResearchModel,
   ResearchOutcome,
   ResearchStance,
+  ResearchStats,
   RotationRow,
   RotationSignal,
   SwIndustryRow,
 } from './macro';
 export {
+  applyCanonicalGlobalNames,
   applyCanonicalIndexNames,
   attachRotationDeltas,
+  attachScoreHistory,
   boardPePercentile,
   buildCoreIndicatorLines,
   buildIndicatorLine,
@@ -75,6 +79,7 @@ export {
   buildMacroSummarySentence,
   buildReviewPrompt,
   buildRotationPrompt,
+  buildSignalFlips,
   buildSwConclusion,
   computeRotation,
   CSI_INDUSTRY_NAMES,
@@ -84,8 +89,13 @@ export {
   formatResearchContext,
   FUND_INDEX_NAMES,
   FUND_INDEX_SECIDS,
+  GLOBAL_NAMES,
+  GLOBAL_SECIDS,
   MACRO_THEMES,
   macroTheme,
+  researchStats,
+  SIGNAL_THRESHOLDS,
+  signalOf,
 } from './macro';
 
 // ---- Sandbox runtime status (main-process DTO shared with the renderer) ----

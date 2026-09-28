@@ -6,7 +6,8 @@
 
 // ---- Data sources ----
 
-export type MacroSourceId = 'indices' | 'yields' | 'macro' | 'fx' | 'funds' | 'industries' | 'sw';
+export type MacroSourceId =
+  'indices' | 'yields' | 'macro' | 'fx' | 'funds' | 'industries' | 'sw' | 'margin' | 'global';
 
 export type MacroSourceStatus = 'idle' | 'loading' | 'ready' | 'error';
 
@@ -80,6 +81,16 @@ export interface MacroFundsData {
   top: MacroFundRankItem[];
 }
 
+/** One margin-trading (两融) day: balances in CNY. */
+export interface MacroMarginPoint {
+  /** 'YYYY-MM-DD'. */
+  date: string;
+  /** Total margin + short balance (RZRQYE). */
+  balance: number | null;
+  /** Margin net buy of the day (RZJME). */
+  netBuy: number | null;
+}
+
 // ---- Canonical display names ----
 // Eastmoney's f14 names are inconsistent for the CSI industry indices
 // ("中证能源" vs "800材料") and too vague for the fund indices. The UI and
@@ -120,10 +131,42 @@ export const FUND_INDEX_NAMES: Record<string, string> = {
   '0.399306': '深证 ETF',
 };
 
+/** Global market quotes: HK/US indexes + gold / oil futures (one request). */
+export const GLOBAL_SECIDS: readonly string[] = [
+  '100.HSI', // 恒生指数
+  '100.SPX', // 标普500
+  '100.NDX', // 纳斯达克100
+  '100.DJIA', // 道琼斯
+  '100.N225', // 日经225
+  '101.GC00Y', // COMEX黄金
+  '112.B00Y', // 布伦特原油
+  '102.CL00Y', // NYMEX(WTI)原油
+];
+
+/** Shorter canonical display names for the global cards. */
+export const GLOBAL_NAMES: Record<string, string> = {
+  '100.HSI': '恒生指数',
+  '100.SPX': '标普500',
+  '100.NDX': '纳斯达克100',
+  '100.DJIA': '道琼斯指数',
+  '100.N225': '日经225',
+  '101.GC00Y': 'COMEX黄金',
+  '112.B00Y': '布伦特原油',
+  '102.CL00Y': 'WTI原油',
+};
+
 /** Overwrite quote names with the canonical display names (fallback: source). */
 export function applyCanonicalIndexNames(quotes: MacroQuote[]): MacroQuote[] {
   return quotes.map((q) => {
     const name = CSI_INDUSTRY_NAMES[q.secid] ?? FUND_INDEX_NAMES[q.secid];
+    return name ? { ...q, name } : q;
+  });
+}
+
+/** applyCanonicalIndexNames for the global group (long futures names → short). */
+export function applyCanonicalGlobalNames(quotes: MacroQuote[]): MacroQuote[] {
+  return quotes.map((q) => {
+    const name = GLOBAL_NAMES[q.secid];
     return name ? { ...q, name } : q;
   });
 }
@@ -189,6 +232,9 @@ export interface RotationRow {
   signal: RotationSignal | null;
   /** Score change vs the previous trading day; null when unknown. */
   scoreDelta: number | null;
+  /** Recent daily scores, oldest → newest (≤20, includes today); empty when
+   * history has not accumulated yet. */
+  scoreHistory: number[];
 }
 
 /**
@@ -224,6 +270,9 @@ export interface SwIndustryRow {
   score: number | null;
   signal: RotationSignal | null;
   scoreDelta: number | null;
+  /** Recent daily scores, oldest → newest (≤20, includes asOf); empty on
+   * cold start. */
+  scoreHistory: number[];
   /** Daily closes up to `asOf` for the drill-down chart. */
   history: MacroKlinePoint[];
 }
@@ -242,6 +291,12 @@ export interface MacroSnapshotData {
   swIndustries: SwIndustryRow[];
   /** Eastmoney industry boards, top by market cap (industry-model picker). */
   boards: MacroBoard[];
+  /** Margin trading (两融) series, oldest → newest (≤60 days). */
+  margin: MacroMarginPoint[];
+  /** Global quotes: HK/US indexes + gold/oil futures. */
+  global: MacroQuote[];
+  /** Signal-flip captions over the recent window ("中证金融 中性→超配"). */
+  signalFlips: string[];
 }
 
 export interface MacroDashboardSnapshot {
@@ -268,6 +323,8 @@ export function emptyMacroSnapshot(): MacroDashboardSnapshot {
       funds: { status: 'idle' },
       industries: { status: 'idle' },
       sw: { status: 'idle' },
+      margin: { status: 'idle' },
+      global: { status: 'idle' },
     },
     data: {
       indices: [],
@@ -279,6 +336,9 @@ export function emptyMacroSnapshot(): MacroDashboardSnapshot {
       rotation: [],
       swIndustries: [],
       boards: [],
+      margin: [],
+      global: [],
+      signalFlips: [],
     },
     errors: [],
   };
@@ -446,6 +506,41 @@ export function buildMacroContextLines(snapshot: MacroDashboardSnapshot): string
   const fx = snapshot.data.fx;
   const fxPrice = num(fx?.price);
   if (fx && fxPrice !== null) out.push(buildIndicatorLine(fx.name, fxPrice, date));
+  // Margin (两融): latest balance + 5-day change + today's net buy.
+  const margin = snapshot.data.margin ?? [];
+  if (margin.length > 0) {
+    const last = margin[margin.length - 1];
+    if (typeof last.balance === 'number') {
+      const prev = margin[Math.max(0, margin.length - 6)]?.balance;
+      const chg =
+        typeof prev === 'number'
+          ? `，较 5 日 ${last.balance >= prev ? '+' : ''}${((last.balance - prev) / 1e8).toFixed(0)}亿`
+          : '';
+      out.push(
+        buildIndicatorLine('两融余额', `${(last.balance / 1e8).toFixed(0)}亿${chg}`, last.date),
+      );
+    }
+    if (typeof last.netBuy === 'number') {
+      out.push(
+        buildIndicatorLine(
+          '融资净买入',
+          `${last.netBuy >= 0 ? '+' : ''}${(last.netBuy / 1e8).toFixed(0)}亿`,
+          last.date,
+        ),
+      );
+    }
+  }
+  // Global cross-asset: the five lines the rotation model actually cites.
+  for (const secid of ['100.SPX', '100.NDX', '100.HSI', '101.GC00Y', '112.B00Y']) {
+    const q = (snapshot.data.global ?? []).find((g) => g.secid === secid);
+    if (!q) continue;
+    const price = num(q.price);
+    const chg = num(q.changePct);
+    if (price === null) continue;
+    const sign = (q.changePct ?? 0) >= 0 ? '+' : '';
+    const value = chg === null ? price : `${price}（${sign}${chg}%）`;
+    out.push(buildIndicatorLine(GLOBAL_NAMES[secid] ?? q.name, value));
+  }
   return out;
 }
 
@@ -456,6 +551,18 @@ function pctChange(points: MacroKlinePoint[]): number | null {
   const first = points[0].close;
   if (!first) return null;
   return points[points.length - 1].close / first - 1;
+}
+
+/** Signal buckets: score ≥ over → overweight, ≤ under → underweight. */
+export const SIGNAL_THRESHOLDS = { over: 67, under: 33 } as const;
+
+/** Signal of a composite score (same buckets everywhere, single source). */
+export function signalOf(score: number): RotationSignal {
+  return score >= SIGNAL_THRESHOLDS.over
+    ? 'overweight'
+    : score <= SIGNAL_THRESHOLDS.under
+      ? 'underweight'
+      : 'neutral';
 }
 
 function percentileRank(values: (number | null)[], v: number | null): number {
@@ -518,15 +625,9 @@ export function computeRotation(
         trend,
         vol60: volatility(industry.klines),
         score,
-        signal:
-          score === null
-            ? null
-            : score >= 67
-              ? 'overweight'
-              : score <= 33
-                ? 'underweight'
-                : 'neutral',
+        signal: score === null ? null : signalOf(score),
         scoreDelta: null,
+        scoreHistory: [],
       } satisfies RotationRow;
     })
     .sort((a, b) => {
@@ -550,6 +651,62 @@ export function attachRotationDeltas(
         typeof prev === 'number' && row.score !== null ? Math.round(row.score - prev) : null,
     };
   });
+}
+
+/**
+ * Attach the recent daily score series to each row from the persisted history.
+ * `days` must already contain today's merged scores (call after record);
+ * unscored rows keep an empty series so the UI never fabricates a trend.
+ */
+export function attachScoreHistory<T extends { secid: string; score: number | null }>(
+  rows: readonly T[],
+  days: Record<string, Record<string, number>>,
+  asOf: string,
+  limit = 20,
+): (T & { scoreHistory: number[] })[] {
+  const dates = Object.keys(days)
+    .filter((d) => d <= asOf)
+    .sort()
+    .slice(-limit);
+  return rows.map((row) => {
+    const series =
+      row.score === null
+        ? []
+        : dates.flatMap((d) => {
+            const v = days[d]?.[row.secid];
+            return typeof v === 'number' ? [v] : [];
+          });
+    return { ...row, scoreHistory: series };
+  });
+}
+
+/**
+ * Signal flips over the recent window: for each scored row, when the signal
+ * `lookback` trading days ago differs from today's, emit "中证金融 中性→超配".
+ * Rows without a signal today are skipped (a degraded row is not a flip).
+ */
+export function buildSignalFlips(
+  days: Record<string, Record<string, number>>,
+  rows: readonly { secid: string; name: string; signal: RotationSignal | null }[],
+  asOf: string,
+  lookback = 5,
+): string[] {
+  const dates = Object.keys(days)
+    .filter((d) => d <= asOf)
+    .sort();
+  const label = (s: RotationSignal) =>
+    ({ overweight: '超配', neutral: '中性', underweight: '低配' })[s];
+  const flips: string[] = [];
+  for (const row of rows) {
+    if (row.signal === null) continue;
+    const window = dates.slice(-(lookback + 1));
+    const first = window.length > 0 ? days[window[0]]?.[row.secid] : undefined;
+    if (typeof first !== 'number') continue;
+    const oldSignal = signalOf(first);
+    if (oldSignal !== row.signal)
+      flips.push(`${row.name} ${label(oldSignal)}→${label(row.signal)}`);
+  }
+  return flips;
 }
 
 /** Board PE percentile within the fetched board universe (0–100). */
@@ -584,10 +741,45 @@ function decisionLine(d: ResearchDecision): string {
   return `- [${model}/${stance}] ${d.target}（${d.createdAt.slice(0, 10)}）：${d.thesis}${attr}`;
 }
 
+/** Ledger hit-rate stats (partial counts separately, never averaged in). */
+export interface ResearchStats {
+  total: number;
+  open: number;
+  reviewed: number;
+  hit: number;
+  partial: number;
+  miss: number;
+  /** hit / reviewed × 100; null when nothing is reviewed yet. */
+  winRate: number | null;
+}
+
+export function researchStats(decisions: readonly ResearchDecision[]): ResearchStats {
+  const reviewed = decisions.filter((d) => d.status === 'reviewed');
+  const by = (o: ResearchOutcome) => reviewed.filter((d) => d.attribution?.outcome === o).length;
+  const hit = by('hit');
+  return {
+    total: decisions.length,
+    open: decisions.length - reviewed.length,
+    reviewed: reviewed.length,
+    hit,
+    partial: by('partial'),
+    miss: by('miss'),
+    winRate: reviewed.length > 0 ? Math.round((hit / reviewed.length) * 100) : null,
+  };
+}
+
 /** The research block appended to model prompts (decisions + knowledge). */
 export function formatResearchContext(research: ResearchContext | null | undefined): string {
   if (!research) return '';
   const parts: string[] = [];
+  const stats = researchStats(research.decisions);
+  if (stats.reviewed > 0) {
+    parts.push(
+      `【台账胜率】命中 ${stats.hit} · 部分 ${stats.partial} · 偏离 ${stats.miss} · 胜率 ${
+        stats.winRate ?? 0
+      }%`,
+    );
+  }
   if (research.digest && research.digest.trim()) {
     parts.push(`【知识资产摘要】\n${research.digest.trim().slice(0, 4000)}`);
   }
@@ -647,6 +839,8 @@ export interface MacroSignalView {
   under: string[];
   /** `较上一交易日：X 走强、Y 走弱。`, or null when nothing moved. */
   change: string | null;
+  /** Signal flips over the recent window: "中证金融 中性→超配". */
+  flips: string[];
 }
 
 /** Strongest day-over-day riser / faller as one line. */
@@ -671,6 +865,7 @@ export function buildMacroSignalView(snapshot: MacroDashboardSnapshot | null): M
     over: names('overweight'),
     under: names('underweight'),
     change: rotationChangeLine(scored),
+    flips: snapshot?.data.signalFlips ?? [],
   };
 }
 
@@ -745,6 +940,8 @@ const SOURCE_LABELS: Record<MacroSourceId, string> = {
   funds: '基金市场',
   industries: '行业轮动 / 板块',
   sw: '申万行业',
+  margin: '资金面（两融）',
+  global: '全球市场',
 };
 
 const SOURCE_STATUS_LABELS: Record<MacroSourceStatus, string> = {
@@ -782,8 +979,7 @@ export function buildMacroReportMarkdown(
   const boards = snapshot?.data.boards ?? [];
   const scored = rotation.filter((r) => r.score !== null);
   const count = (signal: RotationSignal) => scored.filter((r) => r.signal === signal).length;
-  const reviewed = decisions.filter((d) => d.status === 'reviewed').length;
-  const rate = decisions.length > 0 ? Math.round((reviewed / decisions.length) * 100) : 0;
+  const stats = researchStats(decisions);
   const chars = digestCharCount(digest);
   const entries = Object.entries(snapshot?.sources ?? {}) as [MacroSourceId, MacroSourceState][];
   const ready = entries.filter(([, s]) => s.status === 'ready').length;
@@ -806,8 +1002,15 @@ export function buildMacroReportMarkdown(
     `| 轮动信号 | 超配 ${count('overweight')} · 中性 ${count('neutral')} · 低配 ${count(
       'underweight',
     )} |`,
-    `| 决策台账 | ${decisions.length} 条（待归因 ${decisions.length - reviewed}） |`,
-    `| 归因率 | ${rate}%（已归因 ${reviewed} 条） |`,
+    `| 决策台账 | ${decisions.length} 条（待归因 ${stats.open}） |`,
+    `| 归因率 | ${
+      decisions.length > 0 ? Math.round((stats.reviewed / decisions.length) * 100) : 0
+    }%（已归因 ${stats.reviewed} 条） |`,
+    `| 台账胜率 | ${
+      stats.winRate === null
+        ? '待归因'
+        : `${stats.winRate}%（命中 ${stats.hit} · 部分 ${stats.partial} · 偏离 ${stats.miss}）`
+    } |`,
     `| 知识资产 | ${chars > 0 ? `约 ${chars} 字` : '待沉淀'} |`,
     `| 数据时效 | ${ready}/${entries.length} 源${
       snapshot?.fetchedAt ? ` · 更新于 ${reportStamp(snapshot.fetchedAt)}` : ''
@@ -817,7 +1020,9 @@ export function buildMacroReportMarkdown(
     '',
     `数据 ${ready}/${entries.length} · 信号 ${rotation.length} · 模型 2 · 决策 ${
       decisions.length
-    } · 归因 ${reviewed}（${rate}%） · 再训练 ${chars > 0 ? `${chars} 字` : '待沉淀'}`,
+    } · 归因 ${stats.reviewed} · 胜率 ${stats.winRate ?? '—'}% · 再训练 ${
+      chars > 0 ? `${chars} 字` : '待沉淀'
+    }`,
     '',
     '## 轮动信号（中证十大行业）',
     '',
@@ -834,9 +1039,11 @@ export function buildMacroReportMarkdown(
         )
       : ['| （轮动数据未就绪） | | | | | | | |']),
     '',
-    '## 决策台账',
+    `## 决策台账`,
     '',
-    `共 ${decisions.length} 条，已归因 ${reviewed} 条（${rate}%）。`,
+    `共 ${decisions.length} 条，已归因 ${stats.reviewed} 条（${
+      decisions.length > 0 ? Math.round((stats.reviewed / decisions.length) * 100) : 0
+    }%）；命中 ${stats.hit} · 部分 ${stats.partial} · 偏离 ${stats.miss}。`,
     '',
     ...(decisions.length > 0
       ? decisions.slice(0, 5).map(decisionLine)

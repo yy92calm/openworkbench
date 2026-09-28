@@ -100,6 +100,11 @@ export class RotationHistoryStore {
     return previousScores(this.history, date);
   }
 
+  /** Read-only access for score-series assembly (never mutated by callers). */
+  days(): Record<string, Record<string, number>> {
+    return this.history.days;
+  }
+
   record(date: string, rows: readonly RotationRow[]): void {
     const scores = scoresOf(rows);
     if (Object.keys(scores).length === 0) return;

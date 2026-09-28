@@ -1,4 +1,5 @@
 import type { ResearchDecision, ResearchOutcome } from '@workbench/shared';
+import { researchStats } from '@workbench/shared';
 import { useMemo, useState } from 'react';
 
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -133,19 +134,31 @@ export function DecisionLedger({
     }
   };
 
-  const reviewed = decisions.filter((d) => d.status === 'reviewed').length;
-  const rate = decisions.length > 0 ? Math.round((reviewed / decisions.length) * 100) : 0;
+  const stats = researchStats(decisions);
 
   return (
     <div>
       <div className="group mb-2 flex flex-wrap items-center gap-2">
         <h2 className="text-[13px] font-medium text-text">决策台账 · 记录 → 归因 → 再训练</h2>
         <span className="flex flex-wrap items-center gap-1.5 text-[11px] text-muted">
-          共 {decisions.length} 条 · 已归因 {reviewed}（{rate}%）
+          共 {decisions.length} 条 · 已归因 {stats.reviewed}（
+          {decisions.length > 0 ? Math.round((stats.reviewed / decisions.length) * 100) : 0}%）
+          {stats.reviewed > 0 && (
+            <>
+              · 命中 {stats.hit} · 部分 {stats.partial} · 偏离 {stats.miss}
+              {stats.winRate !== null && (
+                <span className="font-medium text-rise">胜率 {stats.winRate}%</span>
+              )}
+            </>
+          )}
           <span className="h-1 w-12 overflow-hidden rounded-full bg-surface-2 ring-1 ring-border/60">
             <span
               className="block h-full rounded-full bg-accent/60"
-              style={{ width: `${rate}%` }}
+              style={{
+                width: `${
+                  decisions.length > 0 ? Math.round((stats.reviewed / decisions.length) * 100) : 0
+                }%`,
+              }}
             />
           </span>
           · 工作区 decisions.jsonl

@@ -9,6 +9,7 @@ import type {
   MacroFxQuote,
   MacroIndicator,
   MacroKlinePoint,
+  MacroMarginPoint,
   MacroPoint,
   MacroQuote,
   MacroYieldPoint,
@@ -97,6 +98,27 @@ export function parseTreasury(raw: string): MacroYieldPoint[] {
     });
   }
   // The API returns newest first; charts want oldest first.
+  return out.reverse();
+}
+
+/** Margin trading totals (RPTA_RZRQ_LSHJ), oldest row first. */
+export function parseMargin(raw: string): MacroMarginPoint[] {
+  const json = parseJson(raw);
+  const result = json?.result as { data?: unknown } | undefined;
+  if (!Array.isArray(result?.data)) return [];
+  const out: MacroMarginPoint[] = [];
+  for (const row of result.data) {
+    if (!row || typeof row !== 'object') continue;
+    const r = row as Record<string, unknown>;
+    const date = asString(r.DIM_DATE)?.slice(0, 10);
+    if (!date) continue;
+    out.push({
+      date,
+      balance: asNumber(r.RZRQYE),
+      netBuy: asNumber(r.RZJME),
+    });
+  }
+  // The API returns newest first; the chart wants oldest first.
   return out.reverse();
 }
 

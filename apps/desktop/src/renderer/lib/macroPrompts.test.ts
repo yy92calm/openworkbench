@@ -3,17 +3,20 @@
 import {
   applyCanonicalIndexNames,
   attachRotationDeltas,
+  attachScoreHistory,
   boardPePercentile,
   buildCoreIndicatorLines,
   buildIndicatorLine,
   buildIndustryPrompt,
   buildMacroConclusion,
+  buildMacroContextLines,
   buildMacroPrompt,
   buildMacroReportMarkdown,
   buildMacroSignalView,
   buildMacroSummarySentence,
   buildReviewPrompt,
   buildRotationPrompt,
+  buildSignalFlips,
   buildSwConclusion,
   computeRotation,
   emptyMacroSnapshot,
@@ -21,11 +24,15 @@ import {
   type MacroDashboardSnapshot,
   type MacroIndustryDetail,
   type MacroKlinePoint,
+  type MacroMarginPoint,
   type MacroQuote,
   type ResearchContext,
+  type ResearchDecision,
   type RotationRow,
   type RotationSignal,
   type SwIndustryRow,
+  researchStats,
+  signalOf,
 } from '@workbench/shared';
 import { describe, expect, it } from 'vitest';
 
@@ -48,6 +55,7 @@ function rotationRow(secid: string, score: number | null): RotationRow {
     score,
     signal: score === null ? null : 'neutral',
     scoreDelta: null,
+    scoreHistory: [],
   };
 }
 
@@ -172,6 +180,7 @@ function filledSnapshot(): MacroDashboardSnapshot {
       score: 92,
       signal: 'overweight',
       scoreDelta: null,
+      scoreHistory: [],
     },
     {
       secid: '1.000934',
@@ -183,6 +192,7 @@ function filledSnapshot(): MacroDashboardSnapshot {
       score: 18,
       signal: 'underweight',
       scoreDelta: null,
+      scoreHistory: [],
     },
   ];
   s.data.boards = [
@@ -226,6 +236,7 @@ function filledSnapshot(): MacroDashboardSnapshot {
       score: 88,
       signal: 'overweight',
       scoreDelta: 5,
+      scoreHistory: [],
       history: [{ date: '2026-09-18', close: 9011.67 }],
     },
     {
@@ -248,6 +259,7 @@ function filledSnapshot(): MacroDashboardSnapshot {
       score: 22,
       signal: 'underweight',
       scoreDelta: -3,
+      scoreHistory: [],
       history: [{ date: '2026-09-18', close: 2200 }],
     },
   ];
@@ -331,6 +343,7 @@ describe('buildRotationPrompt', () => {
         score: null,
         signal: null,
         scoreDelta: null,
+        scoreHistory: [],
       },
     ];
     const prompt = buildRotationPrompt(s, null);
@@ -370,18 +383,139 @@ describe('buildMacroSignalView', () => {
   it('lists the overweight / underweight names and the change line', () => {
     const s = filledSnapshot();
     s.data.rotation[0].scoreDelta = 8;
+    s.data.signalFlips = ['中证金融 中性→超配'];
     expect(buildMacroSignalView(s)).toEqual({
       over: ['中证信息'],
       under: ['中证金融'],
       change: '较上一交易日：中证信息走强。',
+      flips: ['中证金融 中性→超配'],
     });
   });
 
   it('degrades without scores', () => {
     const s = filledSnapshot();
     s.data.rotation = [];
-    expect(buildMacroSignalView(s)).toEqual({ over: [], under: [], change: null });
+    expect(buildMacroSignalView(s)).toEqual({
+      over: [],
+      under: [],
+      change: null,
+      flips: [],
+    });
     expect(buildMacroSignalView(null).change).toBeNull();
+  });
+});
+
+describe('signalOf', () => {
+  it('buckets scores with the shared thresholds', () => {
+    expect(signalOf(100)).toBe('overweight');
+    expect(signalOf(67)).toBe('overweight');
+    expect(signalOf(66)).toBe('neutral');
+    expect(signalOf(33)).toBe('underweight');
+    expect(signalOf(0)).toBe('underweight');
+  });
+});
+
+describe('attachScoreHistory', () => {
+  const days: Record<string, Record<string, number>> = {
+    '2026-09-22': { a: 60, b: 50 },
+    '2026-09-23': { a: 62 },
+    '2026-09-24': { a: 70, b: 55 },
+  };
+
+  it('collects the recent per-secid series including asOf', () => {
+    const rows = [rotationRow('a', 70), rotationRow('b', 55)];
+    const out = attachScoreHistory(rows, days, '2026-09-24');
+    expect(out[0].scoreHistory).toEqual([60, 62, 70]);
+    expect(out[1].scoreHistory).toEqual([50, 55]);
+  });
+
+  it('caps the window at limit and ignores days after asOf', () => {
+    const later = { ...days, '2026-09-25': { a: 99 } };
+    const out = attachScoreHistory([rotationRow('a', 70)], later, '2026-09-24', 2);
+    expect(out[0].scoreHistory).toEqual([62, 70]);
+  });
+
+  it('keeps an empty series for unscored rows', () => {
+    const out = attachScoreHistory([rotationRow('a', null)], days, '2026-09-24');
+    expect(out[0].scoreHistory).toEqual([]);
+  });
+});
+
+describe('buildSignalFlips', () => {
+  it('emits a caption when the signal changed within the window', () => {
+    const days: Record<string, Record<string, number>> = {
+      // 5 trading days ago 中证金融 was neutral(48); today it is overweight.
+      '2026-09-18': { '1.000934': 48, '1.000935': 90 },
+      '2026-09-22': { '1.000934': 55, '1.000935': 20 },
+      '2026-09-24': { '1.000934': 72, '1.000935': 20 },
+    };
+    const rows = [
+      { secid: '1.000934', name: '中证金融', signal: 'overweight' as const },
+      { secid: '1.000935', name: '中证信息', signal: 'underweight' as const },
+    ];
+    expect(buildSignalFlips(days, rows, '2026-09-24')).toEqual([
+      '中证金融 中性→超配',
+      '中证信息 超配→低配',
+    ]);
+  });
+
+  it('returns empty when nothing flipped or signals are missing', () => {
+    const days: Record<string, Record<string, number>> = {
+      '2026-09-18': { a: 70 },
+      '2026-09-24': { a: 72 },
+    };
+    const steady = [{ secid: 'a', name: 'A', signal: 'overweight' as const }];
+    const unscored = [{ secid: 'b', name: 'B', signal: null }];
+    expect(buildSignalFlips(days, steady, '2026-09-24')).toEqual([]);
+    expect(buildSignalFlips(days, unscored, '2026-09-24')).toEqual([]);
+  });
+
+  it('skips rows without history in the window', () => {
+    const days: Record<string, Record<string, number>> = { '2026-09-24': { a: 72 } };
+    const rows = [{ secid: 'a', name: 'A', signal: 'overweight' as const }];
+    expect(buildSignalFlips(days, rows, '2026-09-24')).toEqual([]);
+  });
+});
+
+describe('researchStats', () => {
+  const decision = (
+    status: 'open' | 'reviewed',
+    outcome: 'hit' | 'partial' | 'miss',
+  ): ResearchDecision => ({
+    id: `${status}-${outcome}`,
+    model: 'rotation',
+    target: 'x',
+    stance: 'overweight',
+    thesis: 't',
+    createdAt: '2026-09-18T08:00:00.000Z',
+    status,
+    ...(status === 'reviewed'
+      ? { attribution: { outcome, note: 'n', reviewedAt: '2026-09-19T08:00:00.000Z' } }
+      : {}),
+  });
+
+  it('counts outcomes and the hit-only win rate', () => {
+    const stats = researchStats([
+      decision('open', 'hit'),
+      decision('reviewed', 'hit'),
+      decision('reviewed', 'hit'),
+      decision('reviewed', 'partial'),
+      decision('reviewed', 'miss'),
+    ]);
+    expect(stats).toEqual({
+      total: 5,
+      open: 1,
+      reviewed: 4,
+      hit: 2,
+      partial: 1,
+      miss: 1,
+      winRate: 50,
+    });
+  });
+
+  it('win rate stays null before anything is reviewed', () => {
+    expect(researchStats([decision('open', 'hit')]).winRate).toBeNull();
+    expect(researchStats([]).winRate).toBeNull();
   });
 });
 
@@ -533,6 +667,45 @@ describe('buildMacroPrompt', () => {
     expect(buildMacroPrompt('rotation-weekly', filledSnapshot())).toContain('行业轮动周报');
     expect(buildMacroPrompt('review-weekly', null)).toContain('复盘与再训练');
     expect(buildMacroPrompt('nope' as never, null)).toBe('');
+  });
+});
+
+describe('buildMacroContextLines', () => {
+  const marginFixture: MacroMarginPoint[] = [
+    { date: '2026-09-10', balance: 2.55e12, netBuy: 1e10 },
+    { date: '2026-09-11', balance: 2.56e12, netBuy: 5e10 },
+    { date: '2026-09-12', balance: 2.57e12, netBuy: -3e10 },
+    { date: '2026-09-15', balance: 2.58e12, netBuy: 2e10 },
+    { date: '2026-09-16', balance: 2.59e12, netBuy: 8e10 },
+    { date: '2026-09-17', balance: 2.637e12, netBuy: -1.744e10 },
+  ];
+
+  it('appends margin and global lines after the domestic ones', () => {
+    const s = filledSnapshot();
+    s.data.margin = marginFixture;
+    s.data.global = [
+      quote('100.SPX', '标普500'),
+      quote('100.NDX', '纳斯达克100'),
+      quote('100.HSI', '恒生指数'),
+      quote('101.GC00Y', 'COMEX黄金'),
+      quote('112.B00Y', '布伦特原油当月连续'),
+    ];
+    const lines = buildMacroContextLines(s);
+    expect(lines).toContain('- 中债 10Y 收益率 1.682%（2026-09-18）');
+    expect(lines).toContain('- 两融余额 26370亿，较 5 日 +870亿（2026-09-17）');
+    expect(lines).toContain('- 融资净买入 -174亿（2026-09-17）');
+    expect(lines).toContain('- 标普500 100（+0%）');
+    expect(lines).toContain('- 布伦特原油 100（+0%）');
+  });
+
+  it('stays safe when margin / global are missing (old cached snapshots)', () => {
+    const legacy = filledSnapshot();
+    // Old persisted snapshots predate these fields; simulate undefined.
+    (legacy.data as { margin?: MacroMarginPoint[] }).margin = undefined;
+    (legacy.data as { global?: MacroQuote[] }).global = undefined;
+    const lines = buildMacroContextLines(legacy);
+    expect(lines.some((l) => l.includes('两融'))).toBe(false);
+    expect(lines.some((l) => l.includes('标普'))).toBe(false);
   });
 });
 

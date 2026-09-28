@@ -21,13 +21,17 @@ import type {
   SwIndustryRow,
 } from '@workbench/shared';
 import {
+  applyCanonicalGlobalNames,
   applyCanonicalIndexNames,
   attachRotationDeltas,
+  attachScoreHistory,
   boardPePercentile,
+  buildSignalFlips,
   computeRotation,
   CSI_INDUSTRY_SECIDS,
   emptyMacroSnapshot,
   FUND_INDEX_SECIDS,
+  GLOBAL_SECIDS,
 } from '@workbench/shared';
 import { app, net } from 'electron';
 
@@ -42,6 +46,7 @@ import {
   parseIndexQuotes,
   parseKline,
   parseMacroIndicators,
+  parseMargin,
   parseSwAnalysis,
   parseSwRealtime,
   parseTreasury,
@@ -67,9 +72,6 @@ const INDEX_SECIDS = [
   '1.000905', // 中证500
   '0.399006', // 创业板指
   '1.000688', // 科创50
-  '100.HSI', // 恒生指数
-  '100.SPX', // 标普500
-  '100.NDX', // 纳斯达克100
 ] as const;
 
 /** Daily closes prefetched for the mini charts (HS300 + fund index). */
@@ -121,6 +123,11 @@ const FX_URL =
 
 const FUND_RANK_URL =
   'https://fund.eastmoney.com/data/rankhandler.aspx?op=ph&dt=kf&ft=all&rs=&gs=0&sc=1nzf&st=desc&pi=1&pn=5&dx=1&v=0.1';
+
+/** Margin trading (两融) daily totals: balance + margin net buy, 60 days. */
+const MARGIN_URL =
+  'https://datacenter-web.eastmoney.com/api/data/v1/get?reportName=RPTA_RZRQ_LSHJ' +
+  '&columns=DIM_DATE,RZRQYE,RZJME&pageSize=60&sortColumns=dim_date&sortTypes=-1';
 
 // Shenwan Research index-publish API (public, no key, akshare-documented):
 // live quotes for the 31 level-1 industries + the daily analysis report
@@ -314,6 +321,8 @@ class MacroStore {
       ['funds', () => this.fetchFunds()],
       ['industries', () => this.fetchIndustries()],
       ['sw', () => this.fetchSw()],
+      ['margin', () => this.fetchMargin()],
+      ['global', () => this.fetchGlobal()],
     ];
 
     await Promise.all(
@@ -389,6 +398,22 @@ class MacroStore {
     return { fx };
   }
 
+  /** Margin trading (两融): daily totals from the datacenter report. */
+  private async fetchMargin(): Promise<Partial<MacroSnapshotData>> {
+    const margin = parseMargin(await fetchText(MARGIN_URL));
+    if (margin.length === 0) throw new Error('两融数据解析为空');
+    return { margin };
+  }
+
+  /** Global quotes: HK/US indexes + gold / oil, canonical display names. */
+  private async fetchGlobal(): Promise<Partial<MacroSnapshotData>> {
+    const global = applyCanonicalGlobalNames(
+      parseIndexQuotes(await fetchText(ulistUrl(GLOBAL_SECIDS))),
+    );
+    if (global.length === 0) throw new Error('全球行情解析为空');
+    return { global };
+  }
+
   private async fetchFunds(): Promise<Partial<MacroSnapshotData>> {
     const [quotesRes, rankRes] = await Promise.allSettled([
       fetchText(ulistUrl(FUND_INDEX_SECIDS)),
@@ -435,7 +460,11 @@ class MacroStore {
       hs300.length > 0 ? hs300[hs300.length - 1].date : new Date().toISOString().slice(0, 10);
     const rotation = attachRotationDeltas(rows, this.rotationHistory.previous(asOf));
     this.rotationHistory.record(asOf, rotation);
-    return { rotation, boards };
+    // History now contains today's merged scores: series + signal flips.
+    const days = this.rotationHistory.days();
+    const withHistory = attachScoreHistory(rotation, days, asOf);
+    const signalFlips = buildSignalFlips(days, rotation, asOf);
+    return { rotation: withHistory, signalFlips, boards };
   }
 
   /** Daily analysis (fundamentals + closes): cached an hour, stale-served. */
@@ -496,8 +525,10 @@ class MacroStore {
     const rows = computeRotation(industries, hs);
     const scored = attachRotationDeltas(rows, this.rotationHistory.previous(cutoff));
     this.rotationHistory.record(cutoff, scored);
+    const swDays = this.rotationHistory.days();
+    const scoredWithHistory = attachScoreHistory(scored, swDays, cutoff);
 
-    const swIndustries: SwIndustryRow[] = scored.map((row) => {
+    const swIndustries: SwIndustryRow[] = scoredWithHistory.map((row) => {
       const upto = (analysis.get(row.secid)?.rows ?? []).filter((r) => r.date <= cutoff);
       const latest = upto.length > 0 ? upto[upto.length - 1] : null;
       const quote = quoteByCode.get(row.secid);
@@ -528,6 +559,7 @@ class MacroStore {
         score: row.score,
         signal: row.signal,
         scoreDelta: row.scoreDelta,
+        scoreHistory: row.scoreHistory,
         history: upto.flatMap((r) => (r.close === null ? [] : [{ date: r.date, close: r.close }])),
       };
     });

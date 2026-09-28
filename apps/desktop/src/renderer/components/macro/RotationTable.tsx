@@ -2,6 +2,8 @@ import type { RotationRow, RotationSignal } from '@workbench/shared';
 
 import { cn } from '@/lib/cn';
 
+import { Sparkline } from './IndicatorCard';
+
 function pct(v: number | null): string {
   return v === null ? '—' : `${(v * 100).toFixed(2)}%`;
 }
@@ -68,7 +70,7 @@ function ScoreCell({ row }: { row: RotationRow }) {
   );
 }
 
-const GRID = 'grid-cols-[1.4fr_0.8fr_0.9fr_0.7fr_0.6fr_0.7fr_1.1fr]';
+const GRID = 'grid-cols-[1.2fr_0.7fr_0.8fr_0.6fr_0.55fr_0.6fr_0.9fr_1.1fr]';
 
 /** Rotation model table: transparent signals per CSI top-10 industry. */
 export function RotationTable({
@@ -80,7 +82,7 @@ export function RotationTable({
 }) {
   return (
     <div className="overflow-x-auto rounded-card border border-border bg-surface">
-      <div className="min-w-[720px]">
+      <div className="min-w-[840px]">
         <div
           className={cn(
             'grid gap-2 border-b border-border-soft px-3 py-1.5 text-[11px] text-muted',
@@ -93,6 +95,7 @@ export function RotationTable({
           <span className="text-right">波动</span>
           <span className="text-right">趋势</span>
           <span className="text-right">评分</span>
+          <span className="text-right">近 20 日</span>
           <span className="text-right">信号 / 操作</span>
         </div>
         {rows.map((r) => (
@@ -138,6 +141,13 @@ export function RotationTable({
             </span>
             <span className="text-right">
               <ScoreCell row={r} />
+            </span>
+            <span className="flex items-center justify-end">
+              {r.scoreHistory.length > 1 ? (
+                <Sparkline values={r.scoreHistory} className="h-3.5 w-14" aria-hidden="true" />
+              ) : (
+                <span className="text-[11px] text-muted">—</span>
+              )}
             </span>
             <span className="flex items-center justify-end gap-2">
               {r.signal === null ? (
