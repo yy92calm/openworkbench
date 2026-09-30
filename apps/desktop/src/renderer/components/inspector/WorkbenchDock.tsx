@@ -1,40 +1,50 @@
 import { BrowserPanel } from '@fafawork/browser-mcp/panel';
-import type { ArtifactBlock } from '@workbench/shared';
+import type { ArtifactBlock, ThreadBlock } from '@workbench/shared';
 import { RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 
 import { ContextPanel } from '@/components/inspector/ContextPanel';
 import { FileBrowserPanel } from '@/components/inspector/FileBrowserPanel';
 import { InspectorShell } from '@/components/inspector/InspectorShell';
+import { TasksPanel } from '@/components/inspector/TasksPanel';
 import { TerminalPanel } from '@/components/inspector/TerminalPanel';
 import { fileInspectorFromBlock } from '@/lib/artifacts';
+import type { ThreadTodo } from '@/lib/threadTasks';
 import { useResizable } from '@/lib/useResizable';
 
 /**
- * Right-side dock: context, browser, terminal, files, or artifact preview.
- * Tab bar is in the Topicbar; this component only renders the content.
+ * Right-side dock: context, tasks, browser, terminal, files, or artifact
+ * preview. Tab bar is in the Topicbar; this component only renders the content.
  */
 export function WorkbenchDock({
   artifact,
   browserUrl,
   tab,
   dockVisible,
+  todos,
+  blocks,
   onCloseArtifact,
   onBrowserUrlChange,
   onCloseBrowser,
   onCloseTerminal,
   onCloseFileBrowser,
+  onOpenSession,
   onEvaluate,
 }: {
   artifact: ArtifactBlock | null;
   browserUrl: string;
-  tab: 'context' | 'browser' | 'terminal' | 'files';
+  tab: 'context' | 'tasks' | 'browser' | 'terminal' | 'files';
   dockVisible: boolean;
+  /** The active session's captured todo list (see runtime's Thread.todos). */
+  todos: readonly ThreadTodo[];
+  /** The active session's blocks, for deriving its subagent tasks. */
+  blocks: readonly ThreadBlock[];
   onCloseArtifact: () => void;
   onBrowserUrlChange: (url: string) => void;
   onCloseBrowser: () => void;
   onCloseTerminal: () => void;
   onCloseFileBrowser: () => void;
+  onOpenSession: (sessionId: string, title: string) => void;
   onEvaluate?: (expr: string) => void;
 }) {
   const { targetRef, handleProps, isDragging } = useResizable(480, 320, Infinity, true);
@@ -102,6 +112,14 @@ export function WorkbenchDock({
             )}
             {/* Other panels: rendered only when active (terminal keeps alive) */}
             {tab === 'context' && <ContextPanel onClose={() => {}} />}
+            {tab === 'tasks' && (
+              <TasksPanel
+                todos={todos}
+                blocks={blocks}
+                onOpenSession={onOpenSession}
+                onClose={onCloseFileBrowser}
+              />
+            )}
             {terminalEverOpened && (
               <div
                 className={tab === 'terminal' ? 'h-full' : 'hidden h-full'}

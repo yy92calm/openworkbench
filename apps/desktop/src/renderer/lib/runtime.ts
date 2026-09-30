@@ -38,6 +38,7 @@ import {
   type ToolStatus,
   workspacePath,
 } from './tauri';
+import { isTodoTool, parseTodos, type ThreadTodo } from './threadTasks';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const URL_KEY = 'workbench.opencodeUrl';
@@ -64,6 +65,10 @@ export interface Thread {
   index: Record<string, number>;
   consecutiveTools: number;
   loaded: boolean;
+  /** The agent's todo list, captured from its `todo*` tool calls. Those calls
+   *  are dropped from `blocks` on purpose (see foldEvent); the panel is where
+   *  they surface. */
+  todos: ThreadTodo[];
 }
 
 /** What a session's right pane shows: an artifact inspector, the Files
@@ -185,7 +190,13 @@ interface RuntimeState {
 }
 
 let client: AgentRuntime | null = null;
-const emptyThread = (): Thread => ({ blocks: [], index: {}, consecutiveTools: 0, loaded: false });
+const emptyThread = (): Thread => ({
+  blocks: [],
+  index: {},
+  consecutiveTools: 0,
+  loaded: false,
+  todos: [],
+});
 /** Threads key for the draft conversation — its blocks move to the real
  *  session id once the session exists, so the page never visibly resets. */
 export const DRAFT_KEY = 'draft';
@@ -992,6 +1003,12 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
         const folded = foldEvent({ blocks: cur.blocks, index: cur.index }, event, {
           shellTurn: !!s.shellTurns[sid],
         });
+        // Todo calls never become blocks; capture their list here instead so the
+        // task panel can show it. A call without a todo list leaves it alone.
+        const todos =
+          event.type === 'tool.updated' && isTodoTool(event.tool)
+            ? (parseTodos(event.input) ?? cur.todos)
+            : cur.todos;
         // The turn is over — unlock the composer and drop the "Working…" row.
         // The shell flag clears HERE (not when the POST settles): within the
         // SSE stream the bash-output event always precedes session.idle.
@@ -1004,7 +1021,7 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
         return {
           runningSessions,
           shellTurns,
-          threads: { ...s.threads, [sid]: { ...cur, ...folded, loaded: true } },
+          threads: { ...s.threads, [sid]: { ...cur, ...folded, todos, loaded: true } },
         };
       });
       // A completed live write becomes a provenance version (once per call).
@@ -1671,8 +1688,12 @@ function mapToolStatus(status?: string): ToolCallStatus {
 }
 
 /** Convert loaded message history into thread blocks. */
-export function historyToThread(messages: HistoryMessage[], commands?: CommandInfo[]): FoldState {
+export function historyToThread(
+  messages: HistoryMessage[],
+  commands?: CommandInfo[],
+): FoldState & { todos: ThreadTodo[] } {
   const blocks: ThreadBlock[] = [];
+  let todos: ThreadTodo[] = [];
   // OpenCode stores a slash command's EXPANDED template as the user message,
   // with any typed arguments appended after it (no marker) — show the
   // "/name args" the user actually typed instead. Longest template first, so
@@ -1749,8 +1770,15 @@ export function historyToThread(messages: HistoryMessage[], commands?: CommandIn
           blocks.push({ kind: 'reasoning', text: p.text, streaming: false });
         } else if (p.type === 'tool') {
           // Interactive tools are surfaced by InteractionPrompt, not the thread;
-          // `todo*` tools are opaque "N todos" noise — skip both.
-          if (/question|permission|^ask$|todo/i.test(p.tool ?? '')) continue;
+          // `todo*` tools are opaque "N todos" noise — skip both, but keep the
+          // todo list itself for the task panel.
+          if (/question|permission|^ask$|todo/i.test(p.tool ?? '')) {
+            if (isTodoTool(p.tool ?? '')) {
+              const parsed = parseTodos(p.state?.input);
+              if (parsed) todos = parsed;
+            }
+            continue;
+          }
           const status = mapToolStatus(p.state?.status);
           const frozen = status === 'running' || status === 'pending';
           if (frozen) interrupted = true;
@@ -1797,5 +1825,5 @@ export function historyToThread(messages: HistoryMessage[], commands?: CommandIn
       tone: 'error',
     });
   }
-  return { blocks, index: {}, consecutiveTools: 0 };
+  return { blocks, index: {}, consecutiveTools: 0, todos };
 }

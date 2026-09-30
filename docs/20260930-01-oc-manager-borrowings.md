@@ -161,7 +161,24 @@ YAML frontmatter 存 `title/summary/category/tags/created/updated/converted`，*
 - 只吸收两点：(i) 建立 **channel 常量表** + 薄封装 `handle(channel, fn)`，消除字符串在本仓四处（main / preload / `lib/electron.ts` / `electron.d.ts`）各自硬编码的漂移风险；(ii) `decodeArgs` 式「按位置解参 + 数量校验」在 `main/relayHost.ts:365-486` 的 `/__host/*` 路由此处已部分存在，可提取为共享 helper。
 - 内嵌 Web 服务（约束项）**不建议重做**：`relayHost.ts:228-238` 现为 WS 传输（`connect()` :162-189）且无 HTTP 监听，与 relay/client 的既有分工重叠；若未来要做「本机浏览器打开」，应作为 relay 的一个可选本机入口来设计，而不是并行开第二套前端。
 
-### 10. 实施批次与依赖
+### 10. 待办分组与子任务面板
+
+**OC Manager 的做法**：`chat/sidepanel.js:24` `extractTodos()` 倒序扫消息，取 `todowrite` 工具的 `state.input.todos`，分「进行中 / 已完成」两组（:44 `renderTodos`）；
+`extractSubtaskSummaries()`（:95）扫最近 200 条消息里的 `task` 工具 part，取 `state.metadata` 的 `sessionId` / `description` / `agent` / `model` / `interrupted` 与 `state.time`，
+渲染成带状态徽标的卡片（:175 `renderSubtaskPanel`），点击开详情弹窗（:271 `openSubtaskModal`）加载子会话消息。
+
+**Workbench 落法**：**不反转既有的显示决策，只补数据出口**。Workbench 刻意不把 `todo*` 工具行显示在会话流里（`runtime.ts:1585` 与 :1753 两处丢弃，并有测试
+`drops opaque todo tool rows from the conversation` 守着），理由充分——它们是「N todos」这类无内容噪音。因此：
+
+- **捕获**：`Thread` 增加 `todos: ThreadTodo[]`。实时路径在 `foldEvent` 之前从 `event.input` 取；历史重建路径在 `historyToThread` 跳过 todo 行时顺手收集并随返回值带出
+  （两个调用点都是 `{ ...historyToThread(...), loaded: true }`，字段自动落到线程上）。
+- **派生**（`renderer/lib/threadTasks.ts`，纯函数）：`isTodoTool` / `parseTodos`（**无 todos 时返回 `null` 表示「保持上一次」**，而不是清空）/ `groupTodos`（cancelled 计入已完成）/
+  `subtasksOf`（取带 `childSessionId` 的 tool-call 块）。
+- **呈现**：dock 新增「任务」页签（`components/inspector/TasksPanel.tsx`；`Topicbar` 的 TABS 与 `WorkbenchDock` 的 tab 联合各加一项）。待办按进行中 / 已完成分组
+  （进行中带 spinner、已完成划线），子任务卡片显示标题与状态，点击打开该子会话。
+- 与目标的差异：不做独立详情弹窗——子会话本身就是 Workbench 的一个会话，打开它即可，比弹窗少一条消息渲染路径。
+
+### 11. 实施批次与依赖
 
 | 批次 | 内容 | 依赖 | 结果 |
 |------|------|------|------|
@@ -169,6 +186,7 @@ YAML frontmatter 存 `title/summary/category/tags/created/updated/converted`，*
 | 二 | 知识库：存储 + 索引自愈 + 分类 + UI + `@` 引用（第 1 项） | 原子写工具（第一批） | 已实施 |
 | 三 | 技能来源目录 + 冲突检测 + 方案切换（第 2 项）、项目配置只读总览（第 3 项） | 软链工具（随第 2 项新建） | 已实施（技能启用的落点改设计，见偏差 1） |
 | 四 | SSE 心跳 / 背压（第 7 项）、channel 常量表（第 9 项） | 待核实项结论 | 调研后**未产生代码改动**，结论见「待核实项」 |
+| 五 | 待办分组与子任务面板（第 10 项）、Windows 分支实现 | 无 | 已实施（第 10 项是复核时补上的，见偏差 9） |
 
 ## 验证状态
 
@@ -183,7 +201,8 @@ YAML frontmatter 存 `title/summary/category/tags/created/updated/converted`，*
   - README 称「手机端默认 30 条」——代码中**无 `30` 该常量**：首屏 `limit=20`（`chat/session.js:476`），加载更早为 `limit=200&before=<cursor>`（:358-371，游标为 `{id,time}` 的 base64url，:345）。
   - README 称知识库引用作为「独立上下文」交给 AI——实现上是**同一 user message 内的一个独立 text part**（`chat/session.js:1079-1084`），既非独立 system prompt，也非独立 API 字段。
 - [x] 修正技术方案文档所称的 `config/skill/manager.go` **不存在**：`Manager` 结构体实际定义在 `config/skill/scanner.go:13`，且只有 `globalDir` 一个字段。
-- [x] 核实 Workbench 缺口为真：`src/main` 内无 `Tray`、无 `globalShortcut`（仅有 `index.ts:34` 的单实例锁）；renderer 内无任何 git 写操作调用；`src/main` 无通用「写任意调用方指定路径」的 IPC（既有写盘均收敛于工作区或部署目录）；`packages/ui` 仅剩 README。
+- [x] 核实 Workbench 缺口（**改动前的快照**；其中「无托盘 / 无全局快捷键」已由本方案的批次一填补，其余仍成立）：`src/main` 当时无 `Tray`、无 `globalShortcut`（仅有 `index.ts` 的单实例锁）；
+  renderer 无任何 git 写操作调用；`src/main` 无通用「写任意调用方指定路径」的 IPC（既有写盘均收敛于工作区或部署目录）；`packages/ui` 仅剩 README。
 - [x] 核实 Workbench 优势项（不作为吸收项）：per-session 状态（`runtime.ts:87/110`）与按会话的滚动记忆（`scrollMemory.ts:32` + `LiveSessionPage.tsx:242`）**已具备**；sidecar 版本号已被 `sidecar-fingerprint.txt` 记录。
 
 ### 实施记录（2026-09-30）
@@ -203,7 +222,9 @@ YAML frontmatter 存 `title/summary/category/tags/created/updated/converted`，*
 | 技能软链接 | `main/symlink.ts` + `main/skills.ts`（15 例单测：两层扫描、冲突标记、嵌套技能挂顶层、冲突/缺失不建链、注册表损坏隔离、方案增删改查与非法名拒绝） | 已实施 |
 | 方案切换 | `skills-apply-scheme` 先解绑旧集再物化新集，`skipped` 回执以 toast 提示 | 已实施 |
 | 项目配置只读总览 | `main/projectConfig.ts` + 7 例单测（五类扫描、skills 只取 ≤2 层的 `SKILL.md`、越界与缺失文件被拒）；`/project-config` 页面 + 侧边栏入口 | 已实施 |
-| 回归 | `pnpm typecheck` exit 0（desktop / sdk / relay / client）；`pnpm test`：desktop 62 文件 568 例、sdk 3 例、relay 22 例全通过（基线 57 文件 522 例）；`pnpm lint` 0 错误；`pnpm format:check` 干净；`pnpm md:check` 0 错误 | 通过 |
+| 待办分组与子任务面板 | `renderer/lib/threadTasks.ts` + 8 例单测（待办解析与状态兜底、空列表与「无 todos」的区别、进行中/已完成分组含 cancelled、只挑带 `childSessionId` 的 tool-call）；`Thread.todos` 在实时与历史两条路径都被捕获（既有「不显示 todo 行」的测试未动、仍通过）；dock 新增「任务」页签 | 已实施 |
+| Windows 分支 | `symlink.ts` 目录联接 + `rmdir` 只摘链接（5 例单测覆盖两平台共有语义：读通链接、替换链接、删除后目标完好、幂等、拒删真实目录）；`tray.ts` 双击置顶（win32）、`shouldHideOnClose()` 兜底；close 拦截移到 `index.ts` 以免 `windows.ts` ↔ `tray.ts` 循环依赖 | 已实施（Windows 真机未验证，见下） |
+| 回归 | `pnpm typecheck` exit 0（desktop / sdk / relay / client）；`pnpm test`：desktop 64 文件 581 例、sdk 3 例、relay 22 例全通过（基线 57 文件 522 例）；`pnpm lint` 0 错误；`pnpm format:check` 干净；`pnpm md:check` 0 错误 | 通过 |
 
 ### 与计划的偏差（实施中修正）
 
@@ -218,11 +239,14 @@ YAML frontmatter 存 `title/summary/category/tags/created/updated/converted`，*
 7. **批次四两项均未改代码**：SSE 见「待核实项」结论；channel 名集中化被认为需要改动 190+ 处字面量、风险大于收益，改为**给 IPC 桥加类型安全网**
    （`preload/index.ts` 把桥对象标注为 `ElectronAPI`，漏实现即编译失败），并以它验证了当前桥接层与渲染层契约一致。
 8. **顺手修复一处既有 lint 错误**：`renderer/lib/macroPrompts.test.ts` 的 import 排序（纯顺序调整，无行为变化）。该错误在本方案开始前就存在，会让 `pnpm lint` 无法通过。
+9. **补上被漏掉的一项（复核时发现）**：口头调研总结里列过「子任务面板 / 待办分组」，但它**没有进入本方案的 10 个设计条目**，因此首轮实施时被漏掉。复核对照两侧代码时发现并补齐为第 10 项（见下）。
+10. **Windows 分支从「排除」改为「实现」**：原本写的是「Windows 分支留 TODO，不引入不可验证的代码路径」，现已实现（目录联接 + 托盘双击约定 + `shouldHideOnClose` 兜底），
+    但**仍未在 Windows 上运行过**——实现完整、验证缺失，措辞与 `symlink.ts` 的注释都按此改正。
 
 ### 未覆盖的验证
 
-- 托盘、全局快捷键、关闭驻留、多会话 Tab 的真实交互**未在跑起来的应用里点击验证**（本次改动只在 jsdom + 类型/单测层面验证）。需要一次人工冒烟：关闭窗口→进程驻留、`Shift+X` 显隐、连开两个会话 tab 后切换与关闭、设置页两张新卡片。
-- Windows 分支（托盘、`symlink` 的 junction 回退）按计划未写未经真机验证的实现，托盘代码本身跨平台，但未在 Windows 上运行过。
+- 托盘、全局快捷键、关闭驻留、多会话 Tab 的真实交互**未在跑起来的应用里点击验证**（本次改动只在 jsdom + 类型/单测层面验证）。需要一次人工冒烟：关闭窗口→进程驻留、`Shift+X` 显隐、连开两个会话 tab 后切换与关闭、设置页两张新卡片、任务面板。
+- **Windows 分支已实现但完全未验证**：`symlink.ts` 的目录联接与 `rmdir` 删除、`tray.ts` 的双击约定、`shouldHideOnClose()` 的兜底，都只在本机（macOS）通过了类型检查与 POSIX 路径的单测；Windows 上的实际行为没有跑过。`symlink.test.ts` 的 5 例（读通链接、替换链接、删除后目标完好、幂等、拒删真实目录）覆盖的是两平台共有的语义，Windows 专属分支未被覆盖。
 
 ### 待核实项（结论）
 
@@ -236,6 +260,7 @@ YAML frontmatter 存 `title/summary/category/tags/created/updated/converted`，*
   用 `path.relative()` 且结果不以 `..` 开头（或 `resolve` 后补 `path.sep`），即 `artifact_file.ts:28-34` 现用的思路。
 - **不照抄 `executil` 的无超时命令封装**：本仓任何统一 runner 必须带超时 / AbortSignal。
 - **不采用「程序目录下写数据」**（`<exeDir>/vault`、`<exeDir>/configs/skill-schemes/`）：打包后该目录不可写，且违反本仓 app-private 约定；对应数据一律落 `<userData>` 或工作区。
-- **不为 Windows 托盘 / 软链接写未验证实现**：本仓主战场为 macOS，Windows 分支留 TODO，不引入不可验证的代码路径。
+- **Windows 分支照做，但不声称已验证**：托盘走 Electron 的跨平台 `Tray`（Windows 侧补上「双击置顶」的交互约定），软链接在 Windows 走 Node 的目录联接（`symlinkSync(..., 'junction')`，免管理员权限），删除用 `rmdir` 只摘链接、绝不递归进目标；
+  另外 `shouldHideOnClose()` 保证「隐藏后无路可回」的组合（Windows 且托盘与全局快捷键都没生效）不做关闭拦截。这些路径实现完整、**未在 Windows 真机跑过**，见「未覆盖的验证」。
 - **不改 relay / client**：独立项目，通过 WS/HTTP 协议通信，本次不触碰（协议三份副本手工同步的既有债不在本方案范围内）。
 - **不新增独立文档**：本方案自包含，不按条目拆分多份文档。

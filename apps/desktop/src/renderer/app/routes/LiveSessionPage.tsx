@@ -249,9 +249,9 @@ export function LiveSessionPage() {
   const activeArtifact = pane?.artifact ?? null;
   const browserUrl = pane?.browserUrl ?? '';
   const [rightPanelOpen, setRightPanelOpen] = useState(false);
-  const [rightPanelTab, setRightPanelTab] = useState<'context' | 'browser' | 'terminal' | 'files'>(
-    'context',
-  );
+  const [rightPanelTab, setRightPanelTab] = useState<
+    'context' | 'tasks' | 'browser' | 'terminal' | 'files'
+  >('context');
 
   // Conversation scroll position, per session — restored once history is in.
   const chatRef = useRef<HTMLDivElement>(null);
@@ -528,11 +528,17 @@ export function LiveSessionPage() {
           browserUrl={browserUrl}
           tab={rightPanelTab}
           dockVisible={rightPanelOpen || !!activeArtifact}
+          todos={thread?.todos ?? []}
+          blocks={thread?.blocks ?? []}
           onCloseArtifact={closeArtifact}
           onBrowserUrlChange={setBrowserUrl}
           onCloseBrowser={() => setRightPanelOpen(false)}
           onCloseTerminal={() => setRightPanelOpen(false)}
           onCloseFileBrowser={() => setRightPanelOpen(false)}
+          onOpenSession={(id, title) => {
+            openSessionTab(id, title);
+            navigate(`/live/${id}`);
+          }}
           onEvaluate={onEvaluate}
         />
       </div>

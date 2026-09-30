@@ -6,7 +6,7 @@ import contextMenu from 'electron-context-menu';
 import { APP_IDS, APP_NAMES, CHANNEL } from './constants';
 import { registerIpcHandlers, relayHost } from './ipc';
 import { killAllKernels } from './kernel';
-import { markQuitting } from './lifecycle';
+import { isQuitting, markQuitting } from './lifecycle';
 import { getLogger } from './logging';
 import { macroStore } from './macro';
 import { startPreviewServer, stopPreviewServer } from './preview_server';
@@ -14,7 +14,7 @@ import type { RelayHostConfig } from './relayHost';
 import { cronEngine, ensureMacroTasks, stopSchedulerApi } from './scheduler';
 import { deployBundledProfile, getBrowserMcp, stopSidecar } from './server';
 import { getStore } from './store';
-import { disposeTray, registerGlobalShortcut, setupTray } from './tray';
+import { disposeTray, registerGlobalShortcut, setupTray, shouldHideOnClose } from './tray';
 import { setupAutoUpdater } from './updater';
 import { createMainWindow, getMainWindow, setDockIcon } from './windows';
 
@@ -125,7 +125,16 @@ void app.whenReady().then(async () => {
   });
 
   // Close-to-tray plus the global show/hide hotkey, so the agent and the
-  // scheduled tasks survive a closed window.
+  // scheduled tasks survive a closed window. The interceptor lives here rather
+  // than in windows.ts because it needs both the lifecycle flag and the tray's
+  // own state — wiring them in the composition root keeps those modules from
+  // importing each other.
+  win.on('close', (event) => {
+    if (isQuitting() || !shouldHideOnClose()) return;
+    event.preventDefault();
+    win.hide();
+  });
+
   setupTray();
   registerGlobalShortcut();
 });

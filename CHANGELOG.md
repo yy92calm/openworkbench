@@ -146,6 +146,13 @@ bump minor；发版时打 `v<version>` git tag 并将本条「Unreleased」归�
   配置、规则说明、命令、规则、技能）并就地预览。
 - IPC 桥增加编译期契约检查：preload 桥对象标注为 `ElectronAPI`，渲染层声明了而
   桥未实现的方法会直接编译失败，而不是运行时才暴露 `undefined is not a function`。
+- 任务面板：dock 新增「任务」页签，按进行中 / 已完成分组展示智能体的待办（数据取
+  自 `todo*` 工具调用，它们仍按原设计不进入会话流），并列出子代理子任务卡片，
+  点击直接打开该子会话。
+- Windows 分支：软链接在 Windows 走目录联接（`junction`，免管理员权限）且删除只
+  摘链接、不动目标；托盘补上「双击置顶」；`shouldHideOnClose()` 保证「隐藏后无路
+  可回」的组合（Windows 且托盘与快捷键都不可用）不拦截关闭。实现完整，
+  **Windows 真机未验证**。
 
 ### Fixed
 

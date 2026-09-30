@@ -23,9 +23,26 @@ function toggleWindow(): void {
   if (win.isVisible()) {
     win.hide();
   } else {
-    win.show();
-    win.focus();
+    showWindow();
   }
+}
+
+function showWindow(): void {
+  const win = getMainWindow();
+  if (!win) return;
+  win.show();
+  win.focus();
+}
+
+/** Whether hiding on close is safe — i.e. whether the user has a way back.
+ *  macOS always does (dock icon + app menu). On Windows the window leaves the
+ *  taskbar when hidden, so hiding is only safe when the tray icon or the global
+ *  hotkey actually works; otherwise closing should really close, rather than
+ *  leaving an invisible process the user cannot reach (relaunching restores it,
+ *  but nothing tells them to). */
+export function shouldHideOnClose(): boolean {
+  if (process.platform === 'darwin') return true;
+  return tray !== null || shortcutRegistered;
 }
 
 /** Create the tray icon. Failures (e.g. no app indicator support on some Linux
@@ -38,6 +55,11 @@ export function setupTray(): void {
     tray = new Tray(icon.resize({ width: 16, height: 16 }));
     tray.setToolTip(APP_NAMES[CHANNEL]);
     tray.on('click', toggleWindow);
+    if (process.platform === 'win32') {
+      // Windows convention: a double-click raises the window even when it is
+      // visible but behind another app (the single click already fired).
+      tray.on('double-click', showWindow);
+    }
     tray.setContextMenu(
       Menu.buildFromTemplate([
         { label: '显示主窗口', click: toggleWindow },

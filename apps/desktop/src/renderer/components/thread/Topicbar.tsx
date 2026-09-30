@@ -1,4 +1,4 @@
-import { BookOpen, FolderOpen, Globe, PanelRightClose, Terminal } from 'lucide-react';
+import { BookOpen, FolderOpen, Globe, ListTodo, PanelRightClose, Terminal } from 'lucide-react';
 import { useState } from 'react';
 
 import { ShortcutsCheatsheet } from '@/components/command-palette/ShortcutsCheatsheet';
@@ -14,6 +14,7 @@ const STATUS_TONE: Record<string, string> = {
 
 const TABS = [
   { id: 'context' as const, label: '上下文', icon: <BookOpen size={14} /> },
+  { id: 'tasks' as const, label: '任务', icon: <ListTodo size={14} /> },
   { id: 'browser' as const, label: '浏览器', icon: <Globe size={14} /> },
   { id: 'terminal' as const, label: '终端', icon: <Terminal size={14} /> },
   { id: 'files' as const, label: '文件', icon: <FolderOpen size={14} /> },
@@ -29,7 +30,7 @@ export function Topicbar({
   title?: string;
   rightPanelOpen: boolean;
   currentTab: string;
-  onTabChange: (tab: 'context' | 'browser' | 'terminal' | 'files') => void;
+  onTabChange: (tab: 'context' | 'tasks' | 'browser' | 'terminal' | 'files') => void;
   onClosePanel: () => void;
 }) {
   const status = useRuntimeStore((s) => s.status);
