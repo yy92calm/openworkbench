@@ -1,6 +1,7 @@
 import { Command } from 'cmdk';
 import {
   FileSearch,
+  Keyboard,
   Moon,
   NotebookPen,
   PackagePlus,
@@ -122,6 +123,15 @@ export function CommandPalette() {
       icon: <Moon size={16} />,
       run: () => {
         toggleTheme();
+        close();
+      },
+    },
+    {
+      id: 'shortcuts',
+      label: '键盘快捷键',
+      icon: <Keyboard size={16} />,
+      run: () => {
+        useUiStore.getState().setCheatsheetOpen(true);
         close();
       },
     },

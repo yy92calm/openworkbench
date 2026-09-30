@@ -14,6 +14,7 @@ import { useEffect, useState } from 'react';
 import { stripAnsi } from '@/lib/ansi';
 import { cn } from '@/lib/cn';
 import { useUiStore } from '@/lib/store';
+import { formatElapsed, useElapsed } from '@/lib/useElapsed';
 
 const STATUS: Record<ToolCallStatus, { label: string; icon: React.ReactNode; className: string }> =
   {
@@ -43,10 +44,11 @@ export function ToolCallRow({ block, activity }: { block: ToolCallBlock; activit
   }, [expandDefault]);
 
   const isRunning = block.status === 'running';
+  // Elapsed time only while running: a finished row carries the total in
+  // `meta`, and a row restored from history has no real start to count from.
+  const elapsed = useElapsed(isRunning ? block.startedAt : undefined);
   const isError = block.status === 'failed' || block.status === 'warning';
   const isWaiting = block.status === 'waiting-approval';
-  const isDone =
-    block.status === 'success' || block.status === 'failed' || block.status === 'warning';
 
   // Error display: show first line, expand for full error. Tool output may
   // carry ANSI escapes from the underlying command — strip at display time
@@ -94,8 +96,8 @@ export function ToolCallRow({ block, activity }: { block: ToolCallBlock; activit
           {block.title}
         </span>
         {block.meta && <span className="shrink-0 text-[11px] text-muted">{block.meta}</span>}
-        {isDone && block.duration && (
-          <span className="shrink-0 text-[11px] text-fg-faint">{block.duration}s</span>
+        {elapsed !== null && (
+          <span className="shrink-0 text-[11px] text-fg-faint">{formatElapsed(elapsed)}</span>
         )}
         <ChevronRight
           size={13}

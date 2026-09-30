@@ -11,6 +11,8 @@ const mkThread = (blocks: ThreadBlock[]) => ({
   index: {},
   consecutiveTools: 0,
   loaded: true,
+  todos: [],
+  coldExpanded: false,
 });
 
 afterEach(() => {

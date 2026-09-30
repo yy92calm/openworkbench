@@ -10,6 +10,7 @@ import { Brain, Check, ChevronDown, ChevronRight, Loader2, X } from 'lucide-reac
 import { useEffect, useMemo, useState } from 'react';
 
 import { a2uiEngine } from '@/lib/a2ui/engine';
+import { blockKey } from '@/lib/blockKeys';
 import { cn } from '@/lib/cn';
 import { useUiStore } from '@/lib/store';
 import { groupIsStreaming, isGroupableWorkBlock } from '@/lib/threadGroups';
@@ -39,10 +40,12 @@ export interface BlockHandlers {
 }
 
 /** A renderable item: either a single block or a merged group of consecutive
- *  reasoning + tool-call blocks (a "step" run). */
+ *  reasoning + tool-call blocks (a "step" run). `key` is the React key (block
+ *  identity); `index` is the position in the blocks array, still needed for the
+ *  positional DOM anchor. */
 type RenderItem =
-  | { type: 'block'; block: ThreadBlock; key: number }
-  | { type: 'step-group'; blocks: ThreadBlock[]; key: number };
+  | { type: 'block'; block: ThreadBlock; key: string; index: number }
+  | { type: 'step-group'; blocks: ThreadBlock[]; key: string; index: number };
 
 /** Pre-process blocks: merge consecutive reasoning + tool-call blocks into a
  *  single collapsible group so thinking and tools fold together. A lone block
@@ -56,13 +59,14 @@ function prepareItems(blocks: ThreadBlock[]): RenderItem[] {
       const start = i;
       while (i < blocks.length && isGroupableWorkBlock(blocks[i])) i++;
       const run = blocks.slice(start, i);
+      const key = blockKey(run[0], start);
       if (run.length >= 2) {
-        items.push({ type: 'step-group', blocks: run, key: start });
+        items.push({ type: 'step-group', blocks: run, key, index: start });
       } else {
-        items.push({ type: 'block', block: run[0], key: start });
+        items.push({ type: 'block', block: run[0], key, index: start });
       }
     } else {
-      items.push({ type: 'block', block: b, key: i });
+      items.push({ type: 'block', block: b, key: blockKey(b, i), index: i });
       i++;
     }
   }
@@ -103,18 +107,21 @@ export function renderBlock(
   prevKind?: ThreadBlock['kind'],
 ) {
   const sp = spacingBefore(block.kind);
+  // The React key follows the block's identity; the DOM anchor stays positional
+  // (JumpBar and the conversation search resolve `block-<index>`).
+  const key = blockKey(block, i);
   switch (block.kind) {
     case 'turn-divider':
-      return <TurnDivider key={i} block={block} />;
+      return <TurnDivider key={key} block={block} />;
     case 'user':
       return (
-        <div key={i} id={`block-${i}`} className={prevKind ? sp : ''}>
+        <div key={key} id={`block-${i}`} className={prevKind ? sp : ''}>
           <UserMessage block={block} onEdit={handlers?.onUserMessageEdit} />
         </div>
       );
     case 'agent':
       return (
-        <div key={i} className={prevKind ? sp : ''}>
+        <div key={key} className={prevKind ? sp : ''}>
           <AgentMessage
             markdown={block.markdown}
             timestamp={block.timestamp}
@@ -130,13 +137,13 @@ export function renderBlock(
       );
     case 'reasoning':
       return (
-        <div key={i} className={prevKind ? sp : ''}>
+        <div key={key} className={prevKind ? sp : ''}>
           <ReasoningCard block={block} />
         </div>
       );
     case 'step-summary':
       return (
-        <div key={i} className={prevKind ? sp : ''}>
+        <div key={key} className={prevKind ? sp : ''}>
           <StepSummaryRow block={block} />
         </div>
       );
@@ -144,13 +151,13 @@ export function renderBlock(
       // Shell commands get their own card
       if (block.shellCommand) {
         return (
-          <div key={i} className={prevKind ? sp : ''}>
+          <div key={key} className={prevKind ? sp : ''}>
             <ShellCard block={block} />
           </div>
         );
       }
       return (
-        <div key={i} className={prevKind ? sp : ''}>
+        <div key={key} className={prevKind ? sp : ''}>
           <ToolCallRow
             block={block}
             activity={
@@ -161,31 +168,31 @@ export function renderBlock(
       );
     case 'table':
       return (
-        <div key={i} className={prevKind ? sp : ''}>
+        <div key={key} className={prevKind ? sp : ''}>
           <DataTable block={block} />
         </div>
       );
     case 'figure':
       return (
-        <div key={i} className={prevKind ? sp : ''}>
+        <div key={key} className={prevKind ? sp : ''}>
           <FigureBlock block={block} onComment={handlers?.onFigureComment} />
         </div>
       );
     case 'artifact':
       return (
-        <div key={i} className={prevKind ? sp : ''}>
+        <div key={key} className={prevKind ? sp : ''}>
           <ArtifactCard block={block} onOpen={handlers?.onArtifactOpen} />
         </div>
       );
     case 'running-jobs':
       return (
-        <div key={i} className={prevKind ? sp : ''}>
+        <div key={key} className={prevKind ? sp : ''}>
           <RunningJobsOverlay block={block} />
         </div>
       );
     case 'status-line':
       return (
-        <div key={i} className={prevKind ? sp : ''}>
+        <div key={key} className={prevKind ? sp : ''}>
           <StatusLine block={block} />
         </div>
       );
@@ -196,6 +203,8 @@ export function BlockList({
   blocks,
   handlers,
   warmCount = 40,
+  coldExpanded,
+  onColdExpandedChange,
 }: {
   blocks: ThreadBlock[];
   handlers?: BlockHandlers;
@@ -203,8 +212,17 @@ export function BlockList({
    *  "expand earlier history" placeholder and only render on demand. Warm/cold
    *  layering for long sessions — the full list is never rendered at once. */
   warmCount?: number;
+  /** Controlled fold state. Omitted by surfaces without a session store (mock
+   *  example sessions), which then keep it locally. */
+  coldExpanded?: boolean;
+  onColdExpandedChange?: (expanded: boolean) => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
+  const [localExpanded, setLocalExpanded] = useState(false);
+  const expanded = coldExpanded ?? localExpanded;
+  const setExpanded = (next: boolean) => {
+    setLocalExpanded(next);
+    onColdExpandedChange?.(next);
+  };
   const total = blocks.length;
   const isCold = total > warmCount;
 
@@ -239,7 +257,7 @@ export function BlockList({
                 ? ('tool-call' as const)
                 : (items[idx - 1] as { type: 'block'; block: ThreadBlock }).block.kind
               : undefined;
-          return renderBlock(item.block, item.key, handlers, prevKind);
+          return renderBlock(item.block, item.index, handlers, prevKind);
         }
         // Step group (reasoning + tool calls merged)
         const prevKind =

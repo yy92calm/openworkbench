@@ -75,6 +75,8 @@ interface UiState {
   sidebarWidth: number;
   sidebarCollapsed: boolean;
   paletteOpen: boolean;
+  /** Keyboard-shortcut reference modal (Cmd/Ctrl+/). */
+  cheatsheetOpen: boolean;
   /** One-shot text placed into the composer by another surface (e.g. the
    *  provenance Reproduce action) - consumed on the next composer render. */
   composerDraft: string | null;
@@ -93,6 +95,7 @@ interface UiState {
   setSidebarWidth: (width: number) => void;
   toggleSidebar: () => void;
   setPaletteOpen: (open: boolean) => void;
+  setCheatsheetOpen: (open: boolean) => void;
   setComposerDraft: (draft: string | null) => void;
   setExpandThreadDetails: (expand: boolean) => void;
   /** Open/activate a session tab. Tabs are deduped per session, so several
@@ -116,6 +119,7 @@ export const useUiStore = create<UiState>((set, get) => ({
   sidebarWidth: initialSidebarWidth(),
   sidebarCollapsed: initialSidebarCollapsed(),
   paletteOpen: false,
+  cheatsheetOpen: false,
   expandThreadDetails: initialExpandDetails(),
   setTheme: (theme) => {
     if (typeof window !== 'undefined') window.localStorage.setItem(THEME_KEY, theme);
@@ -148,6 +152,7 @@ export const useUiStore = create<UiState>((set, get) => ({
     set({ sidebarCollapsed: next });
   },
   setPaletteOpen: (paletteOpen) => set({ paletteOpen }),
+  setCheatsheetOpen: (cheatsheetOpen) => set({ cheatsheetOpen }),
   composerDraft: null,
   setComposerDraft: (composerDraft) => set({ composerDraft }),
   setExpandThreadDetails: (expandThreadDetails) => {

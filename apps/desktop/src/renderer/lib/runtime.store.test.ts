@@ -629,3 +629,53 @@ describe('per-session right pane', () => {
     expect(useRuntimeStore.getState().panes['ses_1']).toBeUndefined();
   });
 });
+
+describe('per-session view state', () => {
+  it('keeps the "expand earlier history" fold on the session it belongs to', () => {
+    const store = useRuntimeStore.getState();
+
+    store.setColdExpanded(true);
+    expect(useRuntimeStore.getState().threads[DRAFT_KEY].coldExpanded).toBe(true);
+
+    // Another session is a different conversation: its own fold, still closed.
+    useRuntimeStore.setState({ currentId: 'ses_other' });
+    expect(useRuntimeStore.getState().threads.ses_other).toBeUndefined();
+    useRuntimeStore.getState().setColdExpanded(false);
+    expect(useRuntimeStore.getState().threads.ses_other.coldExpanded).toBe(false);
+
+    // Coming back finds the draft's fold exactly as it was left.
+    useRuntimeStore.setState({ currentId: null });
+    expect(useRuntimeStore.getState().threads[DRAFT_KEY].coldExpanded).toBe(true);
+  });
+
+  it('releases the fold when the tab is closed', () => {
+    useRuntimeStore.setState({ currentId: 'ses_a' });
+    useRuntimeStore.getState().setColdExpanded(true);
+    expect(useRuntimeStore.getState().threads.ses_a?.coldExpanded).toBe(true);
+
+    useRuntimeStore.getState().dropSessionState('ses_a');
+    expect(useRuntimeStore.getState().threads.ses_a).toBeUndefined();
+  });
+});
+
+describe('background session attention', () => {
+  it('flags a background turn that finished, and clears it once opened', async () => {
+    useRuntimeStore.setState({ currentId: 'ses_a' });
+
+    // The conversation on screen needs no flag — you are looking at it.
+    mocks.fireEvent({ type: 'session.idle', sessionId: 'ses_a' });
+    expect(useRuntimeStore.getState().finishedUnseen.ses_a).toBeUndefined();
+
+    mocks.fireEvent({ type: 'session.idle', sessionId: 'ses_b' });
+    expect(useRuntimeStore.getState().finishedUnseen.ses_b).toBe(true);
+
+    await useRuntimeStore.getState().openSession('ses_b');
+    expect(useRuntimeStore.getState().finishedUnseen.ses_b).toBeUndefined();
+  });
+
+  it('ignores a subagent session: its idle rides the parent turn', () => {
+    useRuntimeStore.setState({ currentId: 'ses_a', sessionParents: { ses_child: 'ses_a' } });
+    mocks.fireEvent({ type: 'session.idle', sessionId: 'ses_child' });
+    expect(useRuntimeStore.getState().finishedUnseen.ses_child).toBeUndefined();
+  });
+});

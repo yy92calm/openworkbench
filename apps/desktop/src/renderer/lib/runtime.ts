@@ -69,6 +69,10 @@ export interface Thread {
    *  are dropped from `blocks` on purpose (see foldEvent); the panel is where
    *  they surface. */
   todos: ThreadTodo[];
+  /** Whether the "expand earlier history" fold is open. Per session, like the
+   *  rest of the conversation view state, so switching tabs neither leaks it
+   *  into another conversation nor resets it on the way back. */
+  coldExpanded: boolean;
 }
 
 /** What a session's right pane shows: an artifact inspector, the Files
@@ -109,6 +113,10 @@ interface RuntimeState {
   /** Subagent session → the session whose task tool spawned it, learned from
    *  task tool events (live) and the session list (recovery after reload). */
   sessionParents: Record<string, string>;
+  /** Top-level sessions that finished a turn while you were looking at another
+   *  one — the tab bar clears the flag when you open them. Subagent sessions
+   *  are not tracked: their idle rides the parent's turn. */
+  finishedUnseen: Record<string, true>;
   /** Right-pane state per session (DRAFT_KEY for a draft) — each session keeps
    *  its own open artifact / Files browser and gets it back when reopened.
    *  In-memory only: an app restart returns every session to a closed pane. */
@@ -186,6 +194,9 @@ interface RuntimeState {
    *  the right-pane memory and the scroll offset are dropped, so a long-lived
    *  tab session does not grow without bound. */
   dropSessionState: (id: string) => void;
+  /** Open/close the "expand earlier history" fold of the session on screen.
+   *  Stored on the thread so it follows the session, not the component. */
+  setColdExpanded: (expanded: boolean) => void;
   hideExample: (id: string) => void;
 }
 
@@ -196,6 +207,7 @@ const emptyThread = (): Thread => ({
   consecutiveTools: 0,
   loaded: false,
   todos: [],
+  coldExpanded: false,
 });
 /** Threads key for the draft conversation — its blocks move to the real
  *  session id once the session exists, so the page never visibly resets. */
@@ -475,6 +487,7 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
   questions: [],
   permissions: [],
   sessionParents: {},
+  finishedUnseen: {},
   panes: {},
   workspace: null,
   workspacePinned: false,
@@ -1014,13 +1027,18 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
         // SSE stream the bash-output event always precedes session.idle.
         const runningSessions = { ...s.runningSessions };
         const shellTurns = { ...s.shellTurns };
+        const finishedUnseen = { ...s.finishedUnseen };
         if (event.type === 'session.idle') {
           delete runningSessions[sid];
           delete shellTurns[sid];
+          // A background conversation just finished: flag it so its tab can say
+          // so. Subagent idles are skipped — they belong to the parent's turn.
+          if (s.currentId !== sid && !s.sessionParents[sid]) finishedUnseen[sid] = true;
         }
         return {
           runningSessions,
           shellTurns,
+          finishedUnseen,
           threads: { ...s.threads, [sid]: { ...cur, ...folded, todos, loaded: true } },
         };
       });
@@ -1251,7 +1269,12 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
   },
 
   openSession: async (id) => {
-    set({ currentId: id });
+    set((s) => {
+      // Opening a session is what "seeing" its finished turn means.
+      const finishedUnseen = { ...s.finishedUnseen };
+      delete finishedUnseen[id];
+      return { currentId: id, finishedUnseen };
+    });
     if (!client) return;
     // Follow the session into its own workspace folder: record it as active and
     // reconnect the event stream scoped to it, so the agent, kernel and Files
@@ -1301,7 +1324,14 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
       set((s) => ({
         threads: {
           ...s.threads,
-          [id]: { ...historyToThread(messages, s.commands), loaded: true },
+          // Spread the existing thread first: a reload replaces the conversation
+          // but must keep view state that is not part of the history
+          // (coldExpanded).
+          [id]: {
+            ...(s.threads[id] ?? emptyThread()),
+            ...historyToThread(messages, s.commands),
+            loaded: true,
+          },
         },
       }));
     } catch (err) {
@@ -1401,7 +1431,11 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
             // the thread with the full history rather than leave it stale.
             threads: {
               ...s.threads,
-              [sid]: { ...historyToThread(messages, s.commands), loaded: true },
+              [sid]: {
+                ...(s.threads[sid] ?? emptyThread()),
+                ...historyToThread(messages, s.commands),
+                loaded: true,
+              },
             },
           };
         });
@@ -1448,6 +1482,13 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
     forgetScrollMemory(chatScrollKey(id, DRAFT_KEY));
     a2uiEngine.dropSession(id);
   },
+
+  setColdExpanded: (coldExpanded) =>
+    set((s) => {
+      const key = s.currentId ?? DRAFT_KEY;
+      const cur = s.threads[key] ?? emptyThread();
+      return { threads: { ...s.threads, [key]: { ...cur, coldExpanded } } };
+    }),
 
   hideExample: (id) => {
     const next = Array.from(new Set([...get().hiddenExamples, id]));
@@ -1575,8 +1616,8 @@ export function foldEvent(
       const parsed = extractA2ui(event.text);
       const block: ThreadBlock =
         parsed.markdown === event.text
-          ? { kind: 'agent', markdown: event.text }
-          : { kind: 'agent', markdown: parsed.markdown, a2uiPartKey: event.partId };
+          ? { kind: 'agent', id: key, markdown: event.text }
+          : { kind: 'agent', id: key, markdown: parsed.markdown, a2uiPartKey: event.partId };
       if (key in index) blocks[index[key]] = block;
       else {
         blocks.push(block);
@@ -1587,9 +1628,14 @@ export function foldEvent(
     case 'reasoning.updated': {
       const key = `reasoning:${event.partId}`;
       if (key in index) {
-        blocks[index[key]] = { kind: 'reasoning', text: event.text, streaming: event.streaming };
+        blocks[index[key]] = {
+          kind: 'reasoning',
+          id: key,
+          text: event.text,
+          streaming: event.streaming,
+        };
       } else {
-        blocks.push({ kind: 'reasoning', text: event.text, streaming: event.streaming });
+        blocks.push({ kind: 'reasoning', id: key, text: event.text, streaming: event.streaming });
         index[key] = blocks.length - 1;
       }
       return { blocks, index, consecutiveTools: state.consecutiveTools };
@@ -1614,8 +1660,17 @@ export function foldEvent(
         event.childSessionId ?? (prev?.kind === 'tool-call' ? prev.childSessionId : undefined);
       const isFailed = event.status === 'error' || event.status === 'failed';
       const isShell = event.tool === 'bash' || event.tool === 'shell';
+      // Started-at rides along while the row is running, so the UI can tick an
+      // elapsed time; the first update wins and later ones carry it forward.
+      const startedAt =
+        prev?.kind === 'tool-call' && prev.startedAt !== undefined
+          ? prev.startedAt
+          : event.status === 'running'
+            ? Date.now()
+            : undefined;
       const block: ThreadBlock = {
         kind: 'tool-call',
+        id: key,
         title: tidyToolTitle(event.title?.trim() || command || filePath || event.tool || 'tool'),
         status: event.status,
         meta: extractMeta(event.tool, event.output, event.input),
@@ -1626,6 +1681,7 @@ export function foldEvent(
             ? event.output?.replace(/\s+$/, '')
             : extractOutputSummary(event.tool, event.output, event.input),
         ...(childSessionId ? { childSessionId } : {}),
+        ...(startedAt !== undefined ? { startedAt } : {}),
         ...(isShell && command ? { shellCommand: command } : {}),
       };
       if (key in index) {
@@ -1638,9 +1694,9 @@ export function foldEvent(
       const artifact = deriveArtifact(event);
       if (artifact) {
         const akey = `artifact:${artifact.path}`;
-        if (akey in index) blocks[index[akey]] = artifact;
+        if (akey in index) blocks[index[akey]] = { ...artifact, id: akey };
         else {
-          blocks.push(artifact);
+          blocks.push({ ...artifact, id: akey });
           index[akey] = blocks.length - 1;
         }
       }
@@ -1762,12 +1818,13 @@ export function historyToThread(
           const parsed = extractA2ui(p.text);
           blocks.push({
             kind: 'agent',
+            id: `h${mi}-p${pi}`,
             markdown: parsed.markdown,
             ...(parsed.markdown === p.text ? {} : { a2uiPartKey: historyA2uiPartKey(mi, pi) }),
             ...(m.completed ? { timestamp: m.completed } : {}),
           });
         } else if (p.type === 'reasoning' && p.text?.trim()) {
-          blocks.push({ kind: 'reasoning', text: p.text, streaming: false });
+          blocks.push({ kind: 'reasoning', id: `h${mi}-p${pi}`, text: p.text, streaming: false });
         } else if (p.type === 'tool') {
           // Interactive tools are surfaced by InteractionPrompt, not the thread;
           // `todo*` tools are opaque "N todos" noise — skip both, but keep the
@@ -1797,6 +1854,7 @@ export function historyToThread(
               : extractOutputSummary(p.tool ?? '', p.state?.output, p.state?.input);
           blocks.push({
             kind: 'tool-call',
+            id: `h${mi}-p${pi}`,
             title: tidyToolTitle(p.state?.title?.trim() || command || filePath || p.tool || 'tool'),
             status: frozen ? 'pending' : status,
             ...(toolInput ? { inputSummary: toolInput } : {}),
@@ -1812,7 +1870,7 @@ export function historyToThread(
             input: p.state?.input,
             output: p.state?.output,
           });
-          if (artifact) blocks.push(artifact);
+          if (artifact) blocks.push({ ...artifact, id: `artifact:${artifact.path}` });
         }
       }
       shellTurn = false;

@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import { Outlet, useNavigate } from 'react-router-dom';
 
 import { CommandPalette } from '@/components/command-palette/CommandPalette';
+import { ShortcutsCheatsheet } from '@/components/command-palette/ShortcutsCheatsheet';
 import { Sidebar } from '@/components/sidebar/Sidebar';
 import { StatusBar } from '@/components/sidebar/StatusBar';
 import { Toaster } from '@/components/ui/Toaster';
@@ -19,8 +20,28 @@ export function AppShell() {
   const setSidebarWidth = useUiStore((s) => s.setSidebarWidth);
   const sidebarCollapsed = useUiStore((s) => s.sidebarCollapsed);
   const toggleSidebar = useUiStore((s) => s.toggleSidebar);
+  const cheatsheetOpen = useUiStore((s) => s.cheatsheetOpen);
+  const setCheatsheetOpen = useUiStore((s) => s.setCheatsheetOpen);
   const resizingRef = useRef(false);
   const navigate = useNavigate();
+
+  // Global chrome shortcuts. They are modifier-based, so they stay safe inside
+  // the composer; bare keys (Enter, /, @, !) belong to the textarea and are
+  // handled there.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.altKey) return;
+      if (e.key === '/') {
+        e.preventDefault();
+        setCheatsheetOpen(!useUiStore.getState().cheatsheetOpen);
+      } else if (e.key.toLowerCase() === 'b') {
+        e.preventDefault();
+        useUiStore.getState().toggleSidebar();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [setCheatsheetOpen]);
 
   useEffect(() => {
     void useRuntimeStore.getState().bootstrap();
@@ -128,6 +149,7 @@ export function AppShell() {
         </div>
       </div>
       <CommandPalette />
+      <ShortcutsCheatsheet open={cheatsheetOpen} onClose={() => setCheatsheetOpen(false)} />
       <Toaster />
     </>
   );

@@ -158,6 +158,11 @@ export interface UserMessageBlock {
 
 export interface AgentMessageBlock {
   kind: 'agent';
+  /** Stable identity for the renderer's React key (and, for search, its DOM
+   *  anchor): the runtime part id while streaming, `h<message>-p<part>` when
+   *  rebuilt from history. Absent on blocks that are not addressable (status
+   *  lines, dividers) — those are append-only, so position is identity. */
+  id?: string;
   /** Markdown; inline `code` tokens are rendered as blue mono. A2UI fences
    *  (```a2ui) are extracted before this is set — the raw JSON never shows. */
   markdown: string;
@@ -181,6 +186,12 @@ export type ToolCallStatus =
 
 export interface ToolCallBlock {
   kind: 'tool-call';
+  /** Stable identity (see AgentMessageBlock.id). */
+  id?: string;
+  /** Epoch ms when the row first reported `running`. Absent once it finishes
+   *  (the completed `meta` carries the total) and on rows restored from
+   *  history, where the real start is unknown. */
+  startedAt?: number;
   title: string;
   status: ToolCallStatus;
   /** Right-aligned meta, e.g. "142 lines of output" or "16m 2s". */
@@ -224,6 +235,8 @@ export type ArtifactKind = 'figure' | 'script' | 'report' | 'table' | 'notebook'
 
 export interface ArtifactBlock {
   kind: 'artifact';
+  /** Stable identity (see AgentMessageBlock.id). */
+  id?: string;
   /** Workspace-relative path the tool wrote. */
   path: string;
   filename: string;
@@ -261,6 +274,8 @@ export interface TurnDividerBlock {
 /** Model reasoning / thinking process — collapsible. */
 export interface ReasoningBlock {
   kind: 'reasoning';
+  /** Stable identity (see AgentMessageBlock.id). */
+  id?: string;
   text: string;
   /** True while the reasoning is still streaming. */
   streaming?: boolean;

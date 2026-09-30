@@ -1,7 +1,5 @@
 import { BookOpen, FolderOpen, Globe, ListTodo, PanelRightClose, Terminal } from 'lucide-react';
-import { useState } from 'react';
 
-import { ShortcutsCheatsheet } from '@/components/command-palette/ShortcutsCheatsheet';
 import { cn } from '@/lib/cn';
 import { useRuntimeStore } from '@/lib/runtime';
 
@@ -34,7 +32,6 @@ export function Topicbar({
   onClosePanel: () => void;
 }) {
   const status = useRuntimeStore((s) => s.status);
-  const [showShortcuts, setShowShortcuts] = useState(false);
 
   return (
     <header className="topicbar flex h-10 shrink-0 items-center gap-2 border-b border-border bg-surface px-4">
@@ -44,10 +41,16 @@ export function Topicbar({
       <h1 className="truncate text-[13px] font-medium text-text">{title || '新会话'}</h1>
       <div className="flex-1" />
       {/* Right sidebar tabs */}
-      <div className="flex items-center gap-0.5 rounded-input bg-surface-2 p-0.5">
+      <div
+        role="tablist"
+        aria-label="右侧面板"
+        className="flex items-center gap-0.5 rounded-input bg-surface-2 p-0.5"
+      >
         {TABS.map((t) => (
           <button
             key={t.id}
+            role="tab"
+            aria-selected={rightPanelOpen && currentTab === t.id}
             onClick={() => onTabChange(t.id)}
             className={cn(
               'flex items-center gap-1 rounded-sm px-2 py-1 text-[11px] font-medium transition-colors',
@@ -71,7 +74,6 @@ export function Topicbar({
           <PanelRightClose size={14} />
         </button>
       )}
-      <ShortcutsCheatsheet open={showShortcuts} onClose={() => setShowShortcuts(false)} />
     </header>
   );
 }

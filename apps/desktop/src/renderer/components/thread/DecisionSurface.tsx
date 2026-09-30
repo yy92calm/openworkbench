@@ -29,10 +29,14 @@ export function DecisionSurface({
   onPermission,
   onPermissionModeChange,
   composer,
+  pendingCount = 0,
 }: {
   question?: QuestionAskedEvent;
   permission?: PermissionAskedEvent;
   origin?: string;
+  /** How many requests are waiting in this conversation (the visible one
+   *  included). Shown when more than one, so a queue is never invisible. */
+  pendingCount?: number;
   permissionMode: PermissionMode;
   onAnswer: (requestId: string, answers: string[][]) => void;
   onReject: (requestId: string) => void;
@@ -56,6 +60,9 @@ export function DecisionSurface({
   return (
     <div className="mx-auto max-w-[880px] space-y-3">
       {/* Decision surface – highest priority slot */}
+      {hasDecision && pendingCount > 1 && (
+        <p className="text-center text-[11px] text-muted">另有 {pendingCount - 1} 个请求在排队</p>
+      )}
       {hasDecision && (
         <InteractionPrompt
           question={question}

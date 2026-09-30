@@ -46,7 +46,7 @@ describe('foldEvent', () => {
       { type: 'text.updated', sessionId: S, partId: 'p1', text: 'Planning the review' },
     ]);
     expect(s.blocks).toHaveLength(1);
-    expect(s.blocks[0]).toEqual({ kind: 'agent', markdown: 'Planning the review' });
+    expect(s.blocks[0]).toEqual({ kind: 'agent', id: 'text:p1', markdown: 'Planning the review' });
   });
 
   it('upserts a tool call by callId and reflects status transitions', () => {
@@ -216,14 +216,16 @@ describe('foldEvent', () => {
     const s = foldAll([
       { type: 'text.updated', sessionId: S, partId: 'p1', text: `See:\n\n${fence}\n\nDone.` },
     ]);
-    expect(s.blocks).toEqual([{ kind: 'agent', markdown: 'See:\n\n\nDone.', a2uiPartKey: 'p1' }]);
+    expect(s.blocks).toEqual([
+      { kind: 'agent', id: 'text:p1', markdown: 'See:\n\n\nDone.', a2uiPartKey: 'p1' },
+    ]);
   });
 
   it('keeps fence-less text parts without an a2ui part key', () => {
     const s = foldAll([
       { type: 'text.updated', sessionId: S, partId: 'p1', text: '```json\n{"a":1}\n```' },
     ]);
-    expect(s.blocks).toEqual([{ kind: 'agent', markdown: '```json\n{"a":1}\n```' }]);
+    expect(s.blocks).toEqual([{ kind: 'agent', id: 'text:p1', markdown: '```json\n{"a":1}\n```' }]);
   });
 
   it('hides an a2ui fence while it is still streaming', () => {
@@ -235,7 +237,9 @@ describe('foldEvent', () => {
         text: 'Lead\n```a2ui\n{"version":"v0.9","createSurface":',
       },
     ]);
-    expect(s.blocks).toEqual([{ kind: 'agent', markdown: 'Lead\n', a2uiPartKey: 'p1' }]);
+    expect(s.blocks).toEqual([
+      { kind: 'agent', id: 'text:p1', markdown: 'Lead\n', a2uiPartKey: 'p1' },
+    ]);
   });
 });
 
@@ -372,9 +376,12 @@ describe('historyToThread', () => {
     const t = historyToThread(msgs);
     expect(t.blocks).toEqual([
       { kind: 'user', text: '! pwd' },
-      // A shell tool call now also carries shellCommand (intended).
+      // A shell tool call now also carries shellCommand (intended). The id is
+      // path-specific (live: `tool:<callId>`, history: `h<msg>-p<part>`), so it
+      // is asserted separately below rather than compared across paths.
       {
         kind: 'tool-call',
+        id: 'h1-p0',
         title: 'pwd',
         status: 'success',
         outputSummary: '/ws/here',
@@ -466,6 +473,7 @@ describe('historyToThread', () => {
     const t = historyToThread(msgs);
     expect(t.blocks[2]).toEqual({
       kind: 'agent',
+      id: 'h1-p0',
       markdown: 'Here:\n\n',
       a2uiPartKey: 'h1-p0',
     });
@@ -479,6 +487,6 @@ describe('historyToThread', () => {
       },
     ];
     const t = historyToThread(msgs);
-    expect(t.blocks[0]).toEqual({ kind: 'agent', markdown: '```json\n{"a":1}\n```' });
+    expect(t.blocks[0]).toEqual({ kind: 'agent', id: 'h0-p0', markdown: '```json\n{"a":1}\n```' });
   });
 });

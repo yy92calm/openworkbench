@@ -59,6 +59,7 @@ export function LiveSessionPage() {
     reconcileRunning,
     permissionMode,
     setPermissionMode,
+    setColdExpanded,
   } = useRuntimeStore();
 
   // A deliberate workspace move restarts the sidecar — expected and brief, so
@@ -229,6 +230,11 @@ export function LiveSessionPage() {
   const activeQuestion = questions.find((q) => belongsHere(q.sessionId));
   const activePermission = permissions.find((p) => belongsHere(p.sessionId));
   const activeRequest = activeQuestion ?? activePermission;
+  // How many asks this conversation is blocked on — the surface shows one at a
+  // time, so without this a queue behind it is invisible.
+  const pendingCount =
+    questions.filter((q) => belongsHere(q.sessionId)).length +
+    permissions.filter((p) => belongsHere(p.sessionId)).length;
   // Name the subagent on the card when the ask isn't from the main agent.
   const requestOrigin =
     activeRequest && activeRequest.sessionId !== currentId
@@ -438,7 +444,12 @@ export function LiveSessionPage() {
                   )}
                   {historyLoading && <ThreadSkeleton />}
                   {!historyLoading && thread && (
-                    <BlockList blocks={thread.blocks} handlers={handlers} />
+                    <BlockList
+                      blocks={thread.blocks}
+                      handlers={handlers}
+                      coldExpanded={thread.coldExpanded}
+                      onColdExpandedChange={setColdExpanded}
+                    />
                   )}
                   {working && (
                     // Typing indicator: three bouncing dots + current tool name
@@ -495,6 +506,7 @@ export function LiveSessionPage() {
                     question={activeQuestion}
                     permission={activeQuestion ? undefined : activePermission}
                     origin={requestOrigin}
+                    pendingCount={pendingCount}
                     permissionMode={permissionMode}
                     onAnswer={(id, answers) => void answerQuestion(id, answers)}
                     onReject={(id) => void rejectQuestion(id)}
