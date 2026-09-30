@@ -5,7 +5,7 @@
 // cached in memory, persisted to userData for instant cold starts, and shared
 // with the scheduler (macroTheme tasks build their prompt from live data).
 
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import type {
@@ -35,6 +35,7 @@ import {
 } from '@workbench/shared';
 import { app, net } from 'electron';
 
+import { atomicWriteFile } from './atomicWrite';
 import {
   commonCutoff,
   type MacroReport,
@@ -615,7 +616,7 @@ class MacroStore {
   private persist(): void {
     if (!this.cacheFile) return;
     try {
-      writeFileSync(this.cacheFile, JSON.stringify({ snapshot: this.snapshot }, null, 2), 'utf-8');
+      atomicWriteFile(this.cacheFile, JSON.stringify({ snapshot: this.snapshot }, null, 2));
     } catch {
       /* cache persistence is best-effort */
     }

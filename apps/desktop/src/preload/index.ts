@@ -1,7 +1,9 @@
 import { browserMcpPreload } from '@fafawork/browser-mcp/preload';
 import { contextBridge, ipcRenderer } from 'electron';
 
-const api = {
+import type { ElectronAPI } from '../renderer/electron';
+
+const apiObject = {
   ...browserMcpPreload,
   // Channel
   channelName: () => ipcRenderer.invoke('channel-name'),
@@ -15,6 +17,7 @@ const api = {
   stopRuntime: () => ipcRenderer.invoke('stop-runtime'),
   serverUrl: () => ipcRenderer.invoke('server-url'),
   sandboxStatus: () => ipcRenderer.invoke('sandbox-status'),
+  windowBehavior: () => ipcRenderer.invoke('window-behavior'),
 
   // Workspace
   workspacePath: () => ipcRenderer.invoke('workspace-path'),
@@ -148,6 +151,34 @@ const api = {
     return () => ipcRenderer.removeListener('room-event', handler);
   },
 
+  // Knowledge base (personal vault)
+  knowledgeList: () => ipcRenderer.invoke('knowledge-list'),
+  knowledgeGet: (id: string) => ipcRenderer.invoke('knowledge-get', id),
+  knowledgeSave: (input: unknown) => ipcRenderer.invoke('knowledge-save', input),
+  knowledgeDelete: (id: string) => ipcRenderer.invoke('knowledge-delete', id),
+  knowledgeCategories: () => ipcRenderer.invoke('knowledge-categories'),
+  knowledgeSaveCategories: (categories: string[]) =>
+    ipcRenderer.invoke('knowledge-save-categories', categories),
+
+  // External skill sources (userData registry + links into the deployed profile)
+  skillsConfig: () => ipcRenderer.invoke('skills-config'),
+  skillsList: () => ipcRenderer.invoke('skills-list'),
+  skillsPickSource: () => ipcRenderer.invoke('skills-pick-source'),
+  skillsAddSource: (dir: string) => ipcRenderer.invoke('skills-add-source', dir),
+  skillsRemoveSource: (dir: string) => ipcRenderer.invoke('skills-remove-source', dir),
+  skillsSetEnabled: (name: string, enable: boolean) =>
+    ipcRenderer.invoke('skills-set-enabled', name, enable),
+  skillsSchemes: () => ipcRenderer.invoke('skills-schemes'),
+  skillsReadScheme: (name: string) => ipcRenderer.invoke('skills-read-scheme', name),
+  skillsSaveScheme: (name: string, names: string[]) =>
+    ipcRenderer.invoke('skills-save-scheme', name, names),
+  skillsDeleteScheme: (name: string) => ipcRenderer.invoke('skills-delete-scheme', name),
+  skillsApplyScheme: (name: string) => ipcRenderer.invoke('skills-apply-scheme', name),
+
+  // Packaged profile overview (read-only)
+  projectConfigSummary: () => ipcRenderer.invoke('project-config-summary'),
+  projectConfigRead: (rel: string) => ipcRenderer.invoke('project-config-read', rel),
+
   // Logging
   logDebug: (message: string) => ipcRenderer.invoke('log-debug', message),
   logEvent: (level: string, module: string, message: string, data?: unknown) =>
@@ -157,6 +188,7 @@ const api = {
   // Updater
   checkForUpdates: (alertOnUpToDate?: boolean) =>
     ipcRenderer.invoke('check-for-updates', alertOnUpToDate),
+  checkSidecarVersion: () => ipcRenderer.invoke('check-sidecar-version'),
 
   // Scheduler
   schedulerList: () => ipcRenderer.invoke('scheduler:list'),
@@ -241,5 +273,12 @@ const api = {
   },
   invoke: (channel: string, ...args: unknown[]) => ipcRenderer.invoke(channel, ...args),
 };
+
+// Compile-time contract: the bridge must cover everything the renderer declares
+// in `ElectronAPI`. Without this the two are independent and a method added to
+// one side only surfaces as `undefined is not a function` at runtime. Channel
+// names stay inline (they are visible next to their handler) — this guards the
+// surface, which is what actually drifts.
+const api: ElectronAPI = apiObject;
 
 contextBridge.exposeInMainWorld('electronAPI', api);

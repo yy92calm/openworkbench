@@ -25,7 +25,7 @@ import { extractA2ui } from './a2ui/parser';
 import { deriveArtifact } from './artifacts';
 import { kernelReset } from './kernel';
 import { provenanceInputFromEvent, recordProvenance } from './provenance';
-import { moveScrollMemory } from './scrollMemory';
+import { chatScrollKey, forgetScrollMemory, moveScrollMemory } from './scrollMemory';
 import {
   detectTools as probeTools,
   isTauri,
@@ -176,6 +176,11 @@ interface RuntimeState {
    *  directory-scoped event stream), reload the missed history and unlock. */
   reconcileRunning: () => Promise<void>;
   deleteSession: (id: string) => Promise<void>;
+  /** Release the in-memory state of a session whose tab was closed. The session
+   *  keeps running and stays listed in the sidebar — only the message thread,
+   *  the right-pane memory and the scroll offset are dropped, so a long-lived
+   *  tab session does not grow without bound. */
+  dropSessionState: (id: string) => void;
   hideExample: (id: string) => void;
 }
 
@@ -1412,6 +1417,18 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
         currentId: s.currentId === id ? null : s.currentId,
       };
     });
+    a2uiEngine.dropSession(id);
+  },
+
+  dropSessionState: (id) => {
+    set((s) => {
+      const threads = { ...s.threads };
+      delete threads[id];
+      const panes = { ...s.panes };
+      delete panes[id];
+      return { threads, panes };
+    });
+    forgetScrollMemory(chatScrollKey(id, DRAFT_KEY));
     a2uiEngine.dropSession(id);
   },
 

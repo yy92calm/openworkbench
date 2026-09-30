@@ -17,6 +17,7 @@ export function TabBar() {
   const closeTab = useUiStore((s) => s.closeTab);
   const runningSessions = useRuntimeStore((s) => s.runningSessions);
   const sessions = useRuntimeStore((s) => s.sessions);
+  const dropSessionState = useRuntimeStore((s) => s.dropSessionState);
   const navigate = useNavigate();
 
   if (tabs.length === 0) return null;
@@ -36,15 +37,17 @@ export function TabBar() {
     }
   };
 
-  // Closing a tab never deletes the underlying session - it only drops the tab.
+  // Closing a tab never deletes the underlying session - it only drops the tab,
+  // plus that conversation's in-memory thread/pane/scroll state (the session
+  // keeps running and stays listed in the sidebar, reopenable any time).
   // If the closed tab was active and a neighbor session tab takes over, follow
   // it so the main area stays in sync with the highlighted tab. Closing into a
-  // file tab (or no tab) leaves the main area as-is; the session stays listed
-  // in the sidebar and can be reopened any time.
+  // file tab (or no tab) leaves the main area as-is.
   const onClose = (e: React.MouseEvent, tab: Tab) => {
     e.stopPropagation();
     const wasActive = tab.id === useUiStore.getState().activeTabId;
     closeTab(tab.id);
+    if (tab.kind === 'session' && tab.sessionId) dropSessionState(tab.sessionId);
     if (wasActive) {
       const after = useUiStore.getState();
       const next = after.tabs.find((t) => t.id === after.activeTabId);
@@ -81,15 +84,13 @@ export function TabBar() {
               )}
             />
             <span className="truncate">{tabTitle(t)}</span>
-            {t.kind === 'file' && (
-              <button
-                onClick={(e) => onClose(e, t)}
-                className="shrink-0 rounded p-0.5 opacity-0 transition-opacity hover:bg-surface-2 group-hover:opacity-100"
-                aria-label={`关闭 ${tabTitle(t)}`}
-              >
-                <X size={11} />
-              </button>
-            )}
+            <button
+              onClick={(e) => onClose(e, t)}
+              className="shrink-0 rounded p-0.5 opacity-0 transition-opacity hover:bg-surface-2 group-hover:opacity-100"
+              aria-label={`关闭 ${tabTitle(t)}`}
+            >
+              <X size={11} />
+            </button>
           </div>
         );
       })}

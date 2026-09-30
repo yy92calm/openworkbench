@@ -1,15 +1,7 @@
 // User-level patch overlay for the OpenCode profile (deploy side).
 // Lives entirely outside the mirrored target dir, so a base re-deploy
 // (which prunes the target) never touches user customizations.
-import {
-  cpSync,
-  existsSync,
-  mkdirSync,
-  readdirSync,
-  readFileSync,
-  statSync,
-  writeFileSync,
-} from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
 import {
@@ -28,6 +20,7 @@ import {
 } from '@workbench/shared';
 import { app } from 'electron';
 
+import { atomicWriteFile, quarantineFile } from './atomicWrite';
 import {
   checkSandboxTightness,
   parseSandboxConfig,
@@ -60,6 +53,7 @@ function readJson<T>(file: string): T | null {
   try {
     return JSON.parse(readFileSync(file, 'utf-8')) as T;
   } catch {
+    quarantineFile(file);
     return null;
   }
 }
@@ -124,7 +118,7 @@ export function applyUserOverlay(target: string): DeployedManifest {
     const { requirements } = readRequirements();
     const spec = validateProfilePatch(base, raw, requirements); // dry-run: throws on invalid / unsafe
     const merged = applyProfilePatch(base, { target: 'opencode.json', patch: spec }, requirements);
-    writeFileSync(opencodePath, merged);
+    atomicWriteFile(opencodePath, merged);
   }
 
   const merged = existsSync(opencodePath) ? readFileSync(opencodePath, 'utf-8') : '{}';
@@ -137,7 +131,7 @@ export function applyUserOverlay(target: string): DeployedManifest {
     sourceChanged,
   };
   mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, MANIFEST_FILE), JSON.stringify(manifest, null, 2));
+  atomicWriteFile(join(dir, MANIFEST_FILE), JSON.stringify(manifest, null, 2));
   if (sourceChanged) {
     logWarn(
       `bundled profile base changed since last deploy (base=${previous?.base} -> ${baseFingerprint})`,
@@ -180,7 +174,7 @@ export function writeUserPatch(raw: string): void {
 
   const dir = userPatchDir();
   mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, PATCH_FILE), raw);
+  atomicWriteFile(join(dir, PATCH_FILE), raw);
 }
 
 export type WritePatchResult =

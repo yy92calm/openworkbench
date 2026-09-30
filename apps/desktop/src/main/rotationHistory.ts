@@ -4,10 +4,12 @@
 // The parse/merge/prune logic is pure for unit tests; the small store class
 // at the bottom is the only file IO.
 
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 
 import type { RotationRow } from '@workbench/shared';
+
+import { atomicWriteFile } from './atomicWrite';
 
 /** Trading days of scores to keep. */
 const MAX_DAYS = 60;
@@ -116,7 +118,7 @@ export class RotationHistoryStore {
     if (!this.file) return;
     try {
       mkdirSync(dirname(this.file), { recursive: true });
-      writeFileSync(this.file, JSON.stringify(this.history, null, 2), 'utf-8');
+      atomicWriteFile(this.file, JSON.stringify(this.history, null, 2));
     } catch {
       /* history persistence is best-effort */
     }

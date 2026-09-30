@@ -28,11 +28,11 @@ import {
   type MacroQuote,
   type ResearchContext,
   type ResearchDecision,
+  researchStats,
   type RotationRow,
   type RotationSignal,
-  type SwIndustryRow,
-  researchStats,
   signalOf,
+  type SwIndustryRow,
 } from '@workbench/shared';
 import { describe, expect, it } from 'vitest';
 

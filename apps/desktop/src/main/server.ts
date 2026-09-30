@@ -10,7 +10,6 @@ import {
   readFileSync,
   rmSync,
   statSync,
-  writeFileSync,
 } from 'node:fs';
 import { get as httpGet } from 'node:http';
 import { createServer } from 'node:net';
@@ -21,12 +20,15 @@ import { join } from 'node:path';
 import { type BrowserMcpPlugin, createBrowserMcp } from '@fafawork/browser-mcp';
 import { app } from 'electron';
 
+import { atomicWriteFile } from './atomicWrite';
 import { applyUserOverlay } from './profilePatch';
 import { wrapSpawn } from './sandbox/manager';
 import { readSandboxConfig } from './sandbox/policy';
 import { DEFAULT_SANDBOX_CONFIG, type SandboxPaths } from './sandbox/types';
 import { deploySchedulerProfile, startSchedulerApi } from './scheduler';
 import { enrichedPath } from './shell_env';
+import { sidecarBinaryPath } from './sidecarPaths';
+import { materializeSkills, readConfig as readSkillsConfig } from './skills';
 import { getStore } from './store';
 import { syncDir } from './syncDir';
 
@@ -131,11 +133,11 @@ export function baseWorkspaceDir(): string {
 }
 
 export function setActiveWorkspace(path: string): void {
-  writeFileSync(activeWorkspaceFile(), path);
+  atomicWriteFile(activeWorkspaceFile(), path);
 }
 
 export function setBaseWorkspace(path: string): void {
-  writeFileSync(baseWorkspaceFile(), path);
+  atomicWriteFile(baseWorkspaceFile(), path);
 }
 
 function bundledProfileSource(): string {
@@ -152,14 +154,6 @@ function claudeProfileSource(): string {
     return join(process.resourcesPath, 'app-config', '.claude');
   }
   return join(app.getAppPath(), '..', '..', 'app-config', '.claude');
-}
-
-function sidecarBinaryPath(): string {
-  const binaryName = process.platform === 'win32' ? 'opencode.exe' : 'opencode';
-  if (app.isPackaged) {
-    return join(process.resourcesPath, 'binaries', binaryName);
-  }
-  return join(app.getAppPath(), 'binaries', binaryName);
 }
 
 /** Clear the OpenCode SQLite database when the bundled sidecar binary changes.
@@ -206,8 +200,14 @@ function migrateStaleDatabase(sidecarPath: string, dataHome: string): void {
       }
     }
   }
-  writeFileSync(markerPath, fingerprint);
+  atomicWriteFile(markerPath, fingerprint);
   log('db', 'migrate', `sidecar fingerprint updated: ${fingerprint}`);
+}
+
+/** `<userData>/skills` — the external-skill registry (sources / enabled / schemes).
+ *  Kept out of skills.ts so that module stays free of electron imports. */
+export function skillsConfigDir(): string {
+  return join(app.getPath('userData'), 'skills');
 }
 
 export function deployBundledProfile(): void {
@@ -228,6 +228,33 @@ export function deployBundledProfile(): void {
   );
   // Merge user-configured provider overrides (Settings → Model Config)
   applyUserProviderConfig(target);
+  // Re-link the user's enabled external skills. Must run after the mirror: the
+  // sync prunes anything in `skills/` that is not in the bundled source, so the
+  // links have to be laid down again on every deploy (see skills.ts).
+  materializeUserSkills(target);
+}
+
+/** Materialise the enabled external skills onto a freshly deployed profile. */
+function materializeUserSkills(profileDir: string): void {
+  try {
+    const config = readSkillsConfig(skillsConfigDir());
+    if (config.enabled.length === 0) return;
+    const result = materializeSkills(join(profileDir, 'skills'), config);
+    if (result.linked.length > 0) {
+      log('profile', 'skills', `linked external skills: ${result.linked.join(', ')}`);
+    }
+    if (result.skipped.length > 0) {
+      // A source that moved or now duplicates another: the link is gone but the
+      // name stays enabled, so the settings page can explain it.
+      log('profile', 'skills', `skipped unresolvable skills: ${result.skipped.join(', ')}`);
+    }
+  } catch (err) {
+    log(
+      'profile',
+      'skills',
+      `external skill linking failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
 }
 
 /** Read user's manual provider config from electron-store and patch it into
@@ -283,7 +310,7 @@ function applyUserProviderConfig(profileDir: string): void {
     // Set as default model
     json.model = `${providerId}/${modelId}`;
 
-    writeFileSync(jsonPath, JSON.stringify(json, null, 2));
+    atomicWriteFile(jsonPath, JSON.stringify(json, null, 2));
     log('profile', 'provider', `applied user provider config: ${providerId}/${modelId}`);
   } catch (err) {
     log('profile', 'provider', `failed to apply user config: ${err}`, 'warn');

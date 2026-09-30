@@ -5,7 +5,7 @@
 //   <workspace>/.workbench/research/reports/   (background-generated reports)
 
 import { randomUUID } from 'node:crypto';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
 import type {
@@ -18,6 +18,7 @@ import type {
 } from '@workbench/shared';
 import { digestCharCount } from '@workbench/shared';
 
+import { atomicWriteFile } from './atomicWrite';
 import {
   applyAttribution,
   decisionsToCsv,
@@ -58,7 +59,7 @@ function researchFilePath(name: string): string {
 function writeDecisions(list: ResearchDecision[]): void {
   const path = decisionsPath();
   mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, serializeDecisions(list), 'utf-8');
+  atomicWriteFile(path, serializeDecisions(list));
 }
 
 export function listDecisions(): ResearchDecision[] {
@@ -186,9 +187,9 @@ export function saveMacroReport(input: {
   };
   const dir = reportsDir();
   mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, meta.file), `${text}\n`, 'utf-8');
+  atomicWriteFile(join(dir, meta.file), `${text}\n`);
   const next = [meta, ...readReportsIndex()].slice(0, REPORTS_INDEX_CAP);
-  writeFileSync(join(dir, REPORTS_INDEX), serializeReports(next), 'utf-8');
+  atomicWriteFile(join(dir, REPORTS_INDEX), serializeReports(next));
   return meta;
 }
 

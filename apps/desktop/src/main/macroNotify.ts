@@ -5,10 +5,12 @@
 // (detectAlerts / isDuplicate) stays pure and unit-testable.
 
 import { randomUUID } from 'node:crypto';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import type { MacroDashboardSnapshot, MacroNotification, MacroThemeId } from '@workbench/shared';
+
+import { atomicWriteFile } from './atomicWrite';
 
 export const ALERT_INDEX_PCT = 1.5;
 export const ALERT_CN10Y_DELTA = 0.05;
@@ -121,7 +123,7 @@ export function initMacroNotify(dataDir: string): void {
 function persist(): void {
   if (!dataFile) return;
   try {
-    writeFileSync(dataFile, JSON.stringify(items.slice(0, MAX_NOTIFICATIONS), null, 2), 'utf-8');
+    atomicWriteFile(dataFile, JSON.stringify(items.slice(0, MAX_NOTIFICATIONS), null, 2));
   } catch {
     /* notification persistence is best-effort */
   }

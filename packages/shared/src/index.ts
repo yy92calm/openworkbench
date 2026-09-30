@@ -479,6 +479,84 @@ export function seriesColor(i: number, theme: ChartTheme): string {
   return c[((i % c.length) + c.length) % c.length];
 }
 
+// ---- Knowledge base (personal vault) ----
+
+/** One row of `<userData>/knowledge/index.json`. The body lives in `<id>.md`
+ *  and is loaded on demand, so listing the library stays cheap. */
+export interface KnowledgeEntryMeta {
+  id: string;
+  title: string;
+  /** Short user-written description — never derived from the body. */
+  summary: string;
+  /** `a/b` path; '' means uncategorised. The hierarchy is implied by the
+   *  prefix, which is why the store keeps a flat list. */
+  category: string;
+  tags: string[];
+  created: string;
+  updated: string;
+}
+
+export interface KnowledgeEntry extends KnowledgeEntryMeta {
+  content: string;
+}
+
+/** Create (no `id`) or update (with `id`). Title, summary and content are all
+ *  required — a blank one is rejected without writing anything. */
+export interface KnowledgeInput {
+  id?: string;
+  title: string;
+  summary: string;
+  category?: string;
+  tags?: string[];
+  content: string;
+}
+
+// ---- External skill sources (aggregated from user-chosen folders) ----
+
+export interface SkillsConfig {
+  /** Folders scanned for skills, in priority order (first wins a conflict). */
+  sources: string[];
+  /** Skill names currently linked into the deployed profile. */
+  enabled: string[];
+}
+
+export interface AggregatedSkill {
+  /** Relative slash path inside its source, e.g. `group/review`. */
+  name: string;
+  description: string;
+  /** Absolute path of the skill directory. */
+  path: string;
+  /** Source roots that provide this name. */
+  sources: string[];
+  /** Provided by more than one source — ambiguous, so not enableable. */
+  conflict: boolean;
+  enabled: boolean;
+}
+
+export interface SkillsLinkResult {
+  /** Names linked successfully. */
+  linked: string[];
+  /** Names that could not be resolved (source moved away, or now conflicting). */
+  skipped: string[];
+}
+
+// ---- Packaged .opencode profile overview (read-only) ----
+
+export type ProjectConfigCategoryId = 'coreConfig' | 'agentsMd' | 'commands' | 'rules' | 'skills';
+
+export interface ProjectConfigFile {
+  /** Slash path relative to the profile root. */
+  rel: string;
+  name: string;
+  size: number;
+}
+
+export interface ProjectConfigCategory {
+  id: ProjectConfigCategoryId;
+  label: string;
+  files: ProjectConfigFile[];
+}
+
 // ---- Scheduler ----
 
 export interface ScheduledTask {

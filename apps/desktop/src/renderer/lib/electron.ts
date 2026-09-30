@@ -1,4 +1,8 @@
 import type {
+  AggregatedSkill,
+  KnowledgeEntry,
+  KnowledgeEntryMeta,
+  KnowledgeInput,
   MacroBoard,
   MacroDashboardSnapshot,
   MacroIndustryDetail,
@@ -6,13 +10,16 @@ import type {
   MacroNotification,
   MacroReportMeta,
   MacroThemeId,
+  ProjectConfigCategory,
   ResearchDecision,
   ResearchOutcome,
   ResearchStance,
   SandboxStatus,
+  SkillsConfig,
+  SkillsLinkResult,
 } from '@workbench/shared';
 
-import type { ElectronAPI } from '../electron';
+import type { ElectronAPI, SidecarVersionStatus, WindowBehaviorStatus } from '../electron';
 
 function api(): ElectronAPI {
   if (typeof window === 'undefined' || !window.electronAPI)
@@ -21,6 +28,12 @@ function api(): ElectronAPI {
 }
 
 export const isDesktop = true;
+
+/** Tray availability + whether the global show/hide hotkey registered. Used by
+ *  settings to tell the user when another app already owns the combination. */
+export async function windowBehavior(): Promise<WindowBehaviorStatus> {
+  return api().windowBehavior();
+}
 
 /** Start the bundled agent runtime (desktop only). Returns its base URL,
  *  or null for claude-code (no sidecar). `kind` selects the engine:
@@ -169,6 +182,16 @@ export async function checkForUpdates(alertOnUpToDate?: boolean): Promise<void> 
   }
 }
 
+/** Engine (opencode) version check — the sidecar binary, not the Workbench app
+ *  itself. A failed check arrives in `error` rather than as a rejection. */
+export async function checkSidecarVersion(): Promise<SidecarVersionStatus | null> {
+  try {
+    return await api().checkSidecarVersion();
+  } catch {
+    return null;
+  }
+}
+
 export async function exportLogs(): Promise<string | null> {
   try {
     return await api().exportLogs();
@@ -177,12 +200,96 @@ export async function exportLogs(): Promise<string | null> {
   }
 }
 
+// ---- Knowledge base (personal vault under userData) ----
+
+export async function knowledgeList(): Promise<KnowledgeEntryMeta[]> {
+  return api().knowledgeList();
+}
+
+export async function knowledgeGet(id: string): Promise<KnowledgeEntry> {
+  return api().knowledgeGet(id);
+}
+
+/** Throws when title / summary / content is blank — nothing is written then. */
+export async function knowledgeSave(input: KnowledgeInput): Promise<KnowledgeEntry> {
+  return api().knowledgeSave(input);
+}
+
+export async function knowledgeDelete(id: string): Promise<void> {
+  await api().knowledgeDelete(id);
+}
+
+export async function knowledgeCategories(): Promise<string[]> {
+  return api().knowledgeCategories();
+}
+
+export async function knowledgeSaveCategories(categories: string[]): Promise<string[]> {
+  return api().knowledgeSaveCategories(categories);
+}
+
+// ---- External skill sources ----
+
+export async function skillsConfig(): Promise<SkillsConfig> {
+  return api().skillsConfig();
+}
+
+export async function skillsList(): Promise<AggregatedSkill[]> {
+  return api().skillsList();
+}
+
+export async function skillsPickSource(): Promise<string | null> {
+  return api().skillsPickSource();
+}
+
+export async function skillsAddSource(dir: string): Promise<SkillsConfig> {
+  return api().skillsAddSource(dir);
+}
+
+export async function skillsRemoveSource(dir: string): Promise<SkillsConfig> {
+  return api().skillsRemoveSource(dir);
+}
+
+/** Throws when the skill is unknown or ambiguous across sources. */
+export async function skillsSetEnabled(name: string, enable: boolean): Promise<SkillsConfig> {
+  return api().skillsSetEnabled(name, enable);
+}
+
+export async function skillsSchemes(): Promise<string[]> {
+  return api().skillsSchemes();
+}
+
+export async function skillsReadScheme(name: string): Promise<string[] | null> {
+  return api().skillsReadScheme(name);
+}
+
+export async function skillsSaveScheme(name: string, names: string[]): Promise<void> {
+  await api().skillsSaveScheme(name, names);
+}
+
+export async function skillsDeleteScheme(name: string): Promise<void> {
+  await api().skillsDeleteScheme(name);
+}
+
+export async function skillsApplyScheme(name: string): Promise<SkillsLinkResult> {
+  return api().skillsApplyScheme(name);
+}
+
 export async function channelName(): Promise<string | null> {
   try {
     return await api().channelName();
   } catch {
     return null;
   }
+}
+
+// ---- Packaged profile overview (read-only) ----
+
+export async function projectConfigSummary(): Promise<ProjectConfigCategory[]> {
+  return api().projectConfigSummary();
+}
+
+export async function projectConfigRead(rel: string): Promise<string> {
+  return api().projectConfigRead(rel);
 }
 
 export async function appIdentifier(): Promise<string | null> {

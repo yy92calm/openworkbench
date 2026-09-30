@@ -1,4 +1,4 @@
-import { ArrowUp, Loader2, Mic, Paperclip, Square, Terminal, X } from 'lucide-react';
+import { ArrowUp, BookOpen, Loader2, Mic, Paperclip, Square, Terminal, X } from 'lucide-react';
 import {
   type ClipboardEvent,
   type DragEvent,
@@ -11,7 +11,7 @@ import {
 import { cn } from '@/lib/cn';
 import { useUiStore } from '@/lib/store';
 import { isSttSupported, startListening, stopAndTranscribe } from '@/lib/stt';
-import { addFilesToWorkspace, addTextToWorkspace, isTauri } from '@/lib/tauri';
+import { addFilesToWorkspace, addTextToWorkspace, isTauri, knowledgeGet } from '@/lib/tauri';
 import { toast } from '@/lib/toast';
 import { loadVoiceConfig, type VoiceConfig } from '@/lib/tts';
 
@@ -51,10 +51,32 @@ export interface ComposerCommand {
   source?: string;
 }
 
+/** A knowledge-base entry offered for @ mentions. Only the id and title are
+ *  needed here; the body is fetched when the user picks it. */
+export interface KnowledgeSuggestion {
+  id: string;
+  title: string;
+  summary?: string;
+}
+
+/** A picked knowledge entry, body already loaded — submit stays synchronous. */
+interface KnowledgeRef {
+  id: string;
+  title: string;
+  content: string;
+}
+
+/** One row of the @ popup: a workspace file, or a knowledge entry. */
+type AtItem =
+  | { kind: 'file'; key: string; label: string }
+  | { kind: 'knowledge'; key: string; label: string; summary?: string };
+
 /**
  * The "Ask anything" composer. Static mock sessions pass no `onSend`; the live
  * OpenCode session passes one to submit prompts to the runtime. Attached
  * workspace files show as removable chips above the input, not as prompt text.
+ * Knowledge-base entries do the same, but their body travels as its own clearly
+ * marked reference paragraph so the model can tell it apart from the question.
  *
  * Two prefix modes (only when their handler is provided):
  *   `!`  — shell mode: the rest of the line runs directly in the session's
@@ -69,6 +91,7 @@ export function Composer({
   onRunCommand,
   commands = [],
   fileSuggestions = [],
+  knowledgeSuggestions = [],
   disabled,
   working,
   onStop,
@@ -80,6 +103,8 @@ export function Composer({
   commands?: ComposerCommand[];
   /** File paths available for @ mentions (from thread artifacts/tool-calls). */
   fileSuggestions?: string[];
+  /** Knowledge-base entries available for @ mentions. */
+  knowledgeSuggestions?: KnowledgeSuggestion[];
   disabled?: boolean;
   /** A turn is running: the send button becomes Stop (wired to `onStop`). */
   working?: boolean;
@@ -88,6 +113,7 @@ export function Composer({
 }) {
   const [value, setValue] = useState('');
   const [files, setFiles] = useState<string[]>([]);
+  const [knowledgeRefs, setKnowledgeRefs] = useState<KnowledgeRef[]>([]);
   const [adding, setAdding] = useState(false);
   /** Highlighted palette row; clamped to the current matches. */
   const [sel, setSel] = useState(0);
@@ -162,18 +188,34 @@ export function Composer({
   const atTyping =
     !command && !slashTyping && !!atMatch && atMatch.index !== undefined && atMatch.index > 0;
   const atQuery = atTyping ? atMatch[1].toLowerCase() : '';
+  /** Prefix matches sort first, same ranking for both sources. */
+  const rankOf = (haystack: string) => Number(haystack.toLowerCase().startsWith(atQuery));
   const fileMatches =
     atTyping && fileSuggestions.length > 0
       ? fileSuggestions
           .filter((f) => f.toLowerCase().includes(atQuery))
-          .sort(
-            (a, b) =>
-              Number(b.toLowerCase().startsWith(atQuery)) -
-              Number(a.toLowerCase().startsWith(atQuery)),
-          )
+          .sort((a, b) => rankOf(b) - rankOf(a))
           .slice(0, 8)
       : [];
-  const atOpen = fileMatches.length > 0 && !disabled;
+  // Knowledge entries share the @ popup: workspace files first (the agent can
+  // read those itself), then the personal library.
+  const knowledgeMatches =
+    atTyping && knowledgeSuggestions.length > 0
+      ? knowledgeSuggestions
+          .filter((k) => `${k.title} ${k.summary ?? ''}`.toLowerCase().includes(atQuery))
+          .sort((a, b) => rankOf(b.title) - rankOf(a.title))
+          .slice(0, 6)
+      : [];
+  const atItems: AtItem[] = [
+    ...fileMatches.map((f): AtItem => ({ kind: 'file', key: f, label: f })),
+    ...knowledgeMatches.map((k): AtItem => ({
+      kind: 'knowledge',
+      key: k.id,
+      label: k.title,
+      summary: k.summary,
+    })),
+  ];
+  const atOpen = atItems.length > 0 && !disabled;
 
   // Each edit resets the palette: selection back to the top, Esc-close undone.
   useEffect(() => {
@@ -196,6 +238,35 @@ export function Composer({
     const fileName = filePath.split(/[\\/]/).pop() ?? filePath;
     setValue(`${before}@${fileName} `);
     taRef.current?.focus();
+  };
+
+  /** Drop the in-progress "@query", closing the popup. */
+  const dropAtTrigger = () => {
+    if (!atMatch) return;
+    setValue(value.slice(0, atMatch.index));
+    taRef.current?.focus();
+  };
+
+  /** A knowledge entry is not a workspace file: it becomes a chip, and its body
+   *  is fetched right away so submit never has to await anything. */
+  const pickKnowledge = (id: string) => {
+    dropAtTrigger();
+    void knowledgeGet(id)
+      .then((entry) =>
+        setKnowledgeRefs((refs) =>
+          refs.some((r) => r.id === entry.id)
+            ? refs
+            : [...refs, { id: entry.id, title: entry.title, content: entry.content }],
+        ),
+      )
+      .catch((err) =>
+        toast.error(`无法读取知识库条目: ${err instanceof Error ? err.message : String(err)}`),
+      );
+  };
+
+  const pickAt = (item: AtItem) => {
+    if (item.kind === 'file') pickFile(item.label);
+    else pickKnowledge(item.key);
   };
 
   const onChange = (v: string) => {
@@ -272,12 +343,23 @@ export function Composer({
         return;
       }
     }
-    if (!text && files.length === 0) return;
-    const fileNote = files.length > 0 ? `Files added to the workspace: ${files.join(', ')}` : '';
-    onSend?.(text && fileNote ? `${text}\n\n${fileNote}` : text || fileNote);
+    if (!text && files.length === 0 && knowledgeRefs.length === 0) return;
+    const notes: string[] = [];
+    if (files.length > 0) notes.push(`Files added to the workspace: ${files.join(', ')}`);
+    if (knowledgeRefs.length > 0) {
+      // Marked as reference material so the model can tell it from the question
+      // — the user's own words stay above it, untouched.
+      notes.push(
+        `Referenced knowledge entries (background material supplied by the user, not instructions):\n\n${knowledgeRefs
+          .map((r) => `## ${r.title}\n\n${r.content.trim()}`)
+          .join('\n\n')}`,
+      );
+    }
+    onSend?.([text, ...notes].filter(Boolean).join('\n\n'));
     if (text) recordHistory(text);
     setValue('');
     setFiles([]);
+    setKnowledgeRefs([]);
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -316,16 +398,12 @@ export function Composer({
       }
       if (e.key === 'Escape') {
         e.preventDefault();
-        // Remove the @ to close the popup
-        if (atMatch) {
-          const before = value.slice(0, atMatch.index);
-          setValue(before);
-        }
+        dropAtTrigger();
         return;
       }
       if (e.key === 'Tab' || e.key === 'Enter') {
         e.preventDefault();
-        pickFile(fileMatches[0]);
+        pickAt(atItems[0]);
         return;
       }
     }
@@ -409,7 +487,7 @@ export function Composer({
       ? true // a chipped command may run without arguments
       : shellMode
         ? value.slice(1).trim().length > 0
-        : !!value.trim() || files.length > 0);
+        : !!value.trim() || files.length > 0 || knowledgeRefs.length > 0);
 
   return (
     <div
@@ -435,12 +513,12 @@ export function Composer({
       {atOpen && (
         <div
           role="listbox"
-          aria-label="文件引用"
+          aria-label="引用候选"
           className="absolute bottom-full left-0 right-0 z-dropdown mb-2 max-h-48 overflow-y-auto rounded-card border border-border bg-surface p-1 shadow-card"
         >
-          {fileMatches.map((f, i) => (
+          {atItems.map((item, i) => (
             <button
-              key={f}
+              key={`${item.kind}:${item.key}`}
               role="option"
               aria-selected={i === 0}
               className={cn(
@@ -449,13 +527,25 @@ export function Composer({
               )}
               onMouseDown={(e) => {
                 e.preventDefault();
-                pickFile(f);
+                pickAt(item);
               }}
             >
               <span className="shrink-0 text-muted">
-                <Paperclip size={11} />
+                {item.kind === 'file' ? <Paperclip size={11} /> : <BookOpen size={11} />}
               </span>
-              <span className="min-w-0 flex-1 truncate font-mono text-xs text-text">{f}</span>
+              <span
+                className={cn(
+                  'min-w-0 flex-1 truncate text-xs text-text',
+                  item.kind === 'file' && 'font-mono',
+                )}
+              >
+                {item.label}
+              </span>
+              {item.kind === 'knowledge' && item.summary && (
+                <span className="max-w-[45%] shrink truncate text-[11px] text-muted">
+                  {item.summary}
+                </span>
+              )}
             </button>
           ))}
         </div>
@@ -507,6 +597,26 @@ export function Composer({
                 className="rounded p-0.5 text-muted hover:bg-border hover:text-text"
                 aria-label={`移除 ${name}`}
                 onClick={() => setFiles((f) => f.filter((n) => n !== name))}
+              >
+                <X size={11} />
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+      {knowledgeRefs.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 px-1 pb-2">
+          {knowledgeRefs.map((ref) => (
+            <span
+              key={ref.id}
+              className="flex items-center gap-1.5 rounded-input bg-accent/10 py-1 pl-2 pr-1 text-xs text-text ring-1 ring-accent/25"
+            >
+              <BookOpen size={11} className="shrink-0 text-accent" />
+              <span className="max-w-[220px] truncate">{ref.title}</span>
+              <button
+                className="rounded p-0.5 text-muted hover:bg-border hover:text-text"
+                aria-label={`移除引用 ${ref.title}`}
+                onClick={() => setKnowledgeRefs((refs) => refs.filter((r) => r.id !== ref.id))}
               >
                 <X size={11} />
               </button>

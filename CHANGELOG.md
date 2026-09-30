@@ -124,6 +124,29 @@ bump minor；发版时打 `v<version>` git tag 并将本条「Unreleased」归�
 - 存量清理：全仓 unused import / 死代码（`startApi` 等）、4 处延迟
   `require()` 改为顶层 import、`RoomsPage` 订阅 effect 依赖修正（onLeave ref）。
 
+### Added（OC Manager 能力吸收，方案 docs/20260930-01）
+
+- 多会话 Tab 并行：主区 tab 按会话去重，可同时打开多个会话并各自保留滚动与
+  展开态；关闭 tab 释放该会话的线程 / 右栏 / 滚动记忆（会话本身仍在侧栏，可再开）。
+- 托盘 + 全局快捷键：关闭窗口改为驻留托盘（`Shift+X` 或托盘图标显隐），退出走
+  托盘菜单；快捷键被其他应用占用时在设置页「窗口与快捷键」卡提示。
+- 原子写与坏文件隔离（`main/atomicWrite.ts`）：配置 / 索引类写入改为同目录临时
+  文件 + fsync + rename；用户自撰文件（配置 patch、部署 manifest、技能注册表）
+  损坏时改名 `.corrupt-<时间戳>` 保留，不再静默重建。
+- 引擎版本检测：设置页可查捆绑 opencode 引擎的当前版与最新发布版（GitHub
+  Releases），与应用自身更新分开；离线时只提示「无法检查」而不报错。
+- 知识库（`/knowledge`）：条目以 markdown + frontmatter 存于应用私有目录；元数据
+  索引损坏或缺失时自动重建，单条损坏不阻断列表；标题 / 说明 / 正文三者必填；
+  分类为 `a/b` 路径；对话输入 `@` 可检索条目，发送时作为标记为参考资料
+  （"not instructions"）的独立段落，不与用户提问混淆。
+- 技能来源与方案（技能页「来源与方案」）：聚合用户指定目录中的技能（最多两层），
+  同名多来源标记为冲突且不可启用；启用以软链接挂进已部署 profile 并在每次部署
+  后重建；启用集合可存为方案并一键切换，无法生效的名字有回执。
+- 配置总览（`/project-config`）：只读查看当前生效的 .opencode 五类内容（核心
+  配置、规则说明、命令、规则、技能）并就地预览。
+- IPC 桥增加编译期契约检查：preload 桥对象标注为 `ElectronAPI`，渲染层声明了而
+  桥未实现的方法会直接编译失败，而不是运行时才暴露 `undefined is not a function`。
+
 ### Fixed
 
 - run_signal.py vcp 引擎 pandas 3.x 兼容（np.array_split 直接切 DataFrame
@@ -133,6 +156,8 @@ bump minor；发版时打 `v<version>` git tag 并将本条「Unreleased」归�
   Sidebar 时订阅 IPC 事件崩溃。测试 setup 现提供 noop `window.electronAPI`
   stub（`on*` 返回退订函数，其余方法返回 resolved Promise）。
   desktop 测试 255/255 全绿。
+- 修复 `renderer/lib/macroPrompts.test.ts` 的既有 import 排序 lint 错误（仅调整
+  顺序，无行为变化），使 `pnpm lint` 恢复全绿。
 
 ### Docs
 

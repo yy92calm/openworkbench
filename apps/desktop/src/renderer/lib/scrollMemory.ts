@@ -15,6 +15,17 @@ export function moveScrollMemory(from: string, to: string): void {
   }
 }
 
+/** Scroll key for a session's chat pane (drafts share the draft key). Built in
+ *  one place so the recorder and the tab-close cleanup cannot drift apart. */
+export function chatScrollKey(sessionId: string | null, draftKey: string): string {
+  return `chat:${sessionId ?? draftKey}`;
+}
+
+/** Forget one container's offset — a closed tab must not leak its entry. */
+export function forgetScrollMemory(key: string): void {
+  offsets.delete(key);
+}
+
 /** Test seam / explicit reset. */
 export function clearScrollMemory(): void {
   offsets.clear();

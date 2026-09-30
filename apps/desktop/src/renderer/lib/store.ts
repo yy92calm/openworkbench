@@ -6,12 +6,20 @@ import { loadLocale, type Locale, persistLocale } from './i18n';
 export type Theme = 'light' | 'warm' | 'cool' | 'dark' | 'black' | 'system';
 export type AgentRuntimeKind = 'opencode' | 'claude-code';
 
-/** A main-area tab. Session tabs switch the active conversation (single
- *  instance - the agent keeps running in the background via the global event
+/** A main-area tab. Session tabs switch the active conversation (several can be
+ *  open at once — the agent keeps running in the background via the global event
  *  stream); file tabs show an artifact preview in the main area. */
 export type Tab =
   | { id: string; kind: 'session'; sessionId: string | null; title: string }
   | { id: string; kind: 'file'; artifact: ArtifactBlock; title: string; root?: FileRoot };
+
+function newTabId(): string {
+  return `tab-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+}
+
+function sessionTab(sessionId: string | null, title?: string): Tab {
+  return { id: newTabId(), kind: 'session', sessionId, title: title ?? '新会话' };
+}
 
 const THEME_KEY = 'workbench.theme';
 const RUNTIME_KIND_KEY = 'workbench.agentRuntimeKind';
@@ -87,8 +95,10 @@ interface UiState {
   setPaletteOpen: (open: boolean) => void;
   setComposerDraft: (draft: string | null) => void;
   setExpandThreadDetails: (expand: boolean) => void;
-  /** Open/activate a session tab. A draft tab (sessionId null) converts into
-   *  the real session when its first message creates one. */
+  /** Open/activate a session tab. Tabs are deduped per session, so several
+   *  conversations can stay open side by side. A draft tab (sessionId null) is
+   *  unique and converts into the real session when its first message creates
+   *  one. */
   openSessionTab: (sessionId: string | null, title?: string) => void;
   /** Open/activate a file preview tab (deduped by artifact path). `activate`
    *  defaults to true; pass false to open it in the background (e.g. an
@@ -149,29 +159,53 @@ export const useUiStore = create<UiState>((set, get) => ({
   activeTabId: null,
   openSessionTab: (sessionId, title) =>
     set((s) => {
-      // All sessions share a single "session" tab — switching sessions reuses it.
-      const existing = s.tabs.find((t) => t.kind === 'session');
+      const draft = s.tabs.find((t) => t.kind === 'session' && t.sessionId === null);
+
+      // "New session" reuses the single draft tab.
+      if (sessionId === null) {
+        if (draft) return { activeTabId: draft.id };
+        const tab = sessionTab(null, title);
+        return { tabs: [tab, ...s.tabs], activeTabId: tab.id };
+      }
+
+      // Already open: just activate it (and follow a rename).
+      const existing = s.tabs.find((t) => t.kind === 'session' && t.sessionId === sessionId);
       if (existing) {
         return {
-          tabs: s.tabs.map((t) =>
-            t.id === existing.id ? { ...t, sessionId, title: title ?? t.title } : t,
-          ),
+          tabs: s.tabs.map((t) => (t.id === existing.id ? { ...t, title: title ?? t.title } : t)),
           activeTabId: existing.id,
         };
       }
-      const id = `tab-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-      const tab: Tab = { id, kind: 'session', sessionId, title: title ?? '新会话' };
-      // Session tab is always first; file tabs follow.
-      return { tabs: [tab, ...s.tabs], activeTabId: id };
+
+      // The draft tab becomes the real session when its first message created
+      // it — at that moment the draft is the active tab. Otherwise the user
+      // picked a session from the sidebar: open a separate tab and leave the
+      // draft untouched.
+      if (draft && s.activeTabId === draft.id) {
+        return {
+          tabs: s.tabs.map((t) =>
+            t.id === draft.id ? { ...t, sessionId, title: title ?? t.title } : t,
+          ),
+          activeTabId: draft.id,
+        };
+      }
+
+      const tab = sessionTab(sessionId, title);
+      // Session tabs are always first; file tabs follow.
+      return { tabs: [tab, ...s.tabs], activeTabId: tab.id };
     }),
   openFileTab: (artifact, root, activate = true) =>
     set((s) => {
       const existing = s.tabs.find((t) => t.kind === 'file' && t.artifact.path === artifact.path);
       if (existing) return activate ? { activeTabId: existing.id } : {};
-      const id = `tab-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-      const title = artifact.filename || artifact.path.split(/[\\/]/).pop() || '预览';
-      const tab: Tab = { id, kind: 'file', artifact, title, root };
-      return { tabs: [...s.tabs, tab], ...(activate ? { activeTabId: id } : {}) };
+      const tab: Tab = {
+        id: newTabId(),
+        kind: 'file',
+        artifact,
+        title: artifact.filename || artifact.path.split(/[\\/]/).pop() || '预览',
+        root,
+      };
+      return { tabs: [...s.tabs, tab], ...(activate ? { activeTabId: tab.id } : {}) };
     }),
   closeTab: (id) =>
     set((s) => {

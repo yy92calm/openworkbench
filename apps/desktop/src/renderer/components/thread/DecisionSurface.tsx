@@ -7,7 +7,7 @@ import type {
 
 import { cn } from '@/lib/cn';
 
-import type { ComposerCommand } from './Composer';
+import type { ComposerCommand, KnowledgeSuggestion } from './Composer';
 import { Composer } from './Composer';
 import { InteractionPrompt } from './InteractionPrompt';
 import { ModeSwitch } from './ModeSwitch';
@@ -44,6 +44,7 @@ export function DecisionSurface({
     onRunCommand?: (name: string, args: string) => void;
     commands?: ComposerCommand[];
     fileSuggestions?: string[];
+    knowledgeSuggestions?: KnowledgeSuggestion[];
     disabled?: boolean;
     working?: boolean;
     onStop?: () => void;
@@ -80,6 +81,7 @@ export function DecisionSurface({
           onRunCommand={composer.onRunCommand}
           commands={composer.commands}
           fileSuggestions={composer.fileSuggestions}
+          knowledgeSuggestions={composer.knowledgeSuggestions}
           disabled={composer.disabled}
           working={composer.working}
           onStop={composer.onStop}

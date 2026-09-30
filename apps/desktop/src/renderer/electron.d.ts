@@ -1,4 +1,8 @@
 import type {
+  AggregatedSkill,
+  KnowledgeEntry,
+  KnowledgeEntryMeta,
+  KnowledgeInput,
   MacroBoard,
   MacroDashboardSnapshot,
   MacroIndustryDetail,
@@ -6,9 +10,30 @@ import type {
   MacroNotification,
   MacroReportMeta,
   MacroThemeId,
+  ProjectConfigCategory,
   ResearchDecision,
   SandboxStatus,
+  SkillsConfig,
+  SkillsLinkResult,
 } from '@workbench/shared';
+
+export interface WindowBehaviorStatus {
+  shortcut: string;
+  /** False when another app already owns the hotkey. */
+  shortcutRegistered: boolean;
+  trayAvailable: boolean;
+}
+
+export interface SidecarVersionStatus {
+  /** Bundled engine version; null when the binary could not be probed. */
+  current: string | null;
+  /** Latest upstream release; null when the check failed. */
+  latest: string | null;
+  /** True/false once both sides are known, null otherwise. */
+  isLatest: boolean | null;
+  /** Why the check failed (offline, rate-limited, …), if it did. */
+  error: string | null;
+}
 
 export interface ElectronAPI {
   channelName: () => Promise<string>;
@@ -23,6 +48,9 @@ export interface ElectronAPI {
   /** Sandbox enforcement status (platform / mode / effective) from the main
    *  process. */
   sandboxStatus: () => Promise<SandboxStatus>;
+  /** Tray availability + whether the global show/hide hotkey got registered
+   *  (false when another app already owns the combination). */
+  windowBehavior: () => Promise<WindowBehaviorStatus>;
 
   workspacePath: () => Promise<string>;
   workspaceBase: () => Promise<string>;
@@ -157,8 +185,41 @@ export interface ElectronAPI {
   exportLogs: () => Promise<string>;
 
   checkForUpdates: (alertOnUpToDate?: boolean) => Promise<void>;
+  /** Engine (opencode) version check — separate from the Workbench app updater
+   *  above: two different things that must not be presented as one. */
+  checkSidecarVersion: () => Promise<SidecarVersionStatus>;
 
   openExternal: (url: string) => Promise<void>;
+
+  // Knowledge base (personal vault stored in the app's userData dir)
+  knowledgeList: () => Promise<KnowledgeEntryMeta[]>;
+  knowledgeGet: (id: string) => Promise<KnowledgeEntry>;
+  /** Throws when a required field is blank — nothing is written in that case. */
+  knowledgeSave: (input: KnowledgeInput) => Promise<KnowledgeEntry>;
+  knowledgeDelete: (id: string) => Promise<void>;
+  knowledgeCategories: () => Promise<string[]>;
+  knowledgeSaveCategories: (categories: string[]) => Promise<string[]>;
+
+  // External skill sources (aggregated from folders the user chose)
+  skillsConfig: () => Promise<SkillsConfig>;
+  /** Every skill across the configured sources, with its enable state. */
+  skillsList: () => Promise<AggregatedSkill[]>;
+  /** Native folder picker; null when cancelled. */
+  skillsPickSource: () => Promise<string | null>;
+  skillsAddSource: (dir: string) => Promise<SkillsConfig>;
+  skillsRemoveSource: (dir: string) => Promise<SkillsConfig>;
+  /** Throws when the skill is unknown or ambiguous across sources. */
+  skillsSetEnabled: (name: string, enable: boolean) => Promise<SkillsConfig>;
+  skillsSchemes: () => Promise<string[]>;
+  skillsReadScheme: (name: string) => Promise<string[] | null>;
+  skillsSaveScheme: (name: string, names: string[]) => Promise<void>;
+  skillsDeleteScheme: (name: string) => Promise<void>;
+  /** Switch the enabled set to a saved group; reports what could not be linked. */
+  skillsApplyScheme: (name: string) => Promise<SkillsLinkResult>;
+
+  // Packaged profile overview (read-only: the deployed .opencode mirror)
+  projectConfigSummary: () => Promise<ProjectConfigCategory[]>;
+  projectConfigRead: (rel: string) => Promise<string>;
 
   // Scheduler
   schedulerList: () => Promise<unknown[]>;

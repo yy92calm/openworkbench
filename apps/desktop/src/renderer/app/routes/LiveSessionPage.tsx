@@ -6,6 +6,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { InspectorShell } from '@/components/inspector/InspectorShell';
 import { WorkbenchDock } from '@/components/inspector/WorkbenchDock';
 import { type BlockHandlers, BlockList } from '@/components/thread/BlockList';
+import type { KnowledgeSuggestion } from '@/components/thread/Composer';
 import { DecisionSurface } from '@/components/thread/DecisionSurface';
 import { JumpBar } from '@/components/thread/JumpBar';
 import { TabBar } from '@/components/thread/TabBar';
@@ -16,8 +17,9 @@ import { fileInspectorFromBlock } from '@/lib/artifacts';
 import { cn } from '@/lib/cn';
 import { pickFolder } from '@/lib/electron';
 import { DRAFT_KEY, rootSessionOf, subagentActivity, useRuntimeStore } from '@/lib/runtime';
-import { useScrollMemory } from '@/lib/scrollMemory';
+import { chatScrollKey, useScrollMemory } from '@/lib/scrollMemory';
 import { useUiStore } from '@/lib/store';
+import { knowledgeList } from '@/lib/tauri';
 import { useWorkspaceFiles } from '@/lib/useWorkspaceFiles';
 
 /** Live agent session. `/live` (no id) is a blank draft;
@@ -167,6 +169,20 @@ export function LiveSessionPage() {
     }
     return Array.from(new Set(ordered));
   }, [thread, workspaceFiles]);
+  // Knowledge-base entries offered alongside files in the @ popup. Loaded once
+  // per mount: the library changes rarely, and a stale list only means a
+  // recently added entry is missing from suggestions (it is still in the
+  // library page). Failure is silent — mentions are a convenience, not a need.
+  const [knowledgeSuggestions, setKnowledgeSuggestions] = useState<KnowledgeSuggestion[]>([]);
+  useEffect(() => {
+    void knowledgeList()
+      .then((entries) =>
+        setKnowledgeSuggestions(
+          entries.map((e) => ({ id: e.id, title: e.title, summary: e.summary })),
+        ),
+      )
+      .catch(() => setKnowledgeSuggestions([]));
+  }, []);
   // The turn lifecycle: `sending` covers click → POST accepted (incl. the
   // dated-folder setup on a first message); `running` covers the agent
   // working until session.idle. Together they lock the composer and show the
@@ -239,7 +255,11 @@ export function LiveSessionPage() {
 
   // Conversation scroll position, per session — restored once history is in.
   const chatRef = useRef<HTMLDivElement>(null);
-  const onChatScroll = useScrollMemory(chatRef, `chat:${currentId ?? DRAFT_KEY}`, !historyLoading);
+  const onChatScroll = useScrollMemory(
+    chatRef,
+    chatScrollKey(currentId, DRAFT_KEY),
+    !historyLoading,
+  );
   // Scroll-to-bottom FAB: visible when the user has scrolled up.
   const [showScrollBtn, setShowScrollBtn] = useState(false);
   const scrollToBottom = (behavior: ScrollBehavior = 'auto') => {
@@ -486,6 +506,7 @@ export function LiveSessionPage() {
                       onRunCommand: (n, a) => void onRunCommand(n, a),
                       commands,
                       fileSuggestions,
+                      knowledgeSuggestions,
                       disabled: !connected || working,
                       working: running,
                       onStop: () => void interrupt(),

@@ -10,6 +10,7 @@ import {
 } from '@workbench/sdk/agent-runtime';
 import {
   buildMacroPrompt,
+  type KnowledgeInput,
   type MacroBoard,
   type MacroReportMeta,
   macroTheme,
@@ -23,6 +24,7 @@ import * as artifactFile from './artifact_file';
 import { extractText, fetchPageContent } from './browser';
 import { APP_IDS, CHANNEL } from './constants';
 import * as kernel from './kernel';
+import * as knowledge from './knowledge';
 import { exportDebugLogs, getLogger } from './logging';
 import { macroStore } from './macro';
 import { listNotifications, markRead, pushBriefing } from './macroNotify';
@@ -34,6 +36,7 @@ import {
   validateUserPatch,
   writeUserPatchChecked,
 } from './profilePatch';
+import * as projectConfig from './projectConfig';
 import * as provenance from './provenance';
 import { RelayHost, type RelayHostConfig } from './relayHost';
 import {
@@ -67,20 +70,35 @@ import {
   getServerUrl,
   setActiveWorkspace,
   setBaseWorkspace,
+  skillsConfigDir,
   startAgentRuntime,
   stopSidecar,
   workspaceDir,
 } from './server';
 import { detectShells, detectTools, enrichedPath } from './shell_env';
+import { checkSidecarVersion } from './sidecarVersion';
+import * as skills from './skills';
 import * as snapshot from './snapshot';
 import { getStore } from './store';
 import { registerTerminalHandlers } from './terminal';
+import { windowBehaviorStatus } from './tray';
 import { checkForUpdates } from './updater';
 import { isWhisperAvailable, transcribeWav } from './whisper';
 import { getMainWindow } from './windows';
 
 /** Host-side relay instance (shared by IPC handlers). */
 export const relayHost = new RelayHost();
+
+/** The personal knowledge vault — app-private, next to the other userData state. */
+const knowledgeBaseDir = (): string => join(app.getPath('userData'), 'knowledge');
+
+/** Where the sidecar actually reads skills from: the deployed profile's dir. */
+const deployedSkillsDir = (): string => join(deployedProfileDir(), 'skills');
+
+/** The profile the runtime actually reads. The *source* is the packager's copy
+ *  in app-config/; the deployed mirror is what the app is running, which is
+ *  what a configuration overview should show. */
+const projectProfileDir = (): string => deployedProfileDir();
 
 /** Push a payload to every renderer window (macro snapshot / notifications). */
 function broadcast(channel: string, payload?: unknown): void {
@@ -514,6 +532,107 @@ export function registerIpcHandlers(): void {
     artifactFile.saveTextFile(filename, content),
   );
   ipcMain.handle('open-url', (_e, url: string) => artifactFile.openUrl(url));
+  // Tray + global hotkey state. The hotkey can be taken by another app, which
+  // `registerGlobalShortcut` cannot fix — settings surfaces it instead.
+  ipcMain.handle('window-behavior', () => windowBehaviorStatus());
+  // Engine (opencode) version, distinct from the Workbench app updater below.
+  ipcMain.handle('check-sidecar-version', () => checkSidecarVersion());
+
+  // ---- Knowledge base (personal vault under userData) ----
+  ipcMain.handle('knowledge-list', () => knowledge.listEntries(knowledgeBaseDir()));
+  ipcMain.handle('knowledge-get', (_e, id: string) => knowledge.getEntry(knowledgeBaseDir(), id));
+  ipcMain.handle('knowledge-save', (_e, input: KnowledgeInput) =>
+    knowledge.saveEntry(knowledgeBaseDir(), input),
+  );
+  ipcMain.handle('knowledge-delete', (_e, id: string) => {
+    knowledge.deleteEntry(knowledgeBaseDir(), id);
+  });
+  ipcMain.handle('knowledge-categories', () => knowledge.listCategories(knowledgeBaseDir()));
+  ipcMain.handle('knowledge-save-categories', (_e, categories: string[]) =>
+    knowledge.saveCategories(knowledgeBaseDir(), categories),
+  );
+
+  // ---- External skill sources (registry in userData, links in the deployed profile) ----
+  ipcMain.handle('skills-config', () => skills.readConfig(skillsConfigDir()));
+  ipcMain.handle('skills-list', () => skills.scanSkills(skills.readConfig(skillsConfigDir())));
+  ipcMain.handle('skills-pick-source', async () => {
+    const win = getMainWindow();
+    const options = { properties: ['openDirectory' as const] };
+    const result = win
+      ? await dialog.showOpenDialog(win, options)
+      : await dialog.showOpenDialog(options);
+    return result.canceled || result.filePaths.length === 0 ? null : result.filePaths[0];
+  });
+  ipcMain.handle('skills-add-source', (_e, dir: string) => {
+    const source = (dir ?? '').trim();
+    if (!source) throw new Error('来源目录不能为空');
+    if (!existsSync(source)) throw new Error(`目录不存在: ${source}`);
+    if (source === deployedSkillsDir()) throw new Error('已部署的技能目录不能作为来源');
+    const config = skills.readConfig(skillsConfigDir());
+    if (config.sources.includes(source)) return config;
+    return skills.writeConfig(skillsConfigDir(), {
+      ...config,
+      sources: [...config.sources, source],
+    });
+  });
+  ipcMain.handle('skills-remove-source', (_e, dir: string) => {
+    const config = skills.readConfig(skillsConfigDir());
+    return skills.writeConfig(skillsConfigDir(), {
+      ...config,
+      sources: config.sources.filter((s) => s !== dir),
+    });
+  });
+  ipcMain.handle('skills-set-enabled', (_e, name: string, enable: boolean) => {
+    const config = skills.readConfig(skillsConfigDir());
+    const all = skills.scanSkills(config);
+    if (enable) {
+      if (!skills.linkSkill(deployedSkillsDir(), all, name)) {
+        throw new Error(
+          all.some((s) => s.name === name)
+            ? `技能 ${name} 在多个来源中重复，无法启用`
+            : `未找到技能: ${name}`,
+        );
+      }
+      return skills.writeConfig(skillsConfigDir(), {
+        ...config,
+        enabled: [...config.enabled, name],
+      });
+    }
+    skills.unlinkSkill(deployedSkillsDir(), name);
+    return skills.writeConfig(skillsConfigDir(), {
+      ...config,
+      enabled: config.enabled.filter((n) => n !== name),
+    });
+  });
+  ipcMain.handle('skills-schemes', () => skills.listSchemes(skillsConfigDir()));
+  ipcMain.handle('skills-read-scheme', (_e, name: string) =>
+    skills.readScheme(skillsConfigDir(), name),
+  );
+  ipcMain.handle('skills-save-scheme', (_e, name: string, names: string[]) => {
+    skills.writeScheme(skillsConfigDir(), name, names);
+  });
+  ipcMain.handle('skills-delete-scheme', (_e, name: string) => {
+    skills.deleteScheme(skillsConfigDir(), name);
+  });
+  ipcMain.handle('skills-apply-scheme', (_e, name: string) => {
+    const dir = skillsConfigDir();
+    const names = skills.readScheme(dir, name);
+    if (!names) throw new Error(`方案不存在: ${name}`);
+    const config = skills.readConfig(dir);
+    // The previous set is unlinked first, then the scheme's names are laid down;
+    // names whose source disappeared come back in `skipped`.
+    for (const previous of config.enabled) skills.unlinkSkill(deployedSkillsDir(), previous);
+    const next = skills.writeConfig(dir, { ...config, enabled: names });
+    return skills.materializeSkills(deployedSkillsDir(), next);
+  });
+
+  // ---- Packaged profile overview (read-only) ----
+  ipcMain.handle('project-config-summary', () =>
+    projectConfig.scanProjectConfig(projectProfileDir()),
+  );
+  ipcMain.handle('project-config-read', (_e, rel: string) =>
+    projectConfig.readProjectConfigFile(projectProfileDir(), rel),
+  );
   ipcMain.handle('add-files-to-workspace', async () => {
     const win = getMainWindow();
     if (!win) return [];

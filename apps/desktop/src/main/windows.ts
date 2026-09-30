@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { app, BrowserWindow, nativeImage, nativeTheme } from 'electron';
 
 import { APP_NAMES, CHANNEL } from './constants';
+import { isQuitting } from './lifecycle';
 import { getStore } from './store';
 
 const WINDOW_STORE_KEY = 'windowState';
@@ -73,6 +74,16 @@ export function createMainWindow(): BrowserWindow {
     void win.loadFile(join(__dirname, '../renderer/index.html'));
   }
 
+  // Closing the window hides it instead of ending the app: the sidecar, the
+  // scheduler and the relay host keep running, and the tray icon / Shift+X
+  // bring the window back. A real quit flags the lifecycle first (before-quit),
+  // which lets this close through.
+  win.on('close', (e) => {
+    if (isQuitting()) return;
+    e.preventDefault();
+    win.hide();
+  });
+
   win.once('ready-to-show', () => {
     win.show();
   });
@@ -85,9 +96,13 @@ export function getMainWindow(): BrowserWindow | null {
   return mainWindow;
 }
 
+/** Bundled app icon — used for the dock icon and the tray. */
+export function appIconPath(): string {
+  return join(app.getAppPath(), 'icons', 'icon.png');
+}
+
 export function setDockIcon(): void {
   if (process.platform !== 'darwin') return;
-  const iconPath = join(app.getAppPath(), 'icons', 'icon.png');
-  const icon = nativeImage.createFromPath(iconPath);
+  const icon = nativeImage.createFromPath(appIconPath());
   if (!icon.isEmpty()) app.dock?.setIcon(icon);
 }

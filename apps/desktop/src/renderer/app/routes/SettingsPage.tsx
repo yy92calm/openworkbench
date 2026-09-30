@@ -30,10 +30,12 @@ import {
   appVersion,
   channelName,
   checkForUpdates,
+  checkSidecarVersion,
   exportLogs,
   openWorkspaceBase,
   pickFolder,
   setWorkspaceBase,
+  windowBehavior,
   workspaceBase,
 } from '@/lib/tauri';
 import {
@@ -53,6 +55,8 @@ import {
   speak,
   type VoiceConfig,
 } from '@/lib/tts';
+
+import type { SidecarVersionStatus, WindowBehaviorStatus } from '../../electron';
 
 type Section =
   | 'general'
@@ -224,6 +228,8 @@ export function SettingsPage() {
                     ))}
                   </div>
                 </Card>
+
+                <WindowBehaviorSection />
 
                 <Card title={t('settings.appearance')}>
                   <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
@@ -1263,7 +1269,8 @@ function AboutSection() {
   const [name, setName] = useState<string | null>(null);
   const [id, setId] = useState<string | null>(null);
   const [version, setVersion] = useState<string | null>(null);
-  const [busy, setBusy] = useState<'updates' | 'logs' | null>(null);
+  const [engine, setEngine] = useState<SidecarVersionStatus | null>(null);
+  const [busy, setBusy] = useState<'updates' | 'logs' | 'engine' | null>(null);
 
   useEffect(() => {
     void channelName().then(setName);
@@ -1277,6 +1284,15 @@ function AboutSection() {
       await checkForUpdates(true);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const onCheckEngine = async () => {
+    setBusy('engine');
+    try {
+      setEngine(await checkSidecarVersion());
     } finally {
       setBusy(null);
     }
@@ -1303,6 +1319,30 @@ function AboutSection() {
           <Row label={t('settings.appId')} value={id} />
           <Row label={t('settings.version')} value={version} />
         </dl>
+      </Card>
+
+      <Card title="引擎版本" hint="捆绑的 opencode 引擎版本，与应用自身更新互相独立">
+        <dl className="space-y-2.5">
+          <Row label="当前引擎" value={engine?.current ?? null} />
+          <Row label="最新发布" value={engine?.latest ?? null} />
+        </dl>
+        {engine?.isLatest === false && (
+          <p className="mt-2 text-xs text-amber-600">引擎有新版本可用。</p>
+        )}
+        {engine?.error && <p className="mt-2 text-xs text-muted">无法检查：{engine.error}</p>}
+        {engine && !engine.error && engine.isLatest === null && (
+          <p className="mt-2 text-xs text-muted">未能读取本地引擎版本，无法比较。</p>
+        )}
+        <div className="mt-3">
+          <button
+            className={btnGhost('gap-1.5')}
+            onClick={() => void onCheckEngine()}
+            disabled={busy === 'engine'}
+          >
+            <RefreshCw size={13} className={busy === 'engine' ? 'animate-spin' : ''} />
+            检查引擎版本
+          </button>
+        </div>
       </Card>
 
       <Card title={t('settings.exportLogs')} hint={t('settings.exportLogsHint')}>
@@ -1360,6 +1400,38 @@ const btnAccent = (extra = '') =>
     'text-accent-fg transition-opacity hover:opacity-90 disabled:opacity-50',
     extra,
   );
+
+/** Tray + global hotkey status. The hotkey can be lost to another app, and
+ *  nothing else in the UI would explain why Shift+X does nothing. */
+function WindowBehaviorSection() {
+  const [status, setStatus] = useState<WindowBehaviorStatus | null>(null);
+  useEffect(() => {
+    void windowBehavior()
+      .then(setStatus)
+      .catch(() => setStatus(null));
+  }, []);
+  if (!status) return null;
+  return (
+    <Card title="窗口与快捷键">
+      <ul className="space-y-2 text-[13px]">
+        <li className="flex items-center justify-between gap-3">
+          <span className="text-muted">全局快捷键</span>
+          <span className={status.shortcutRegistered ? 'text-text' : 'text-red-500'}>
+            {status.shortcut} · {status.shortcutRegistered ? '已注册' : '被其他应用占用'}
+          </span>
+        </li>
+        <li className="flex items-center justify-between gap-3">
+          <span className="text-muted">系统托盘</span>
+          <span className="text-text">{status.trayAvailable ? '可用' : '不可用'}</span>
+        </li>
+        <li className="text-xs text-muted">
+          关闭窗口后应用驻留托盘，智能体与定时任务继续运行；用托盘图标或 {status.shortcut}{' '}
+          重新打开。
+        </li>
+      </ul>
+    </Card>
+  );
+}
 
 function Card({
   title,

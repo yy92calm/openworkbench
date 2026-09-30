@@ -6,6 +6,7 @@ import contextMenu from 'electron-context-menu';
 import { APP_IDS, APP_NAMES, CHANNEL } from './constants';
 import { registerIpcHandlers, relayHost } from './ipc';
 import { killAllKernels } from './kernel';
+import { markQuitting } from './lifecycle';
 import { getLogger } from './logging';
 import { macroStore } from './macro';
 import { startPreviewServer, stopPreviewServer } from './preview_server';
@@ -13,6 +14,7 @@ import type { RelayHostConfig } from './relayHost';
 import { cronEngine, ensureMacroTasks, stopSchedulerApi } from './scheduler';
 import { deployBundledProfile, getBrowserMcp, stopSidecar } from './server';
 import { getStore } from './store';
+import { disposeTray, registerGlobalShortcut, setupTray } from './tray';
 import { setupAutoUpdater } from './updater';
 import { createMainWindow, getMainWindow, setDockIcon } from './windows';
 
@@ -45,6 +47,8 @@ app.on('second-instance', () => {
 });
 
 app.on('before-quit', () => {
+  // Let the window's close interceptor stand down so the app can really quit.
+  markQuitting();
   cronEngine.stop();
   stopSidecar();
   stopSchedulerApi();
@@ -53,6 +57,7 @@ app.on('before-quit', () => {
 });
 
 app.on('will-quit', () => {
+  disposeTray();
   cronEngine.stop();
   stopSidecar();
   stopSchedulerApi();
@@ -118,4 +123,9 @@ void app.whenReady().then(async () => {
   win.on('closed', () => {
     // On macOS, keep the app running in the dock
   });
+
+  // Close-to-tray plus the global show/hide hotkey, so the agent and the
+  // scheduled tasks survive a closed window.
+  setupTray();
+  registerGlobalShortcut();
 });

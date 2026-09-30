@@ -1,5 +1,7 @@
-import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
+
+import { atomicWriteFile } from './atomicWrite';
 
 /** Audit snapshots of session transcripts captured at compaction boundaries.
  *  Counterpart of the model-side compaction (which only rewrites the model's
@@ -36,7 +38,7 @@ export function writeCompactionSnapshot(
 
   const key = safeName(snapshot.sessionId);
   const file = join(dir, `${key}-${snapshot.historyVersion}.json`);
-  writeFileSync(file, JSON.stringify(snapshot, null, 2), 'utf-8');
+  atomicWriteFile(file, JSON.stringify(snapshot, null, 2));
 
   prune(snapshotsRoot, key);
   return file;
