@@ -1,6 +1,6 @@
 {
   "name": "@workbench/admin",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "description": "Relay admin console: manage account tokens and monitor device status.",
