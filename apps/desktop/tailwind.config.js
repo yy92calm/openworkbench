@@ -26,8 +26,9 @@ export default {
         ok: 'var(--ok)',
         error: 'var(--error)',
         // A-share convention: rise (red) = up, fall (green) = down.
-        rise: 'var(--rise)',
-        fall: 'var(--fall)',
+        // RGB-channel format so Tailwind opacity modifiers (bg-rise/10 etc.) work.
+        rise: 'rgb(var(--rise) / <alpha-value>)',
+        fall: 'rgb(var(--fall) / <alpha-value>)',
         'chat-user-bg': 'var(--chat-user-bg)',
         'chat-user-border': 'var(--chat-user-border)',
         'chat-user-fg': 'var(--chat-user-fg)',

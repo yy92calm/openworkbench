@@ -49,9 +49,9 @@
   --warn: #d97706;
   --ok: #16a34a;
   --error: #dc2626;
-  /* A-share convention: red = up, green = down */
-  --rise: #dc2626;
-  --fall: #16a34a;
+  /* A-share convention: red = up, green = down (RGB channels for Tailwind opacity) */
+  --rise: 220 38 38;
+  --fall: 22 163 74;
   /* Chat bubble tokens */
   --chat-user-bg: #f0f0f0;
   --chat-user-border: #e5e5e5;
@@ -95,9 +95,9 @@
   --warn: #c07000;
   --ok: #3d8c40;
   --error: #c53030;
-  /* A-share convention: red = up, green = down */
-  --rise: #c53030;
-  --fall: #3d8c40;
+  /* A-share convention: red = up, green = down (RGB channels for Tailwind opacity) */
+  --rise: 197 48 48;
+  --fall: 61 140 64;
   /* Chat bubble tokens */
   --chat-user-bg: #f5f0ea;
   --chat-user-border: #e8e0d8;
@@ -141,9 +141,9 @@
   --warn: #d97706;
   --ok: #059669;
   --error: #dc2626;
-  /* A-share convention: red = up, green = down */
-  --rise: #dc2626;
-  --fall: #059669;
+  /* A-share convention: red = up, green = down (RGB channels for Tailwind opacity) */
+  --rise: 220 38 38;
+  --fall: 5 150 105;
   /* Chat bubble tokens */
   --chat-user-bg: #eef2f8;
   --chat-user-border: #dde3ec;
@@ -187,9 +187,9 @@
   --warn: #f59e0b;
   --ok: #22c55e;
   --error: #ef4444;
-  /* A-share convention: red = up, green = down */
-  --rise: #ef4444;
-  --fall: #22c55e;
+  /* A-share convention: red = up, green = down (RGB channels for Tailwind opacity) */
+  --rise: 239 68 68;
+  --fall: 34 197 94;
   /* Chat bubble tokens */
   --chat-user-bg: #242424;
   --chat-user-border: #2e2e2e;
@@ -233,9 +233,9 @@
   --warn: #f59e0b;
   --ok: #22c55e;
   --error: #ef4444;
-  /* A-share convention: red = up, green = down */
-  --rise: #ef4444;
-  --fall: #22c55e;
+  /* A-share convention: red = up, green = down (RGB channels for Tailwind opacity) */
+  --rise: 239 68 68;
+  --fall: 34 197 94;
   /* Chat bubble tokens */
   --chat-user-bg: #1c1c1c;
   --chat-user-border: #2a2a2a;
