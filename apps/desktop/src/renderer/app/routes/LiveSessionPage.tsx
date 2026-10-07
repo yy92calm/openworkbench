@@ -51,6 +51,8 @@ export function LiveSessionPage() {
     runShell,
     runCommand,
     closeArtifact,
+    openMemory,
+    closeMemory,
     setBrowserUrl,
     answerQuestion,
     rejectQuestion,
@@ -132,6 +134,7 @@ export function LiveSessionPage() {
   const activeTab = useUiStore((s) => s.tabs.find((t) => t.id === s.activeTabId) ?? null);
   const handlers: BlockHandlers = {
     onArtifactOpen: openFileTab,
+    onMemoryOpen: openMemory,
     onFigureComment: (a, title) =>
       void sendPrompt(
         `On the figure ${title}, at (${a.x.toFixed(0)}%, ${a.y.toFixed(0)}%): ${a.note}`,
@@ -253,10 +256,11 @@ export function LiveSessionPage() {
   // gets it back when the user returns.
   const pane = panes[currentId ?? DRAFT_KEY];
   const activeArtifact = pane?.artifact ?? null;
+  const activeMemoryId = pane?.memoryId ?? null;
   const browserUrl = pane?.browserUrl ?? '';
   const [rightPanelOpen, setRightPanelOpen] = useState(false);
   const [rightPanelTab, setRightPanelTab] = useState<
-    'context' | 'tasks' | 'browser' | 'terminal' | 'files'
+    'context' | 'tasks' | 'memory' | 'browser' | 'terminal' | 'files'
   >('context');
 
   // Conversation scroll position, per session — restored once history is in.
@@ -537,12 +541,14 @@ export function LiveSessionPage() {
 
         <WorkbenchDock
           artifact={activeArtifact}
+          memoryId={activeMemoryId}
           browserUrl={browserUrl}
           tab={rightPanelTab}
-          dockVisible={rightPanelOpen || !!activeArtifact}
+          dockVisible={rightPanelOpen || !!activeArtifact || !!activeMemoryId}
           todos={thread?.todos ?? []}
           blocks={thread?.blocks ?? []}
           onCloseArtifact={closeArtifact}
+          onCloseMemory={closeMemory}
           onBrowserUrlChange={setBrowserUrl}
           onCloseBrowser={() => setRightPanelOpen(false)}
           onCloseTerminal={() => setRightPanelOpen(false)}

@@ -36,8 +36,6 @@ export {
   profileManifest,
   profileValidatePatch,
   profileWritePatch,
-  projectConfigRead,
-  projectConfigSummary,
   restartRuntime,
   runtimePassword,
   sandboxStatus,

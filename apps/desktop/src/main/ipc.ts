@@ -29,6 +29,7 @@ import { exportDebugLogs, getLogger } from './logging';
 import { macroStore } from './macro';
 import { listNotifications, markRead, pushBriefing } from './macroNotify';
 import { previewUrl } from './preview_server';
+import { onNotification as onProactiveNotification } from './proactive';
 import {
   explainConfig,
   readDeployedManifest,
@@ -687,6 +688,344 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('write-compaction-snapshot', (_e, payload: snapshot.CompactionSnapshot) =>
     snapshot.writeCompactionSnapshot(workspaceDir(), payload),
   );
+
+  // ---- Auto long-term memory ----
+  ipcMain.handle('auto-memory-extract', async (_e, sessionId: string) => {
+    // Extract memories from a completed user session. Called by the renderer
+    // when a user session goes idle (not scheduler tasks).
+    const serverUrl = getServerUrl();
+    if (!serverUrl) {
+      log.warn('[auto-memory] no runtime available for extraction');
+      return { extracted: 0, saved: 0 };
+    }
+    const { getAutoMemoryConfig, processSessionForMemory } = await import('./autoMemory');
+    const config = getAutoMemoryConfig();
+    if (!config.enabled) return { extracted: 0, saved: 0 };
+
+    // Create a temporary client for extraction
+    const client = await createAgentRuntime({
+      kind: 'opencode',
+      baseUrl: serverUrl,
+      password: getServerPassword(),
+      directory: workspaceDir() ?? undefined,
+    });
+
+    try {
+      await processSessionForMemory(client, knowledgeBaseDir(), sessionId);
+      // processSessionForMemory handles all the checks internally
+      return { extracted: 1, saved: 1 };
+    } finally {
+      client.close();
+    }
+  });
+
+  ipcMain.handle('auto-memory-recall', async (_e, query: string, limit?: number) => {
+    // Recall relevant memories for a query. Called by the renderer when
+    // creating a new session to inject context.
+    const { recallMemories, buildMemoryContext, getAutoMemoryConfig } =
+      await import('./autoMemory');
+    const config = getAutoMemoryConfig();
+    if (!config.enabled) return { context: '', memories: [] };
+
+    const memories = recallMemories(knowledgeBaseDir(), query, limit);
+    return {
+      context: buildMemoryContext(memories),
+      memories: memories.map((m) => ({ id: m.id, title: m.title, summary: m.summary })),
+    };
+  });
+
+  ipcMain.handle('auto-memory-config-get', async () => {
+    const { getAutoMemoryConfig } = await import('./autoMemory');
+    return getAutoMemoryConfig();
+  });
+
+  ipcMain.handle(
+    'auto-memory-config-set',
+    async (_e, patch: Partial<import('@workbench/shared').AutoMemoryConfig>) => {
+      const { setAutoMemoryConfig, getAutoMemoryConfig } = await import('./autoMemory');
+      setAutoMemoryConfig(patch);
+      return getAutoMemoryConfig();
+    },
+  );
+
+  ipcMain.handle(
+    'auto-memory-extract-from-messages',
+    async (_e, messages: import('@workbench/sdk/agent-runtime').AgentHistoryMessage[]) => {
+      // Extract memories from a message array (e.g. pre-compaction snapshot).
+      // Unlike auto-memory-extract, this doesn't need a session ID — it works
+      // directly on the provided messages.
+      const serverUrl = getServerUrl();
+      if (!serverUrl) return { extracted: 0, saved: 0 };
+      const { getAutoMemoryConfig, extractMemories, saveAutoMemories, hasMeaningfulContent } =
+        await import('./autoMemory');
+      const config = getAutoMemoryConfig();
+      if (!config.enabled) return { extracted: 0, saved: 0 };
+      if (!hasMeaningfulContent(messages))
+        return { extracted: 0, saved: 0, reason: 'no-meaningful-content' };
+
+      const client = await createAgentRuntime({
+        kind: 'opencode',
+        baseUrl: serverUrl,
+        password: getServerPassword(),
+        directory: workspaceDir() ?? undefined,
+      });
+
+      try {
+        const memories = await extractMemories(client, messages);
+        const saved = saveAutoMemories(knowledgeBaseDir(), memories);
+        return { extracted: memories.length, saved };
+      } finally {
+        client.close();
+      }
+    },
+  );
+
+  ipcMain.handle(
+    'session-extract-tags',
+    async (_e, messages: import('@workbench/sdk/agent-runtime').AgentHistoryMessage[]) => {
+      const { extractSessionTags } = await import('./autoMemory');
+      const tags = extractSessionTags(messages);
+      return { tags };
+    },
+  );
+
+  ipcMain.handle('session-save-tags', async (_e, sessionId: string, tags: string[]) => {
+    const { saveSessionTags } = await import('./autoMemory');
+    saveSessionTags(sessionId, tags);
+    return { ok: true };
+  });
+
+  ipcMain.handle('session-get-tags', async (_e, sessionId: string) => {
+    const { getSessionTags } = await import('./autoMemory');
+    return { tags: getSessionTags(sessionId) };
+  });
+
+  ipcMain.handle('auto-memory-consolidate', async () => {
+    const { consolidateMemories } = await import('./autoMemory');
+    const knowledgeDir = knowledgeBaseDir();
+    return consolidateMemories(knowledgeDir);
+  });
+
+  // ---- Session cleanup ----
+  ipcMain.handle('session-cleanup-run', async () => {
+    const serverUrl = getServerUrl();
+    if (!serverUrl) return { deleted: 0, remaining: 0, error: 'no-server' };
+    const { cleanupOldSessions } = await import('./sessionCleanup');
+    const client = await createAgentRuntime({
+      kind: 'opencode',
+      baseUrl: serverUrl,
+      password: getServerPassword(),
+      directory: workspaceDir() ?? undefined,
+    });
+    try {
+      return await cleanupOldSessions(client);
+    } finally {
+      client.close();
+    }
+  });
+
+  ipcMain.handle('session-cleanup-config-get', async () => {
+    const { getCleanupConfig } = await import('./sessionCleanup');
+    return getCleanupConfig();
+  });
+
+  ipcMain.handle(
+    'session-cleanup-config-set',
+    async (_e, patch: Partial<import('./sessionCleanup').SessionCleanupConfig>) => {
+      const { setCleanupConfig, getCleanupConfig } = await import('./sessionCleanup');
+      setCleanupConfig(patch);
+      return getCleanupConfig();
+    },
+  );
+
+  // ---- Proactive engine ----
+  ipcMain.handle('proactive-status', async () => {
+    const { getStatus } = await import('./proactive');
+    return getStatus();
+  });
+
+  // Register default triggers on startup
+  void import('./proactive').then(({ registerDefaults }) => registerDefaults());
+
+  ipcMain.handle(
+    'proactive-register-trigger',
+    async (_e, trigger: import('./proactive').ProactiveTrigger) => {
+      const { registerTrigger } = await import('./proactive');
+      return registerTrigger(trigger);
+    },
+  );
+
+  ipcMain.handle('proactive-list-triggers', async () => {
+    const { listTriggers } = await import('./proactive');
+    return listTriggers();
+  });
+
+  ipcMain.handle('proactive-remove-trigger', async (_e, id: string) => {
+    const { removeTrigger } = await import('./proactive');
+    return removeTrigger(id);
+  });
+
+  ipcMain.handle(
+    'proactive-fire-event',
+    async (_e, event: string, context: Record<string, unknown>) => {
+      const { fireEvent } = await import('./proactive');
+      return fireEvent(event, context);
+    },
+  );
+
+  // Wire proactive notifications to renderer via broadcast
+  onProactiveNotification((notification) => broadcast('proactive-notification', notification));
+
+  // ---- Decision follow-up ----
+  ipcMain.handle('decision-followup-check', async () => {
+    const { checkDecisionFollowups } = await import('./decisionFollowup');
+    return checkDecisionFollowups();
+  });
+  ipcMain.handle('decision-followup-pending', async () => {
+    const { getPendingFollowups } = await import('./decisionFollowup');
+    return getPendingFollowups();
+  });
+  ipcMain.handle('decision-followup-mark-reviewed', async (_e, decisionId: string) => {
+    const { markDecisionReviewed } = await import('./decisionFollowup');
+    markDecisionReviewed(decisionId);
+    return { ok: true };
+  });
+  ipcMain.handle('decision-followup-config-get', async () => {
+    const { getStore } = await import('./store');
+    const store = getStore('workbench.decisionFollowup');
+    const defaults = { enabled: true, remindAfterDays: 7, maxPerDay: 3 };
+    return { ...defaults, ...store.get('config') };
+  });
+  ipcMain.handle('decision-followup-config-set', async (_e, patch: Record<string, unknown>) => {
+    const { setFollowupConfig } = await import('./decisionFollowup');
+    setFollowupConfig(patch);
+    const { getStore } = await import('./store');
+    const store = getStore('workbench.decisionFollowup');
+    const defaults = { enabled: true, remindAfterDays: 7, maxPerDay: 3 };
+    return { ...defaults, ...store.get('config') };
+  });
+
+  // ---- Session insights ----
+  ipcMain.handle('session-insights-analyze', async () => {
+    const { analyzeSessionPatterns } = await import('./sessionInsights');
+    return analyzeSessionPatterns(knowledgeBaseDir());
+  });
+  ipcMain.handle('session-insights-get', async () => {
+    const { getGeneratedInsights } = await import('./sessionInsights');
+    return getGeneratedInsights();
+  });
+  ipcMain.handle('session-insights-config-get', async () => {
+    const store = getStore('workbench.sessionInsights');
+    const defaults = { enabled: true, minSessionsForInsight: 3, maxInsightsPerDay: 5 };
+    return { ...defaults, ...store.get('config') };
+  });
+  ipcMain.handle('session-insights-config-set', async (_e, patch: Record<string, unknown>) => {
+    const { setInsightConfig } = await import('./sessionInsights');
+    setInsightConfig(patch);
+    const store = getStore('workbench.sessionInsights');
+    const defaults = { enabled: true, minSessionsForInsight: 3, maxInsightsPerDay: 5 };
+    return { ...defaults, ...store.get('config') };
+  });
+
+  // ---- Workflow patterns ----
+  ipcMain.handle('workflow-patterns-record', async (_e, step: { type: string; detail?: string }) => {
+    const { recordWorkflowStep } = await import('./workflowPatterns');
+    recordWorkflowStep(step);
+    return { ok: true };
+  });
+  ipcMain.handle('workflow-patterns-top', async (_e, limit?: number) => {
+    const { getTopPatterns } = await import('./workflowPatterns');
+    return getTopPatterns(limit);
+  });
+  ipcMain.handle('workflow-patterns-get', async () => {
+    const { getRecognizedPatterns } = await import('./workflowPatterns');
+    return getRecognizedPatterns();
+  });
+  ipcMain.handle('workflow-patterns-config-get', async () => {
+    const store = getStore('workbench.workflowPatterns');
+    const defaults = {
+      enabled: true,
+      minOccurrences: 3,
+      maxPatternLength: 5,
+      patternWindowMs: 24 * 60 * 60 * 1000,
+    };
+    return { ...defaults, ...store.get('config') };
+  });
+  ipcMain.handle('workflow-patterns-config-set', async (_e, patch: Record<string, unknown>) => {
+    const { setWorkflowConfig } = await import('./workflowPatterns');
+    setWorkflowConfig(patch);
+    const store = getStore('workbench.workflowPatterns');
+    const defaults = {
+      enabled: true,
+      minOccurrences: 3,
+      maxPatternLength: 5,
+      patternWindowMs: 24 * 60 * 60 * 1000,
+    };
+    return { ...defaults, ...store.get('config') };
+  });
+
+  // ---- Knowledge gap (enhanced recall) ----
+  ipcMain.handle('auto-memory-recall-with-gaps', async (_e, query: string, limit?: number) => {
+    const { recallMemoriesWithGaps, buildMemoryContext, getAutoMemoryConfig } =
+      await import('./autoMemory');
+    const config = getAutoMemoryConfig();
+    if (!config.enabled) {
+      return { recalled: [], unrecalledCount: 0, unrecalledSamples: [], context: '' };
+    }
+    const result = recallMemoriesWithGaps(knowledgeBaseDir(), query, limit);
+    return { ...result, context: buildMemoryContext(result.recalled) };
+  });
+
+  // ---- Agent registry (A2A Agent Card) ----
+  ipcMain.handle('agents-list', async () => {
+    const { initRegistry, listAgents } = await import('./agentRegistry');
+    initRegistry(deployedProfileDir());
+    return listAgents();
+  });
+  ipcMain.handle('agents-get', async (_e, name: string) => {
+    const { initRegistry, getAgent } = await import('./agentRegistry');
+    initRegistry(deployedProfileDir());
+    return getAgent(name);
+  });
+  ipcMain.handle('agents-search', async (_e, query: string, options?: import('./agentRegistry').AgentSearchOptions) => {
+    const { initRegistry, searchAgents } = await import('./agentRegistry');
+    initRegistry(deployedProfileDir());
+    return searchAgents(query, options);
+  });
+  ipcMain.handle('agents-suggest', async (_e, query: string) => {
+    const { initRegistry, suggestAgent } = await import('./agentRegistry');
+    initRegistry(deployedProfileDir());
+    return suggestAgent(query);
+  });
+
+  // ---- Agent runtime status ----
+  ipcMain.handle('agents-status-get', async (_e, name: string) => {
+    const { getAgentStatus, initAgentStatus } = await import('./agentStatus');
+    initAgentStatus(name);
+    return getAgentStatus(name);
+  });
+  ipcMain.handle('agents-status-all', async () => {
+    const { getAllAgentStatuses } = await import('./agentStatus');
+    return getAllAgentStatuses();
+  });
+  ipcMain.handle('agents-status-busy', async () => {
+    const { getBusyAgents } = await import('./agentStatus');
+    return getBusyAgents();
+  });
+  ipcMain.handle('agents-status-idle', async () => {
+    const { getIdleAgents } = await import('./agentStatus');
+    return getIdleAgents();
+  });
+
+  // ---- Agent routing ----
+  ipcMain.handle('agents-route', async (_e, message: string, currentAgent?: string) => {
+    const { routeMessage } = await import('./agentRouter');
+    return routeMessage(message, currentAgent);
+  });
+  ipcMain.handle('agents-should-switch', async (_e, message: string, currentAgent: string) => {
+    const { shouldSwitchAgent } = await import('./agentRouter');
+    return shouldSwitchAgent(message, currentAgent);
+  });
 
   // ---- Preview ----
   ipcMain.handle('preview-url', (_e, rel: string, root?: string) => previewUrl(rel, root));

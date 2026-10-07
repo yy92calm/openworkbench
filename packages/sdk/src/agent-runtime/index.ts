@@ -5,6 +5,7 @@
 
 export type { AgentRuntime } from './adapter';
 export { type AgentRuntimeConfig, type AgentRuntimeKind, createAgentRuntime } from './factory';
+export { MockRuntime, type MockRuntimeOptions } from './mock';
 export type {
   AgentCommandInfo,
   AgentHistoryMessage,

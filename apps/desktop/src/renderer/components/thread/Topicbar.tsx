@@ -1,4 +1,4 @@
-import { BookOpen, FolderOpen, Globe, ListTodo, PanelRightClose, Terminal } from 'lucide-react';
+import { BookOpen, Brain, FolderOpen, Globe, ListTodo, PanelRightClose, Terminal } from 'lucide-react';
 
 import { cn } from '@/lib/cn';
 import { useRuntimeStore } from '@/lib/runtime';
@@ -13,6 +13,7 @@ const STATUS_TONE: Record<string, string> = {
 const TABS = [
   { id: 'context' as const, label: '上下文', icon: <BookOpen size={14} /> },
   { id: 'tasks' as const, label: '任务', icon: <ListTodo size={14} /> },
+  { id: 'memory' as const, label: '记忆', icon: <Brain size={14} /> },
   { id: 'browser' as const, label: '浏览器', icon: <Globe size={14} /> },
   { id: 'terminal' as const, label: '终端', icon: <Terminal size={14} /> },
   { id: 'files' as const, label: '文件', icon: <FolderOpen size={14} /> },
@@ -28,7 +29,7 @@ export function Topicbar({
   title?: string;
   rightPanelOpen: boolean;
   currentTab: string;
-  onTabChange: (tab: 'context' | 'tasks' | 'browser' | 'terminal' | 'files') => void;
+  onTabChange: (tab: 'context' | 'tasks' | 'memory' | 'browser' | 'terminal' | 'files') => void;
   onClosePanel: () => void;
 }) {
   const status = useRuntimeStore((s) => s.status);

@@ -6,7 +6,6 @@ import {
   DEFAULT_OPENCODE_URL,
   type HistoryMessage,
   type McpServer,
-  OpenCodeClient,
   type OpenCodeEvent,
   type PermissionAskedEvent,
   type PermissionMode,
@@ -17,6 +16,7 @@ import {
   type SkillInfo,
   type ToolCallStatus,
 } from '@workbench/sdk';
+import { createAgentRuntime } from '@workbench/sdk/agent-runtime';
 import type { ArtifactBlock, RuntimeStatus, SandboxStatus, ThreadBlock } from '@workbench/shared';
 import { create } from 'zustand';
 
@@ -28,6 +28,7 @@ import { provenanceInputFromEvent, recordProvenance } from './provenance';
 import { chatScrollKey, forgetScrollMemory, moveScrollMemory } from './scrollMemory';
 import {
   detectTools as probeTools,
+  isDesktop,
   isTauri,
   logDebug,
   newDatedWorkspace,
@@ -83,6 +84,7 @@ export interface PaneState {
   browserUrl: string;
   showTerminal: boolean;
   showFileBrowser: boolean;
+  memoryId: string | null;
 }
 
 interface RuntimeState {
@@ -128,6 +130,8 @@ interface RuntimeState {
   sandbox: SandboxStatus | null;
   openArtifact: (a: ArtifactBlock) => void;
   closeArtifact: () => void;
+  openMemory: (id: string) => void;
+  closeMemory: () => void;
   setShowFiles: (show: boolean) => void;
   setBrowserUrl: (url: string) => void;
   setShowTerminal: (show: boolean) => void;
@@ -234,6 +238,11 @@ const compactionVersions = new Map<string, number>();
  *  not add a second line. Consumed by the idle event; a new turn clears it. */
 const interruptedSessions = new Set<string>();
 
+/** Track when each turn started, for long-running task notifications. */
+const turnStartTimes = new Map<string, number>();
+
+const LONG_RUNNING_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutes
+
 /** Server-side truth for "is this session's turn over": the last message is an
  *  assistant message that has finished streaming (time.completed set). A last
  *  USER message means a turn was accepted but not yet answered — still running. */
@@ -302,9 +311,10 @@ async function performTurn(
   set: StoreSet,
   get: StoreGet,
   echo: string,
-  post: (sid: string) => Promise<void>,
+  post: (sid: string, memoryPrefix: string) => Promise<void>,
   syncTurn: boolean,
   shell = false,
+  memoryQuery?: string,
 ): Promise<string | null> {
   if (!client) {
     set({ error: 'Not connected to the agent runtime.' });
@@ -329,6 +339,7 @@ async function performTurn(
     };
   });
   try {
+    const isNewSession = !get().currentId;
     let id = get().currentId;
     if (!id) {
       // Lazy-create the session on the first message (#3). Unless the user
@@ -364,7 +375,46 @@ async function performTurn(
       void get().refreshSessions();
     }
     const sid = id;
+
+    let memoryPrefix = '';
+    let recalledMemories: { id: string; title: string; summary: string }[] = [];
+    if (isNewSession && memoryQuery && isDesktop) {
+      try {
+        const result = await window.electronAPI.autoMemoryRecall(memoryQuery);
+        if (result?.context) {
+          memoryPrefix = result.context + '\n\n';
+          recalledMemories = result.memories ?? [];
+        }
+      } catch {
+        // recall failure must not block the send
+      }
+    }
+
+    // Show recalled memories as a collapsible card (transparency)
+    if (recalledMemories.length > 0) {
+      const key = get().currentId ?? DRAFT_KEY;
+      set((s) => {
+        const cur = s.threads[key] ?? emptyThread();
+        return {
+          threads: {
+            ...s.threads,
+            [key]: {
+              ...cur,
+              blocks: [
+                ...cur.blocks,
+                {
+                  kind: 'memory-recall' as const,
+                  memories: recalledMemories,
+                },
+              ],
+            },
+          },
+        };
+      });
+    }
+
     interruptedSessions.delete(sid); // a fresh turn folds its events normally
+    turnStartTimes.set(sid, Date.now());
     void logDebug(`turn → ${sid}`);
     if (syncTurn) {
       set((s) => ({
@@ -373,7 +423,7 @@ async function performTurn(
       }));
       const mark = sseSeq;
       try {
-        await post(sid);
+        await post(sid, memoryPrefix);
       } catch (err) {
         // The POST rejected — but shell/command POSTs are held open for the
         // WHOLE turn, and WKWebView kills any fetch at ~60 s. If SSE kept
@@ -404,7 +454,7 @@ async function performTurn(
         return { runningSessions };
       });
     } else {
-      await post(sid);
+      await post(sid, memoryPrefix);
       set((s) => ({ runningSessions: { ...s.runningSessions, [sid]: true } }));
     }
     void logDebug('turn OK');
@@ -510,6 +560,7 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
           browserUrl: '',
           showTerminal: false,
           showFileBrowser: false,
+          memoryId: null,
         },
       },
     })),
@@ -522,8 +573,36 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
         browserUrl: '',
         showTerminal: false,
         showFileBrowser: false,
+        memoryId: null,
       };
       return { panes: { ...s.panes, [key]: { ...prev, artifact: null, showFiles: true } } };
+    }),
+  openMemory: (id) =>
+    set((s) => ({
+      panes: {
+        ...s.panes,
+        [s.currentId ?? DRAFT_KEY]: {
+          artifact: null,
+          showFiles: false,
+          browserUrl: '',
+          showTerminal: false,
+          showFileBrowser: false,
+          memoryId: id,
+        },
+      },
+    })),
+  closeMemory: () =>
+    set((s) => {
+      const key = s.currentId ?? DRAFT_KEY;
+      const prev = s.panes[key] ?? {
+        artifact: null,
+        showFiles: false,
+        browserUrl: '',
+        showTerminal: false,
+        showFileBrowser: false,
+        memoryId: null,
+      };
+      return { panes: { ...s.panes, [key]: { ...prev, memoryId: null, showFiles: true } } };
     }),
   setShowFiles: (show) =>
     set((s) => {
@@ -534,6 +613,7 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
         browserUrl: '',
         showTerminal: false,
         showFileBrowser: false,
+        memoryId: null,
       };
       const artifact = show ? null : prev.artifact;
       return {
@@ -546,6 +626,7 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
             browserUrl: show ? '' : prev.browserUrl,
             showTerminal: show ? false : prev.showTerminal,
             showFileBrowser: show ? false : prev.showFileBrowser,
+            memoryId: show ? null : prev.memoryId,
           },
         },
       };
@@ -558,6 +639,8 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
         showFiles: false,
         browserUrl: '',
         showTerminal: false,
+        showFileBrowser: false,
+        memoryId: null,
       };
       return {
         panes: {
@@ -567,6 +650,7 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
             showFiles: false,
             artifact: null,
             showTerminal: false,
+            memoryId: null,
             browserUrl: url,
           },
         },
@@ -581,6 +665,7 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
         browserUrl: '',
         showTerminal: false,
         showFileBrowser: false,
+        memoryId: null,
       };
       return {
         panes: {
@@ -591,6 +676,7 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
             showFiles: false,
             browserUrl: '',
             showFileBrowser: false,
+            memoryId: null,
             showTerminal: show,
           },
         },
@@ -605,6 +691,7 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
         browserUrl: '',
         showTerminal: false,
         showFileBrowser: false,
+        memoryId: null,
       };
       return {
         panes: {
@@ -615,6 +702,7 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
             showFiles: false,
             browserUrl: '',
             showTerminal: false,
+            memoryId: null,
             showFileBrowser: show,
           },
         },
@@ -775,7 +863,8 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
     // The bundled sidecar requires per-run Basic auth; browser dev (no Tauri)
     // gets null and connects to a user-run passwordless server.
     const password = await runtimePassword();
-    const c = new OpenCodeClient({
+    const c = await createAgentRuntime({
+      kind: 'opencode',
       baseUrl: url,
       directory: directory ?? undefined,
       password: password ?? undefined,
@@ -885,6 +974,14 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
               },
             };
           });
+          // Fire proactive event for session error notification
+          const isDesktop = typeof window !== 'undefined' && !!window.electronAPI;
+          if (isDesktop) {
+            void window.electronAPI?.proactiveFireEvent('session.error', {
+              sessionId: sid,
+              error: event.message,
+            });
+          }
         } else {
           set({ error: event.message });
         }
@@ -971,6 +1068,11 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
                 triggeredAt: new Date().toISOString(),
                 messages,
               });
+              // Extract memories from the pre-compaction transcript so important
+              // facts/decisions survive the context reset.
+              if (isDesktop && !get().sessionParents[sid]) {
+                void window.electronAPI.autoMemoryExtractFromMessages(messages);
+              }
             } catch (err) {
               void logDebug(
                 `compaction snapshot FAILED: ${err instanceof Error ? err.message : String(err)}`,
@@ -1050,7 +1152,34 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
           void recordProvenance(input, sid, get().defaultModel);
         }
       }
-      if (event.type === 'session.idle') void get().refreshSessions();
+      if (event.type === 'session.idle') {
+        void get().refreshSessions();
+        // Trigger auto-memory extraction for user sessions (not subagents).
+        // The IPC handler checks config.enabled and minTurns internally.
+        if (!get().sessionParents[sid]) {
+          void window.electronAPI?.autoMemoryExtract(sid);
+          // Auto-tag session based on content
+          const isDesktop = typeof window !== 'undefined' && !!window.electronAPI;
+          if (isDesktop) {
+            void (async () => {
+              const messages = await client!.getMessages(sid);
+              const result = await window.electronAPI?.sessionExtractTags(messages);
+              if (result?.tags?.length) {
+                await window.electronAPI?.sessionSaveTags(sid, result.tags);
+              }
+            })();
+          }
+        }
+        // Long-running task notification: if the turn took > 5 minutes, notify.
+        const startTime = turnStartTimes.get(sid);
+        if (startTime && Date.now() - startTime > LONG_RUNNING_THRESHOLD_MS) {
+          void window.electronAPI?.proactiveFireEvent('task.completed', {
+            sessionId: sid,
+            durationMs: Date.now() - startTime,
+          });
+        }
+        turnStartTimes.delete(sid);
+      }
     };
     // Route every normalized event into the coalescing layers above. Streaming
     // text/reasoning updates ride the animation frame; token/cost heartbeats
@@ -1347,9 +1476,11 @@ export const useRuntimeStore = create<RuntimeState>((set, get) => ({
     return performTurn(
       set,
       get,
-      enriched,
-      (sid) => withRetry(() => client!.sendPrompt(sid, enriched)),
+      text,
+      (sid, memPrefix) => withRetry(() => client!.sendPrompt(sid, memPrefix + enriched)),
       false,
+      false,
+      text,
     );
   },
 

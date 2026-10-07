@@ -8,7 +8,7 @@ import { Sidebar } from '@/components/sidebar/Sidebar';
 import { StatusBar } from '@/components/sidebar/StatusBar';
 import { Toaster } from '@/components/ui/Toaster';
 import { cn } from '@/lib/cn';
-import { onMacroNotification, openExternal } from '@/lib/electron';
+import { onMacroNotification, onProactiveNotification, openExternal } from '@/lib/electron';
 import { useMacroStore } from '@/lib/macroStore';
 import { mockProject } from '@/lib/mock';
 import { useRuntimeStore } from '@/lib/runtime';
@@ -62,6 +62,16 @@ export function AppShell() {
     });
     return off;
   }, [navigate]);
+
+  // Proactive engine notifications: task completed, session error, macro alert,
+  // decision follow-up, workflow pattern, knowledge gap, etc.
+  useEffect(() => {
+    const off = onProactiveNotification((n) => {
+      const tone = n.type === 'warning' ? 'error' : 'success';
+      toast.push(tone, `${n.title}: ${n.message}`);
+    });
+    return off;
+  }, []);
 
   // External links open in the system browser.
   useEffect(() => {

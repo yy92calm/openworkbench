@@ -10,7 +10,6 @@ import type {
   MacroNotification,
   MacroReportMeta,
   MacroThemeId,
-  ProjectConfigCategory,
   ResearchDecision,
   ResearchOutcome,
   ResearchStance,
@@ -280,16 +279,6 @@ export async function channelName(): Promise<string | null> {
   } catch {
     return null;
   }
-}
-
-// ---- Packaged profile overview (read-only) ----
-
-export async function projectConfigSummary(): Promise<ProjectConfigCategory[]> {
-  return api().projectConfigSummary();
-}
-
-export async function projectConfigRead(rel: string): Promise<string> {
-  return api().projectConfigRead(rel);
 }
 
 export async function appIdentifier(): Promise<string | null> {
@@ -831,4 +820,20 @@ export async function roomStatus(): Promise<{
 
 export function onRoomEvent(callback: (event: RoomEvent) => void): () => void {
   return api().onRoomEvent(callback as (event: unknown) => void);
+}
+
+// -- Proactive notifications ------------------------------------------------
+
+export interface ProactiveNotification {
+  id: string;
+  type: 'info' | 'warning' | 'success';
+  title: string;
+  message: string;
+  timestamp: string;
+}
+
+export function onProactiveNotification(
+  callback: (notification: ProactiveNotification) => void,
+): () => void {
+  return api().onProactiveNotification(callback);
 }

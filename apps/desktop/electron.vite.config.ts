@@ -56,8 +56,9 @@ export default defineConfig({
       alias: {
         '@': r('./src/renderer'),
         '@workbench/shared': r('../../packages/shared/src/index.ts'),
-        '@workbench/sdk': r('../../packages/sdk/src/index.ts'),
+        '@workbench/sdk/agent-runtime': r('../../packages/sdk/src/agent-runtime/index.ts'),
         '@workbench/sdk/mock-server': r('../../packages/sdk/src/mockServer.ts'),
+        '@workbench/sdk': r('../../packages/sdk/src/index.ts'),
         '@fafawork/browser-mcp/panel': r(
           '../../packages/browser-mcp/src/renderer/BrowserPanel.tsx',
         ),

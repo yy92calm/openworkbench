@@ -182,15 +182,28 @@ export function handleRefreshAlerts(
   const created: MacroNotification[] = [];
   for (const c of detectAlerts(prev, next)) {
     if (isDuplicate(items, c.dedupeKey)) continue;
-    created.push(
-      pushNotification({
-        kind: 'alert',
-        title: c.title,
-        body: c.body,
+    const notification = pushNotification({
+      kind: 'alert',
+      title: c.title,
+      body: c.body,
+      indicator: c.indicator,
+      dedupeKey: c.dedupeKey,
+    });
+    created.push(notification);
+
+    // Fire proactive event for macro alerts
+    try {
+      const { fireEvent } = require('./proactive');
+      fireEvent('macro.alert', {
+        type: 'info',
+        title: `宏观预警: ${c.title}`,
+        message: c.body,
         indicator: c.indicator,
         dedupeKey: c.dedupeKey,
-      }),
-    );
+      });
+    } catch {
+      // Proactive integration is optional
+    }
   }
   return created;
 }

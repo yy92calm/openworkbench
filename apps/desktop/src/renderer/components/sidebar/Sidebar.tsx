@@ -1,7 +1,6 @@
 import type { SessionMeta } from '@workbench/sdk';
 import type { Project } from '@workbench/shared';
 import {
-  BookOpen,
   CalendarClock,
   FolderTree,
   LineChart,
@@ -11,7 +10,6 @@ import {
   Radio,
   Search,
   Settings,
-  SlidersHorizontal,
   Trash2,
   X,
 } from 'lucide-react';
@@ -153,16 +151,6 @@ export function Sidebar({ project }: { project: Project }) {
           icon={<FolderTree size={15} />}
           label={t('sidebar.skills')}
           onClick={() => navigate('/skills')}
-        />
-        <NavRow
-          icon={<BookOpen size={15} />}
-          label={t('sidebar.knowledge')}
-          onClick={() => navigate('/knowledge')}
-        />
-        <NavRow
-          icon={<SlidersHorizontal size={15} />}
-          label={t('sidebar.projectConfig')}
-          onClick={() => navigate('/project-config')}
         />
         <NavRow
           icon={<Radio size={15} />}

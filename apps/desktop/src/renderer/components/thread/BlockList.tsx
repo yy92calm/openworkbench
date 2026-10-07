@@ -19,6 +19,7 @@ import { A2uiSurfaceCard } from './A2uiSurfaceCard';
 import { ArtifactCard } from './ArtifactCard';
 import { AgentMessage, DataTable, RunningJobsOverlay, StatusLine, UserMessage } from './atoms';
 import { FigureBlock } from './FigureBlock';
+import { MemoryRecallCard } from './MemoryRecallCard';
 import { ReasoningCard } from './ReasoningCard';
 import { ShellCard } from './ShellCard';
 import { StepSummaryRow } from './StepSummaryRow';
@@ -28,6 +29,8 @@ import { TurnDivider } from './TurnDivider';
 export interface BlockHandlers {
   /** Open an artifact in the inspector (live session). */
   onArtifactOpen?: (a: ArtifactBlock) => void;
+  /** Open a memory entry in the right panel (live session). */
+  onMemoryOpen?: (id: string) => void;
   /** Forward a figure annotation to the agent (live session). */
   onFigureComment?: (annotation: FigureAnnotation, figureTitle: string) => void;
   /** Live one-line activity of the subagent a task tool spawned (live session). */
@@ -196,6 +199,12 @@ export function renderBlock(
           <StatusLine block={block} />
         </div>
       );
+    case 'memory-recall':
+      return (
+        <div key={key} className={prevKind ? sp : ''}>
+          <MemoryRecallCard block={block} onMemoryOpen={handlers?.onMemoryOpen} />
+        </div>
+      );
   }
 }
 
@@ -319,15 +328,14 @@ function ReasoningInline({ block }: { block: ReasoningBlock }) {
  *  live thinking/running tools stay visible. */
 function StepGroup({ blocks, handlers }: { blocks: ThreadBlock[]; handlers?: BlockHandlers }) {
   const isStreaming = groupIsStreaming(blocks);
-  // Default fold follows the global setting; streaming does NOT auto-expand -
-  // the user opted into collapsed, so a live indicator on the header is enough
-  // and they can expand by hand. Setting changes apply immediately (re-folds
-  // every group to the new default).
   const expandDefault = useUiStore((s) => s.expandThreadDetails);
   const [expanded, setExpanded] = useState(expandDefault);
   useEffect(() => {
     setExpanded(expandDefault);
   }, [expandDefault]);
+  useEffect(() => {
+    if (isStreaming) setExpanded(true);
+  }, [isStreaming]);
 
   const reasoningCount = blocks.filter((b) => b.kind === 'reasoning').length;
   const toolBlocks = blocks.filter((b): b is ToolCallBlock => b.kind === 'tool-call');

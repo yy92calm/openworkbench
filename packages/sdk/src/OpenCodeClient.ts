@@ -1,30 +1,33 @@
+import type { AgentRuntime } from './agent-runtime/adapter';
 import type {
+  AgentCommandInfo,
+  AgentHistoryMessage,
   AgentInfo,
-  CommandInfo,
-  HistoryMessage,
-  McpConfig,
-  McpServer,
-  OAuthAuthorization,
-  OpenCodeClientOptions,
-  OpenCodeEvent,
-  OpenCodePart,
-  OpenCodeRawEvent,
+  AgentMcpServer,
+  AgentProviderInfo,
+  AgentRuntimeEvent,
+  AgentSessionMeta,
+  AgentSkillInfo,
   PermissionAskedEvent,
   PermissionMode,
   PermissionReply,
-  ProviderAuthMethod,
-  ProviderCatalogEntry,
-  ProviderInfo,
   QuestionAskedEvent,
   RuntimeStatus,
-  SessionMeta,
+} from './agent-runtime/types';
+import type {
+  McpConfig,
+  OAuthAuthorization,
+  OpenCodeClientOptions,
+  OpenCodePart,
+  OpenCodeRawEvent,
+  ProviderAuthMethod,
+  ProviderCatalogEntry,
   SessionStatus,
-  SkillInfo,
   ToolCallStatus,
 } from './types';
 import { DEFAULT_OPENCODE_URL } from './types';
 
-type EventListener = (event: OpenCodeEvent) => void;
+type EventListener = (event: AgentRuntimeEvent) => void;
 type StatusListener = (status: RuntimeStatus) => void;
 
 function mapToolStatus(status: string): ToolCallStatus {
@@ -45,7 +48,7 @@ function mapToolStatus(status: string): ToolCallStatus {
  * Talks to a running `opencode serve` over its HTTP + SSE API. The UI must go
  * through this class, never the transport directly (see AGENTS.md guardrails).
  */
-export class OpenCodeClient {
+export class OpenCodeClient implements AgentRuntime {
   private readonly baseUrl: string;
   private readonly fetchImpl: typeof fetch;
   private readonly authHeader: string | null;
@@ -203,7 +206,7 @@ export class OpenCodeClient {
    *  (each item still carries its `directory`). The OpenCode version is pinned,
    *  so the experimental route is stable for us; fall back to `/session` if a
    *  server ever lacks it. */
-  async listSessions(): Promise<SessionMeta[]> {
+  async listSessions(): Promise<AgentSessionMeta[]> {
     let res = await this.fetchImpl(`${this.baseUrl}/experimental/session`, {
       headers: this.headers(),
     });
@@ -259,7 +262,7 @@ export class OpenCodeClient {
   }
 
   /** Load a session's message history. */
-  async getMessages(sessionId: string): Promise<HistoryMessage[]> {
+  async getMessages(sessionId: string): Promise<AgentHistoryMessage[]> {
     const res = await this.fetchImpl(
       `${this.baseUrl}/session/${encodeURIComponent(sessionId)}/message`,
       { headers: this.headers() },
@@ -267,7 +270,7 @@ export class OpenCodeClient {
     if (!res.ok) throw new Error(`Failed to load messages (${res.status})`);
     const arr = (await res.json()) as Array<{
       info: { role: 'user' | 'assistant'; time?: { completed?: number } };
-      parts: HistoryMessage['parts'];
+      parts: AgentHistoryMessage['parts'];
     }>;
     return arr.map((m) => ({
       role: m.info.role,
@@ -287,7 +290,7 @@ export class OpenCodeClient {
   }
 
   /** Real skills loaded by OpenCode (built-in + bundled + user). */
-  async listSkills(): Promise<SkillInfo[]> {
+  async listSkills(): Promise<AgentSkillInfo[]> {
     // Scope to the workspace: skill instances are created lazily per directory,
     // and the unscoped endpoint answers from an instance that may have none.
     const query = this.directory ? `?directory=${encodeURIComponent(this.directory)}` : '';
@@ -295,7 +298,7 @@ export class OpenCodeClient {
       headers: this.headers(),
     });
     if (!res.ok) throw new Error(`Failed to list skills (${res.status})`);
-    const body = (await res.json()) as { data?: SkillInfo[] };
+    const body = (await res.json()) as { data?: AgentSkillInfo[] };
     return body.data ?? [];
   }
 
@@ -318,7 +321,7 @@ export class OpenCodeClient {
   }
 
   /** Providers OpenCode can use right now, with their models. */
-  async listProviders(): Promise<ProviderInfo[]> {
+  async listProviders(): Promise<AgentProviderInfo[]> {
     const res = await this.fetchImpl(`${this.baseUrl}/config/providers`, {
       headers: this.headers(),
     });
@@ -375,7 +378,7 @@ export class OpenCodeClient {
   }
 
   /** Configured MCP servers with live status, joined with their config. */
-  async listMcpServers(): Promise<McpServer[]> {
+  async listMcpServers(): Promise<AgentMcpServer[]> {
     const [statusRes, cfgRes] = await Promise.all([
       this.fetchImpl(`${this.baseUrl}/mcp`, { headers: this.headers() }),
       this.fetchImpl(`${this.baseUrl}/global/config`, { headers: this.headers() }),
@@ -484,7 +487,7 @@ export class OpenCodeClient {
 
   /** Slash commands the runtime can run — config commands, skills and MCP
    *  prompts all surface in this one list (directory-scoped like skills). */
-  async listCommands(): Promise<CommandInfo[]> {
+  async listCommands(): Promise<AgentCommandInfo[]> {
     const res = await this.fetchImpl(`${this.baseUrl}/command${this.dirQuery()}`, {
       headers: this.headers(),
     });
@@ -983,7 +986,7 @@ export class OpenCodeClient {
     }
   }
 
-  private emit(event: OpenCodeEvent): void {
+  private emit(event: AgentRuntimeEvent): void {
     this.eventListeners.forEach((l) => l(event));
   }
   private setStatus(status: RuntimeStatus): void {

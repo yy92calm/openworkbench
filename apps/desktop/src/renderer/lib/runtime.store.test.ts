@@ -31,6 +31,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('./tauri', () => ({
+  isDesktop: true,
   isTauri: true,
   logDebug: async () => {},
   detectTools: async () => [],
@@ -126,6 +127,13 @@ vi.mock('@workbench/sdk', () => {
     close() {}
   }
   return { OpenCodeClient, DEFAULT_OPENCODE_URL: 'http://127.0.0.1:4096' };
+});
+
+vi.mock('@workbench/sdk/agent-runtime', async () => {
+  const { OpenCodeClient } = await import('@workbench/sdk');
+  return {
+    createAgentRuntime: async (opts: Record<string, unknown>) => new OpenCodeClient(opts),
+  };
 });
 
 import type { ArtifactBlock } from '@workbench/shared';
@@ -586,6 +594,7 @@ describe('per-session right pane', () => {
       browserUrl: '',
       showTerminal: false,
       showFileBrowser: false,
+      memoryId: null,
     });
     useRuntimeStore.getState().openArtifact(artifact('report.pdf'));
     expect(useRuntimeStore.getState().panes['ses_1']?.showFiles).toBe(false);

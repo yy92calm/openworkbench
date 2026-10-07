@@ -6,7 +6,6 @@ import { KnowledgePage } from './routes/KnowledgePage';
 import { LiveSessionPage } from './routes/LiveSessionPage';
 import { MacroInsightsPage } from './routes/MacroInsightsPage';
 import { NotFound } from './routes/NotFound';
-import { ProjectConfigPage } from './routes/ProjectConfigPage';
 import { RoomsPage } from './routes/RoomsPage';
 import { SessionPage } from './routes/SessionPage';
 import { SettingsPage } from './routes/SettingsPage';
@@ -24,7 +23,6 @@ export const routes: RouteObject[] = [
       { path: 'example/:sessionId', element: <SessionPage /> },
       { path: 'skills', element: <SkillsPage /> },
       { path: 'knowledge', element: <KnowledgePage /> },
-      { path: 'project-config', element: <ProjectConfigPage /> },
       { path: 'macro', element: <MacroInsightsPage /> },
       { path: 'tasks', element: <TasksPage /> },
       { path: 'files', element: <FilesPage /> },

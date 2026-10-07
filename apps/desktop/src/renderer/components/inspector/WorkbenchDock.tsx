@@ -6,6 +6,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { ContextPanel } from '@/components/inspector/ContextPanel';
 import { FileBrowserPanel } from '@/components/inspector/FileBrowserPanel';
 import { InspectorShell } from '@/components/inspector/InspectorShell';
+import { MemoryDockPanel } from '@/components/inspector/MemoryDockPanel';
+import { MemoryPanel } from '@/components/inspector/MemoryPanel';
 import { TasksPanel } from '@/components/inspector/TasksPanel';
 import { TerminalPanel } from '@/components/inspector/TerminalPanel';
 import { fileInspectorFromBlock } from '@/lib/artifacts';
@@ -13,17 +15,19 @@ import type { ThreadTodo } from '@/lib/threadTasks';
 import { useResizable } from '@/lib/useResizable';
 
 /**
- * Right-side dock: context, tasks, browser, terminal, files, or artifact
+ * Right-side dock: context, tasks, memory, browser, terminal, files, or artifact
  * preview. Tab bar is in the Topicbar; this component only renders the content.
  */
 export function WorkbenchDock({
   artifact,
+  memoryId,
   browserUrl,
   tab,
   dockVisible,
   todos,
   blocks,
   onCloseArtifact,
+  onCloseMemory,
   onBrowserUrlChange,
   onCloseBrowser,
   onCloseTerminal,
@@ -32,14 +36,16 @@ export function WorkbenchDock({
   onEvaluate,
 }: {
   artifact: ArtifactBlock | null;
+  memoryId: string | null;
   browserUrl: string;
-  tab: 'context' | 'tasks' | 'browser' | 'terminal' | 'files';
+  tab: 'context' | 'tasks' | 'memory' | 'browser' | 'terminal' | 'files';
   dockVisible: boolean;
   /** The active session's captured todo list (see runtime's Thread.todos). */
   todos: readonly ThreadTodo[];
   /** The active session's blocks, for deriving its subagent tasks. */
   blocks: readonly ThreadBlock[];
   onCloseArtifact: () => void;
+  onCloseMemory: () => void;
   onBrowserUrlChange: (url: string) => void;
   onCloseBrowser: () => void;
   onCloseTerminal: () => void;
@@ -60,6 +66,7 @@ export function WorkbenchDock({
     if (tab === 'terminal') setTerminalEverOpened(true);
   }, [tab]);
   const showArtifact = !!artifact;
+  const showMemory = !!memoryId;
 
   return (
     <>
@@ -93,7 +100,10 @@ export function WorkbenchDock({
             />
           </div>
         )}
-        {!showArtifact && (
+        {showMemory && (
+          <MemoryPanel memoryId={memoryId!} onClose={onCloseMemory} />
+        )}
+        {!showArtifact && !showMemory && (
           <>
             {/* Browser: mounted on first use (user switches to it or an MCP
                 open does), then kept alive across tab switches. */}
@@ -120,6 +130,7 @@ export function WorkbenchDock({
                 onClose={onCloseFileBrowser}
               />
             )}
+            {tab === 'memory' && <MemoryDockPanel />}
             {terminalEverOpened && (
               <div
                 className={tab === 'terminal' ? 'h-full' : 'hidden h-full'}

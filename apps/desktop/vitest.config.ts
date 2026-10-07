@@ -24,6 +24,7 @@ export default defineConfig({
       // Longest paths first: "@workbench/sdk" would otherwise prefix-match
       // "@workbench/sdk/mock-server" and rewrite it to a broken path.
       '@workbench/sdk/mock-server': r('../../packages/sdk/src/mockServer.ts'),
+      '@workbench/sdk/agent-runtime': r('../../packages/sdk/src/agent-runtime/index.ts'),
       '@workbench/sdk': r('../../packages/sdk/src/index.ts'),
       '@workbench/shared': r('../../packages/shared/src/index.ts'),
       '@fafawork/browser-mcp/panel': r('../../packages/browser-mcp/src/renderer/BrowserPanel.tsx'),

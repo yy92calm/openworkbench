@@ -144,7 +144,8 @@ export type ThreadBlock =
   | RunningJobsBlock
   | StatusLineBlock
   | TurnDividerBlock
-  | ReasoningBlock;
+  | ReasoningBlock
+  | MemoryRecallBlock;
 
 export interface UserMessageBlock {
   kind: 'user';
@@ -279,6 +280,12 @@ export interface ReasoningBlock {
   text: string;
   /** True while the reasoning is still streaming. */
   streaming?: boolean;
+}
+
+/** Recalled long-term memories injected at session start — collapsible. */
+export interface MemoryRecallBlock {
+  kind: 'memory-recall';
+  memories: { id: string; title: string; summary: string }[];
 }
 
 // ---- Inspector (right pane) ----
@@ -524,6 +531,87 @@ export interface KnowledgeInput {
   category?: string;
   tags?: string[];
   content: string;
+}
+
+// ---- Auto long-term memory ----
+
+/** One memory extracted from a session transcript. The Agent outputs this
+ *  structure; the app persists it to the knowledge base under `auto-memory`. */
+export interface ExtractedMemory {
+  title: string;
+  summary: string;
+  content: string;
+  tags: string[];
+  type: 'fact' | 'preference' | 'decision';
+  /** How stable this memory is. 'stable' = user profile (preferences, long-term
+   *  facts); 'ephemeral' = recent focus (current projects, temporary context). */
+  stability: 'stable' | 'ephemeral';
+  /** How important this memory is (1-5). 1 = trivial, 5 = critical.
+   *  Used as a weight during recall scoring. Defaults to 3 if not provided. */
+  importance?: number;
+}
+
+/** User-facing configuration for the auto-memory feature. */
+export interface AutoMemoryConfig {
+  enabled: boolean;
+  /** Maximum number of auto-memory entries to keep. */
+  maxEntries: number;
+  /** How many memories to inject into a new session. */
+  recallLimit: number;
+  /** Skip extraction for sessions with fewer turns than this. */
+  minTurns: number;
+}
+
+export const DEFAULT_AUTO_MEMORY_CONFIG: AutoMemoryConfig = {
+  enabled: true,
+  maxEntries: 500,
+  recallLimit: 5,
+  minTurns: 3,
+};
+
+// ---- A2A: Agent Card (capability description) ----
+
+/** Machine-readable description of an agent's capabilities. Parsed from
+ *  `.opencode/agents/*.md` YAML frontmatter + body. */
+export interface AgentCard {
+  /** Agent identifier (frontmatter `name`). */
+  name: string;
+  /** One-line capability summary. */
+  description: string;
+  /** Default model ID (e.g. `aliyuntokenplan/glm-5.2`). */
+  model?: string;
+  /** Available tools (e.g. `['write', 'edit', 'bash']`). */
+  tools: string[];
+  /** MCP server dependencies (e.g. `['wind', 'juyuan']`). */
+  mcp: string[];
+  /** Skills used by this agent (extracted from body). */
+  skills: string[];
+  /** Optional version string. */
+  version?: string;
+  /** Tags for categorization and filtering (e.g. `['code', 'review']`). */
+  tags?: string[];
+  /** System instructions summary (extracted from body or frontmatter). */
+  instructions?: string;
+  /** Whether this agent is enabled (default: true). */
+  enabled?: boolean;
+  /** Priority for sorting and suggestions (higher = more important, default: 0). */
+  priority?: number;
+}
+
+/** Runtime status of an agent (busy/idle, current session, task count). */
+export interface AgentStatus {
+  /** Agent name (from AgentCard). */
+  name: string;
+  /** Whether the agent is currently processing a request. */
+  busy: boolean;
+  /** Current session ID if busy, null otherwise. */
+  sessionId: string | null;
+  /** When the current task started (ISO timestamp), null if idle. */
+  taskStartedAt: string | null;
+  /** Number of tasks completed in this session. */
+  tasksCompleted: number;
+  /** Agent card reference (for display). */
+  card: AgentCard | null;
 }
 
 // ---- External skill sources (aggregated from user-chosen folders) ----

@@ -6,14 +6,15 @@ import { cn } from '@/lib/cn';
 import { useUiStore } from '@/lib/store';
 
 export function ReasoningCard({ block }: { block: ReasoningBlock }) {
-  // Default fold follows the global setting; streaming does not auto-expand.
-  // Setting changes apply immediately (re-folds the card to the new default).
   const expandDefault = useUiStore((s) => s.expandThreadDetails);
   const isStreaming = !!block.streaming;
   const [expanded, setExpanded] = useState(expandDefault);
   useEffect(() => {
     setExpanded(expandDefault);
   }, [expandDefault]);
+  useEffect(() => {
+    if (isStreaming) setExpanded(true);
+  }, [isStreaming]);
 
   return (
     <div className="relative flex">

@@ -53,6 +53,12 @@ vi.mock('@workbench/sdk', () => {
   }
   return { OpenCodeClient, DEFAULT_OPENCODE_URL: 'http://127.0.0.1:4096' };
 });
+vi.mock('@workbench/sdk/agent-runtime', async () => {
+  const { OpenCodeClient } = await import('@workbench/sdk');
+  return {
+    createAgentRuntime: async (opts: Record<string, unknown>) => new OpenCodeClient(opts),
+  };
+});
 
 describe('WorkspaceChip', () => {
   beforeEach(() => {

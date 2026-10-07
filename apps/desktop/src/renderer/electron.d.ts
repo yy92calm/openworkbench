@@ -1,4 +1,6 @@
 import type {
+  AgentCard,
+  AgentStatus,
   AggregatedSkill,
   KnowledgeEntry,
   KnowledgeEntryMeta,
@@ -10,7 +12,6 @@ import type {
   MacroNotification,
   MacroReportMeta,
   MacroThemeId,
-  ProjectConfigCategory,
   ResearchDecision,
   SandboxStatus,
   SkillsConfig,
@@ -200,6 +201,221 @@ export interface ElectronAPI {
   knowledgeCategories: () => Promise<string[]>;
   knowledgeSaveCategories: (categories: string[]) => Promise<string[]>;
 
+  // Auto long-term memory
+  autoMemoryExtract: (sessionId: string) => Promise<{
+    extracted: number;
+    saved: number;
+    reason?: string;
+  }>;
+  autoMemoryExtractFromMessages: (
+    messages: { role: string; parts: { type: string; text?: string; synthetic?: boolean }[] }[],
+  ) => Promise<{
+    extracted: number;
+    saved: number;
+    reason?: string;
+  }>;
+  autoMemoryRecall: (
+    query: string,
+    limit?: number,
+  ) => Promise<{ context: string; memories: { id: string; title: string; summary: string }[] }>;
+  autoMemoryConsolidate: () => Promise<{ removed: number; remaining: number }>;
+
+  // Session tagging
+  sessionExtractTags: (messages: unknown[]) => Promise<{ tags: string[] }>;
+  sessionSaveTags: (sessionId: string, tags: string[]) => Promise<{ ok: boolean }>;
+  sessionGetTags: (sessionId: string) => Promise<{ tags: string[] }>;
+
+  // Session cleanup
+  sessionCleanupRun: () => Promise<{ deleted: number; remaining: number; error?: string }>;
+  sessionCleanupConfigGet: () => Promise<{
+    enabled: boolean;
+    maxAgeDays: number;
+    minSessionsToKeep: number;
+  }>;
+  sessionCleanupConfigSet: (patch: {
+    enabled?: boolean;
+    maxAgeDays?: number;
+    minSessionsToKeep?: number;
+  }) => Promise<{
+    enabled: boolean;
+    maxAgeDays: number;
+    minSessionsToKeep: number;
+  }>;
+
+  // Proactive engine (event-driven triggers + notifications)
+  proactiveStatus: () => Promise<{
+    enabled: boolean;
+    triggers: number;
+    notificationsSent: number;
+  }>;
+  proactiveRegisterTrigger: (trigger: {
+    id: string;
+    event: string;
+    action: string;
+    config?: Record<string, unknown>;
+  }) => Promise<{ ok: boolean; error?: string }>;
+  proactiveListTriggers: () => Promise<
+    { id: string; event: string; action: string; config?: Record<string, unknown> }[]
+  >;
+  proactiveRemoveTrigger: (id: string) => Promise<{ ok: boolean }>;
+  proactiveFireEvent: (
+    event: string,
+    context: Record<string, unknown>,
+  ) => Promise<{ actionsExecuted: number }>;
+  onProactiveNotification: (callback: (notification: unknown) => void) => () => void;
+
+  // Decision follow-up
+  decisionFollowupCheck: () => Promise<
+    Array<{
+      decision: ResearchDecision;
+      daysSinceDecision: number;
+      reminderSent: boolean;
+    }>
+  >;
+  decisionFollowupPending: () => Promise<
+    Array<{
+      decision: ResearchDecision;
+      daysSinceDecision: number;
+      reminderSent: boolean;
+    }>
+  >;
+  decisionFollowupMarkReviewed: (decisionId: string) => Promise<{ ok: boolean }>;
+  decisionFollowupConfigGet: () => Promise<{
+    enabled: boolean;
+    remindAfterDays: number;
+    maxPerDay: number;
+  }>;
+  decisionFollowupConfigSet: (patch: {
+    enabled?: boolean;
+    remindAfterDays?: number;
+    maxPerDay?: number;
+  }) => Promise<{
+    enabled: boolean;
+    remindAfterDays: number;
+    maxPerDay: number;
+  }>;
+
+  // Session insights
+  sessionInsightsAnalyze: () => Promise<
+    Array<{
+      tag: string;
+      sessionCount: number;
+      relatedMemories: KnowledgeEntryMeta[];
+      summary: string;
+      generatedAt: string;
+    }>
+  >;
+  sessionInsightsGet: () => Promise<
+    Array<{
+      tag: string;
+      sessionCount: number;
+      relatedMemories: KnowledgeEntryMeta[];
+      summary: string;
+      generatedAt: string;
+    }>
+  >;
+  sessionInsightsConfigGet: () => Promise<{
+    enabled: boolean;
+    minSessionsForInsight: number;
+    maxInsightsPerDay: number;
+  }>;
+  sessionInsightsConfigSet: (patch: {
+    enabled?: boolean;
+    minSessionsForInsight?: number;
+    maxInsightsPerDay?: number;
+  }) => Promise<{
+    enabled: boolean;
+    minSessionsForInsight: number;
+    maxInsightsPerDay: number;
+  }>;
+
+  // Workflow patterns
+  workflowPatternsRecord: (step: { type: string; detail?: string }) => Promise<{ ok: boolean }>;
+  workflowPatternsTop: (limit?: number) => Promise<
+    Array<{
+      id: string;
+      steps: Array<{ type: string; detail?: string; timestamp: string }>;
+      occurrences: number;
+      firstSeen: string;
+      lastSeen: string;
+      suggestedName: string;
+    }>
+  >;
+  workflowPatternsGet: () => Promise<
+    Array<{
+      id: string;
+      steps: Array<{ type: string; detail?: string; timestamp: string }>;
+      occurrences: number;
+      firstSeen: string;
+      lastSeen: string;
+      suggestedName: string;
+    }>
+  >;
+  workflowPatternsConfigGet: () => Promise<{
+    enabled: boolean;
+    minOccurrences: number;
+    maxPatternLength: number;
+    patternWindowMs: number;
+  }>;
+  workflowPatternsConfigSet: (patch: {
+    enabled?: boolean;
+    minOccurrences?: number;
+    maxPatternLength?: number;
+    patternWindowMs?: number;
+  }) => Promise<{
+    enabled: boolean;
+    minOccurrences: number;
+    maxPatternLength: number;
+    patternWindowMs: number;
+  }>;
+
+  // Knowledge gap (enhanced recall)
+  autoMemoryRecallWithGaps: (
+    query: string,
+    limit?: number,
+  ) => Promise<{
+    recalled: KnowledgeEntry[];
+    unrecalledCount: number;
+    unrecalledSamples: KnowledgeEntry[];
+    context: string;
+  }>;
+
+  // Agent registry (A2A Agent Card)
+  agentsList: () => Promise<AgentCard[]>;
+  agentsGet: (name: string) => Promise<AgentCard | null>;
+  agentsSearch: (
+    query: string,
+    options?: {
+      tags?: string[];
+      tools?: string[];
+      mcp?: string[];
+      skills?: string[];
+      enabledOnly?: boolean;
+    },
+  ) => Promise<AgentCard[]>;
+  agentsSuggest: (query: string) => Promise<AgentCard | null>;
+
+  // Agent runtime status
+  agentsStatusGet: (name: string) => Promise<AgentStatus | null>;
+  agentsStatusAll: () => Promise<AgentStatus[]>;
+  agentsStatusBusy: () => Promise<AgentStatus[]>;
+  agentsStatusIdle: () => Promise<AgentStatus[]>;
+
+  // Agent routing
+  agentsRoute: (
+    message: string,
+    currentAgent?: string,
+  ) => Promise<{
+    agent: string;
+    confidence: number;
+    reason: string;
+    alternatives: Array<{ agent: string; confidence: number; reason: string }>;
+  }>;
+  agentsShouldSwitch: (
+    message: string,
+    currentAgent: string,
+  ) => Promise<{ shouldSwitch: boolean; recommended: string; reason: string } | null>;
+
   // External skill sources (aggregated from folders the user chose)
   skillsConfig: () => Promise<SkillsConfig>;
   /** Every skill across the configured sources, with its enable state. */
@@ -216,10 +432,6 @@ export interface ElectronAPI {
   skillsDeleteScheme: (name: string) => Promise<void>;
   /** Switch the enabled set to a saved group; reports what could not be linked. */
   skillsApplyScheme: (name: string) => Promise<SkillsLinkResult>;
-
-  // Packaged profile overview (read-only: the deployed .opencode mirror)
-  projectConfigSummary: () => Promise<ProjectConfigCategory[]>;
-  projectConfigRead: (rel: string) => Promise<string>;
 
   // Scheduler
   schedulerList: () => Promise<unknown[]>;

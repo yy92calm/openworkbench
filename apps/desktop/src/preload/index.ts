@@ -160,6 +160,90 @@ const apiObject = {
   knowledgeSaveCategories: (categories: string[]) =>
     ipcRenderer.invoke('knowledge-save-categories', categories),
 
+  // Auto long-term memory
+  autoMemoryExtract: (sessionId: string) => ipcRenderer.invoke('auto-memory-extract', sessionId),
+  autoMemoryExtractFromMessages: (messages: unknown[]) =>
+    ipcRenderer.invoke('auto-memory-extract-from-messages', messages),
+  autoMemoryRecall: (query: string, limit?: number) =>
+    ipcRenderer.invoke('auto-memory-recall', query, limit),
+  autoMemoryConsolidate: () => ipcRenderer.invoke('auto-memory-consolidate'),
+
+  // Session tagging
+  sessionExtractTags: (messages: unknown[]) => ipcRenderer.invoke('session-extract-tags', messages),
+  sessionSaveTags: (sessionId: string, tags: string[]) =>
+    ipcRenderer.invoke('session-save-tags', sessionId, tags),
+  sessionGetTags: (sessionId: string) => ipcRenderer.invoke('session-get-tags', sessionId),
+
+  // Session cleanup
+  sessionCleanupRun: () => ipcRenderer.invoke('session-cleanup-run'),
+  sessionCleanupConfigGet: () => ipcRenderer.invoke('session-cleanup-config-get'),
+  sessionCleanupConfigSet: (patch: unknown) =>
+    ipcRenderer.invoke('session-cleanup-config-set', patch),
+
+  // Proactive engine (event-driven triggers + notifications)
+  proactiveStatus: () => ipcRenderer.invoke('proactive-status'),
+  proactiveRegisterTrigger: (trigger: unknown) =>
+    ipcRenderer.invoke('proactive-register-trigger', trigger),
+  proactiveListTriggers: () => ipcRenderer.invoke('proactive-list-triggers'),
+  proactiveRemoveTrigger: (id: string) => ipcRenderer.invoke('proactive-remove-trigger', id),
+  proactiveFireEvent: (event: string, context: Record<string, unknown>) =>
+    ipcRenderer.invoke('proactive-fire-event', event, context),
+  onProactiveNotification: (callback: (notification: unknown) => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, notification: unknown) =>
+      callback(notification);
+    ipcRenderer.on('proactive-notification', handler);
+    return () => ipcRenderer.removeListener('proactive-notification', handler);
+  },
+
+  // Decision follow-up
+  decisionFollowupCheck: () => ipcRenderer.invoke('decision-followup-check'),
+  decisionFollowupPending: () => ipcRenderer.invoke('decision-followup-pending'),
+  decisionFollowupMarkReviewed: (decisionId: string) =>
+    ipcRenderer.invoke('decision-followup-mark-reviewed', decisionId),
+  decisionFollowupConfigGet: () => ipcRenderer.invoke('decision-followup-config-get'),
+  decisionFollowupConfigSet: (patch: unknown) =>
+    ipcRenderer.invoke('decision-followup-config-set', patch),
+
+  // Session insights
+  sessionInsightsAnalyze: () => ipcRenderer.invoke('session-insights-analyze'),
+  sessionInsightsGet: () => ipcRenderer.invoke('session-insights-get'),
+  sessionInsightsConfigGet: () => ipcRenderer.invoke('session-insights-config-get'),
+  sessionInsightsConfigSet: (patch: unknown) =>
+    ipcRenderer.invoke('session-insights-config-set', patch),
+
+  // Workflow patterns
+  workflowPatternsRecord: (step: { type: string; detail?: string }) =>
+    ipcRenderer.invoke('workflow-patterns-record', step),
+  workflowPatternsTop: (limit?: number) =>
+    ipcRenderer.invoke('workflow-patterns-top', limit),
+  workflowPatternsGet: () => ipcRenderer.invoke('workflow-patterns-get'),
+  workflowPatternsConfigGet: () => ipcRenderer.invoke('workflow-patterns-config-get'),
+  workflowPatternsConfigSet: (patch: unknown) =>
+    ipcRenderer.invoke('workflow-patterns-config-set', patch),
+
+  // Knowledge gap (enhanced recall)
+  autoMemoryRecallWithGaps: (query: string, limit?: number) =>
+    ipcRenderer.invoke('auto-memory-recall-with-gaps', query, limit),
+
+  // Agent registry (A2A Agent Card)
+  agentsList: () => ipcRenderer.invoke('agents-list'),
+  agentsGet: (name: string) => ipcRenderer.invoke('agents-get', name),
+  agentsSearch: (query: string, options?: unknown) =>
+    ipcRenderer.invoke('agents-search', query, options),
+  agentsSuggest: (query: string) => ipcRenderer.invoke('agents-suggest', query),
+
+  // Agent runtime status
+  agentsStatusGet: (name: string) => ipcRenderer.invoke('agents-status-get', name),
+  agentsStatusAll: () => ipcRenderer.invoke('agents-status-all'),
+  agentsStatusBusy: () => ipcRenderer.invoke('agents-status-busy'),
+  agentsStatusIdle: () => ipcRenderer.invoke('agents-status-idle'),
+
+  // Agent routing
+  agentsRoute: (message: string, currentAgent?: string) =>
+    ipcRenderer.invoke('agents-route', message, currentAgent),
+  agentsShouldSwitch: (message: string, currentAgent: string) =>
+    ipcRenderer.invoke('agents-should-switch', message, currentAgent),
+
   // External skill sources (userData registry + links into the deployed profile)
   skillsConfig: () => ipcRenderer.invoke('skills-config'),
   skillsList: () => ipcRenderer.invoke('skills-list'),
