@@ -1,8 +1,8 @@
 // Workflow pattern recognition: tracks user operation sequences and identifies
 // recurring patterns that could be automated or offered as shortcuts.
 
-import { fireEvent } from './proactive';
 import { getLogger } from './logging';
+import { fireEvent } from './proactive';
 import { getStore } from './store';
 
 const log = getLogger('workflowPatterns');

@@ -24,7 +24,9 @@ export function MemoryDockPanel() {
   }, []);
 
   useEffect(() => {
-    void refresh().catch((err) => toast.error(`无法读取记忆：${err instanceof Error ? err.message : String(err)}`));
+    void refresh().catch((err) =>
+      toast.error(`无法读取记忆：${err instanceof Error ? err.message : String(err)}`),
+    );
   }, [refresh]);
 
   const visible = useMemo(() => {

@@ -16,6 +16,11 @@ import type {
   SandboxStatus,
   SkillsConfig,
   SkillsLinkResult,
+  WikiCompileResult,
+  WikiLintReport,
+  WikiPage,
+  WikiPageMeta,
+  WikiStatus,
 } from '@workbench/shared';
 
 export interface WindowBehaviorStatus {
@@ -219,6 +224,21 @@ export interface ElectronAPI {
     limit?: number,
   ) => Promise<{ context: string; memories: { id: string; title: string; summary: string }[] }>;
   autoMemoryConsolidate: () => Promise<{ removed: number; remaining: number }>;
+
+  // LLM Wiki — compiled by the agent, read-only here
+  wikiList: () => Promise<WikiPageMeta[]>;
+  wikiGet: (slug: string) => Promise<WikiPage>;
+  wikiCompile: () => Promise<WikiCompileResult>;
+  wikiStatus: () => Promise<WikiStatus>;
+  wikiLint: () => Promise<WikiLintReport>;
+  wikiSearch: (query: string, limit?: number) => Promise<WikiPageMeta[]>;
+  wikiRecall: (
+    query: string,
+    limit?: number,
+  ) => Promise<{
+    context: string;
+    pages: { slug: string; title: string; summary: string }[];
+  }>;
 
   // Session tagging
   sessionExtractTags: (messages: unknown[]) => Promise<{ tags: string[] }>;

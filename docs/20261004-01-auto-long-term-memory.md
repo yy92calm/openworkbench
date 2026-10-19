@@ -10,7 +10,7 @@
 
 ### 核心流程
 
-```
+```text
 会话结束（session.idle）
   → 获取会话消息列表
   → 调用 sidecar 提取关键记忆（事实/偏好/决策）
@@ -32,9 +32,9 @@
 - `recallMemories(knowledgeDir, query, limit)` — 关键词匹配检索 auto-memory 条目
 - `buildMemoryContext(memories)` — 将检索到的记忆格式化为 instructions 补丁
 
-**2. 记忆提取 prompt**
+#### 2. 记忆提取 prompt
 
-```
+```text
 请从以下对话中提取值得长期记住的信息，输出 JSON 数组：
 [
   {
@@ -57,7 +57,7 @@
 - 如果没有值得记忆的内容，返回空数组 []
 ```
 
-**3. 稳定性维度（用户画像 vs 最近关注）**
+#### 3. 稳定性维度（用户画像 vs 最近关注）
 
 记忆按 `stability` 分为两类，生命周期和召回权重不同：
 
@@ -70,13 +70,13 @@
 - 召回：有关键词命中时，stable 记忆获得 0.5 分加成，排名更靠前
 - 裁剪：超过 maxEntries 时，先裁剪 ephemeral（最旧的），再裁剪 stable
 
-**4. 去重策略**
+#### 4. 去重策略
 
 - 新记忆写入前，加载所有 `category === 'auto-memory'` 的条目
 - 比较 title + summary 的关键词重叠度
 - 重叠度 >= 阈值 → 更新已有条目（合并内容）而非新建
 
-**5. 记忆注入**
+#### 5. 记忆注入
 
 - 新会话创建后、发送 prompt 前
 - 从 prompt 中提取关键词（简单分词 + 停用词过滤）

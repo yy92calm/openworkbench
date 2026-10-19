@@ -193,6 +193,9 @@ export function handleRefreshAlerts(
 
     // Fire proactive event for macro alerts
     try {
+      // Lazy require keeps notifications independent of the proactive engine
+      // when it is not initialised (tests, early boot).
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { fireEvent } = require('./proactive');
       fireEvent('macro.alert', {
         type: 'info',

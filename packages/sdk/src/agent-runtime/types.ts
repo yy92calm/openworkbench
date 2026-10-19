@@ -166,6 +166,9 @@ export interface AgentSessionMeta {
   directory?: string;
   /** Set on subagent sessions: the session whose task tool spawned this one. */
   parentId?: string;
+  /** Epoch ms timestamps as returned by the runtime's session list. */
+  createdAt?: number;
+  updatedAt?: number;
 }
 
 export interface AgentSkillInfo {

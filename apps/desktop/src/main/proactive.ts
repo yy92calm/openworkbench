@@ -173,6 +173,22 @@ function generateId(): string {
 /** Register the default set of triggers that ship with the app. */
 export function registerDefaults(): void {
   loadState();
+
+  // Registered before the legacy early-return below so existing installs pick
+  // up the newer default trigger too.
+  if (!state.triggers.some((t) => t.id === 'wiki-compiled-notify')) {
+    registerTrigger({
+      id: 'wiki-compiled-notify',
+      event: 'wiki.compiled',
+      action: 'notify-user',
+      config: {
+        type: 'success',
+        title: 'Wiki 已更新',
+        message: 'LLM Wiki 已完成一次编译。',
+      },
+    });
+  }
+
   const alreadyRegistered = state.triggers.some((t) => t.id === 'task-complete-notify');
   if (alreadyRegistered) return;
 

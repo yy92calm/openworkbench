@@ -538,6 +538,9 @@ export function recallMemoriesWithGaps(
   // Fire proactive event if there are unrecalled related entries
   if (unrecalledCount >= 3) {
     try {
+      // Lazy require keeps the optional proactive integration off the boot path
+      // (and out of tests that only exercise recall).
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const { fireEvent } = require('./proactive');
       fireEvent('knowledge.gap', {
         type: 'info',

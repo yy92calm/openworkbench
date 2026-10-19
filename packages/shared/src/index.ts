@@ -145,7 +145,8 @@ export type ThreadBlock =
   | StatusLineBlock
   | TurnDividerBlock
   | ReasoningBlock
-  | MemoryRecallBlock;
+  | MemoryRecallBlock
+  | WikiRecallBlock;
 
 export interface UserMessageBlock {
   kind: 'user';
@@ -286,6 +287,12 @@ export interface ReasoningBlock {
 export interface MemoryRecallBlock {
   kind: 'memory-recall';
   memories: { id: string; title: string; summary: string }[];
+}
+
+/** LLM Wiki pages recalled for a new session — collapsible. */
+export interface WikiRecallBlock {
+  kind: 'wiki-recall';
+  pages: { slug: string; title: string; summary: string }[];
 }
 
 // ---- Inspector (right pane) ----
@@ -568,6 +575,75 @@ export const DEFAULT_AUTO_MEMORY_CONFIG: AutoMemoryConfig = {
   recallLimit: 5,
   minTurns: 3,
 };
+
+// ---- LLM Wiki ----
+
+/** One compiled wiki page. The body lives in `pages/<slug>.md`; the index only
+ *  carries metadata and the link graph. */
+export interface WikiPageMeta {
+  slug: string;
+  title: string;
+  summary: string;
+  tags: string[];
+  /** Source ids (`session:<id>` / `memory:<id>`) the page was compiled from. */
+  sources: string[];
+  created: string;
+  updated: string;
+  /** Outgoing `[[slug]]` references found in the body. */
+  links: string[];
+  /** Pages whose body links to this one. */
+  backlinks: string[];
+}
+
+export interface WikiPage extends WikiPageMeta {
+  content: string;
+}
+
+export interface WikiCompileResult {
+  ok: boolean;
+  trigger: 'manual' | 'daily';
+  /** Total pages after the run. */
+  pages: number;
+  created: number;
+  updated: number;
+  /** New sources sent to the LLM in this run. */
+  sources: number;
+  /** Pages the LLM returned but validation dropped. */
+  skipped: number;
+  reason?: string;
+  error?: string;
+  compiledAt?: string;
+}
+
+export interface WikiLintIssue {
+  kind:
+    | 'broken-link'
+    | 'orphan-page'
+    | 'empty-page'
+    | 'missing-summary'
+    | 'duplicate-title'
+    | 'index-drift'
+    | 'unreadable-page';
+  level: 'error' | 'warn';
+  slug?: string;
+  detail: string;
+}
+
+export interface WikiLintReport {
+  checkedAt: string;
+  pages: number;
+  issues: WikiLintIssue[];
+}
+
+export interface WikiStatus {
+  pages: number;
+  lastCompiledAt: string | null;
+  lastCheckedAt: string | null;
+  /** True when the daily check is due (24 h since the last check). */
+  due: boolean;
+  sourcesTracked: number;
+  compiling: boolean;
+}
 
 // ---- A2A: Agent Card (capability description) ----
 

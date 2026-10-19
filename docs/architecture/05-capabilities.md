@@ -187,3 +187,30 @@
 | 语音 | `apps/desktop/src/main/whisper.ts`、`renderer/lib/stt.ts` |
 | 宏观洞察 | `apps/desktop/src/main/{macro,macroData,macroNotify,rotationHistory,research,researchData}.ts`、`packages/shared/src/macro.ts`、`renderer/app/routes/MacroInsightsPage.tsx`、`renderer/components/macro/*` |
 | 文件/预览 | `apps/desktop/src/main/{artifact_file.ts,preview_server.ts}`、`renderer/components/inspector/*` |
+| LLM Wiki | `apps/desktop/src/main/wiki.ts`、`renderer/components/inspector/WikiDockPanel.tsx`、`renderer/components/thread/WikiRecallCard.tsx` |
+
+## 11. Personal Agent：LLM Wiki
+
+- **定位**：把会话与自动长期记忆编译成互相链接的 Markdown 页面（Karpathy 式
+  LLM Wiki），由 agent 独占写入，界面只读。方案见
+  [docs/20261019-01](../20261019-01-llm-wiki-personal-agent.md)。
+- **存储**：`<userData>/wiki/`：`pages/<slug>.md`（frontmatter：
+  title/summary/tags/sources/created/updated）、`index.json`（元数据 + 链接图，
+  可由页面扫描重建）、`index.md`（按 tag 分组的目录）、`log.md`（追加式编译
+  日志）、`state.json`（上次检查/编译时间 + 素材指纹，最多 500 条）。
+- **素材**：自动记忆（`knowledge` 中 `category=auto-memory`，最多 40 条）+
+  非子 agent 会话（最多 10 条、每条 ≥2 个 user turn、正文截断 4000 字符）。
+  单次 prompt 素材上限 48000 字符；指纹未变的素材不重复送入。
+- **编译**：主进程通过 sidecar 创建临时会话，要求 LLM 返回严格的
+  `{"pages":[{slug,title,summary,tags,content,sources}]}` JSON（最多 6 页）。
+  解析/校验失败不写任何页面、不推进指纹；成功后确定性重建索引、反向链接与
+  `index.md`，推进 `state.json` 并写日志。手动（dock 按钮）与每日批量
+  （启动 2 分钟后首查、之后每 30 分钟检查、距上次 ≥24h 才编译）共用同一
+  编译锁。
+- **召回**：新会话首条消息并行调用 `auto-memory-recall` 与 `wiki-recall`，
+  把相关页面摘要 + 正文前 1500 字符追加到 prompt，并在会话中显示
+  `wiki-recall` 折叠卡片；点击卡片可打开右侧 Wiki 页签。
+- **Lint**：确定性检查断链、孤立页、空页、缺摘要、重复标题、索引漂移、
+  不可解析页面；不调用 LLM。
+- **IPC**：`wiki-list/get/compile/status/lint/search/recall`；渲染层入口在
+  Topicbar 第七个页签「Wiki」，由 `WorkbenchDock` 渲染只读面板。

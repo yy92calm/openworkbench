@@ -378,15 +378,19 @@ async function performTurn(
 
     let memoryPrefix = '';
     let recalledMemories: { id: string; title: string; summary: string }[] = [];
+    let recalledWikiPages: { slug: string; title: string; summary: string }[] = [];
     if (isNewSession && memoryQuery && isDesktop) {
-      try {
-        const result = await window.electronAPI.autoMemoryRecall(memoryQuery);
-        if (result?.context) {
-          memoryPrefix = result.context + '\n\n';
-          recalledMemories = result.memories ?? [];
-        }
-      } catch {
-        // recall failure must not block the send
+      const [memoryResult, wikiResult] = await Promise.all([
+        window.electronAPI.autoMemoryRecall(memoryQuery).catch(() => null),
+        window.electronAPI.wikiRecall(memoryQuery).catch(() => null),
+      ]);
+      if (memoryResult?.context) {
+        memoryPrefix = memoryResult.context + '\n\n';
+        recalledMemories = memoryResult.memories ?? [];
+      }
+      if (wikiResult?.context) {
+        memoryPrefix += wikiResult.context + '\n\n';
+        recalledWikiPages = wikiResult.pages ?? [];
       }
     }
 
@@ -405,6 +409,28 @@ async function performTurn(
                 {
                   kind: 'memory-recall' as const,
                   memories: recalledMemories,
+                },
+              ],
+            },
+          },
+        };
+      });
+    }
+
+    if (recalledWikiPages.length > 0) {
+      const key = get().currentId ?? DRAFT_KEY;
+      set((s) => {
+        const cur = s.threads[key] ?? emptyThread();
+        return {
+          threads: {
+            ...s.threads,
+            [key]: {
+              ...cur,
+              blocks: [
+                ...cur.blocks,
+                {
+                  kind: 'wiki-recall' as const,
+                  pages: recalledWikiPages,
                 },
               ],
             },

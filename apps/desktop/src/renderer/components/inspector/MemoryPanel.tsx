@@ -2,13 +2,7 @@ import type { KnowledgeEntry } from '@workbench/shared';
 import { BookOpen, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
-export function MemoryPanel({
-  memoryId,
-  onClose,
-}: {
-  memoryId: string;
-  onClose: () => void;
-}) {
+export function MemoryPanel({ memoryId, onClose }: { memoryId: string; onClose: () => void }) {
   const [entry, setEntry] = useState<KnowledgeEntry | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -37,7 +31,7 @@ export function MemoryPanel({
       <div className="flex items-center gap-2 border-b border-border px-3 py-2">
         <BookOpen size={14} className="shrink-0 text-accent/70" />
         <span className="flex-1 truncate text-[13px] font-medium text-text">
-          {loading ? '加载中…' : entry?.title ?? '记忆'}
+          {loading ? '加载中…' : (entry?.title ?? '记忆')}
         </span>
         <button
           type="button"
@@ -48,22 +42,14 @@ export function MemoryPanel({
         </button>
       </div>
       <div className="flex-1 overflow-y-auto px-4 py-3">
-        {loading && (
-          <p className="text-[13px] text-muted">加载中…</p>
-        )}
-        {!loading && !entry && (
-          <p className="text-[13px] text-muted">未找到该记忆条目。</p>
-        )}
+        {loading && <p className="text-[13px] text-muted">加载中…</p>}
+        {!loading && !entry && <p className="text-[13px] text-muted">未找到该记忆条目。</p>}
         {!loading && entry && (
           <div className="flex flex-col gap-3">
             <div>
-              <h2 className="text-[15px] font-semibold text-text">
-                {entry.title}
-              </h2>
+              <h2 className="text-[15px] font-semibold text-text">{entry.title}</h2>
               {entry.summary && (
-                <p className="mt-1 text-[13px] leading-relaxed text-text-dim">
-                  {entry.summary}
-                </p>
+                <p className="mt-1 text-[13px] leading-relaxed text-text-dim">{entry.summary}</p>
               )}
             </div>
             {entry.tags.length > 0 && (

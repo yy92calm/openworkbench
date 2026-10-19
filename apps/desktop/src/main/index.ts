@@ -1,4 +1,5 @@
 import { homedir } from 'node:os';
+import { join } from 'node:path';
 
 import { app } from 'electron';
 import contextMenu from 'electron-context-menu';
@@ -10,15 +11,26 @@ import { isQuitting, markQuitting } from './lifecycle';
 import { getLogger } from './logging';
 import { macroStore } from './macro';
 import { startPreviewServer, stopPreviewServer } from './preview_server';
+import { fireEvent } from './proactive';
 import type { RelayHostConfig } from './relayHost';
 import { cronEngine, ensureMacroTasks, stopSchedulerApi } from './scheduler';
-import { deployBundledProfile, getBrowserMcp, stopSidecar } from './server';
+import {
+  deployBundledProfile,
+  getBrowserMcp,
+  getServerPassword,
+  getServerUrl,
+  stopSidecar,
+  workspaceDir,
+} from './server';
 import { getStore } from './store';
 import { disposeTray, registerGlobalShortcut, setupTray, shouldHideOnClose } from './tray';
 import { setupAutoUpdater } from './updater';
+import { startWikiDailyCompile } from './wiki';
 import { createMainWindow, getMainWindow, setDockIcon } from './windows';
 
 contextMenu({ showSaveImageAs: true });
+
+let stopWikiDaily: (() => void) | null = null;
 
 try {
   process.chdir(homedir());
@@ -50,6 +62,7 @@ app.on('before-quit', () => {
   // Let the window's close interceptor stand down so the app can really quit.
   markQuitting();
   cronEngine.stop();
+  stopWikiDaily?.();
   stopSidecar();
   stopSchedulerApi();
   killAllKernels();
@@ -116,6 +129,32 @@ void app.whenReady().then(async () => {
   }
 
   startPreviewServer();
+
+  // LLM Wiki daily batch: the first check runs a couple of minutes after boot
+  // (the sidecar is started by the renderer's connect), then every 30 minutes.
+  // It compiles only when the previous check is ≥24h old.
+  stopWikiDaily = startWikiDailyCompile({
+    dir: join(app.getPath('userData'), 'wiki'),
+    knowledgeDir: join(app.getPath('userData'), 'knowledge'),
+    getRuntime: () => {
+      const baseUrl = getServerUrl();
+      if (!baseUrl) return null;
+      return {
+        baseUrl,
+        password: getServerPassword(),
+        directory: workspaceDir() ?? undefined,
+      };
+    },
+    onCompiled: (result) => {
+      fireEvent('wiki.compiled', {
+        type: 'success',
+        title: 'Wiki 已更新',
+        message: `每日编译完成：${result.sources} 条素材，${result.created + result.updated} 个页面。`,
+        created: result.created,
+        updated: result.updated,
+      });
+    },
+  });
 
   setupAutoUpdater();
 

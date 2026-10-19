@@ -16,6 +16,11 @@ import type {
   SandboxStatus,
   SkillsConfig,
   SkillsLinkResult,
+  WikiCompileResult,
+  WikiLintReport,
+  WikiPage,
+  WikiPageMeta,
+  WikiStatus,
 } from '@workbench/shared';
 
 import type { ElectronAPI, SidecarVersionStatus, WindowBehaviorStatus } from '../electron';
@@ -224,6 +229,42 @@ export async function knowledgeCategories(): Promise<string[]> {
 
 export async function knowledgeSaveCategories(categories: string[]): Promise<string[]> {
   return api().knowledgeSaveCategories(categories);
+}
+
+// ---- LLM Wiki (agent-compiled, read-only) ----
+
+export async function wikiList(): Promise<WikiPageMeta[]> {
+  return api().wikiList();
+}
+
+export async function wikiGet(slug: string): Promise<WikiPage> {
+  return api().wikiGet(slug);
+}
+
+export async function wikiCompile(): Promise<WikiCompileResult> {
+  return api().wikiCompile();
+}
+
+export async function wikiStatus(): Promise<WikiStatus> {
+  return api().wikiStatus();
+}
+
+export async function wikiLint(): Promise<WikiLintReport> {
+  return api().wikiLint();
+}
+
+export async function wikiSearch(query: string, limit?: number): Promise<WikiPageMeta[]> {
+  return api().wikiSearch(query, limit);
+}
+
+export async function wikiRecall(
+  query: string,
+  limit?: number,
+): Promise<{
+  context: string;
+  pages: { slug: string; title: string; summary: string }[];
+}> {
+  return api().wikiRecall(query, limit);
 }
 
 // ---- External skill sources ----

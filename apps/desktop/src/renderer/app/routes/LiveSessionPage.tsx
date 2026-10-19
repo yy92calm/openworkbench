@@ -135,6 +135,11 @@ export function LiveSessionPage() {
   const handlers: BlockHandlers = {
     onArtifactOpen: openFileTab,
     onMemoryOpen: openMemory,
+    onWikiOpen: (slug) => {
+      setWikiSlug(slug);
+      setRightPanelTab('wiki');
+      setRightPanelOpen(true);
+    },
     onFigureComment: (a, title) =>
       void sendPrompt(
         `On the figure ${title}, at (${a.x.toFixed(0)}%, ${a.y.toFixed(0)}%): ${a.note}`,
@@ -260,8 +265,9 @@ export function LiveSessionPage() {
   const browserUrl = pane?.browserUrl ?? '';
   const [rightPanelOpen, setRightPanelOpen] = useState(false);
   const [rightPanelTab, setRightPanelTab] = useState<
-    'context' | 'tasks' | 'memory' | 'browser' | 'terminal' | 'files'
+    'context' | 'tasks' | 'memory' | 'wiki' | 'browser' | 'terminal' | 'files'
   >('context');
+  const [wikiSlug, setWikiSlug] = useState<string | null>(null);
 
   // Conversation scroll position, per session — restored once history is in.
   const chatRef = useRef<HTMLDivElement>(null);
@@ -542,6 +548,7 @@ export function LiveSessionPage() {
         <WorkbenchDock
           artifact={activeArtifact}
           memoryId={activeMemoryId}
+          wikiSlug={wikiSlug}
           browserUrl={browserUrl}
           tab={rightPanelTab}
           dockVisible={rightPanelOpen || !!activeArtifact || !!activeMemoryId}

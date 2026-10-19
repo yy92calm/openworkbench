@@ -6,6 +6,31 @@ bump minor；发版时打 `v<version>` git tag 并将本条「Unreleased」归�
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-19
+
+### Added（Personal Agent：内置 LLM Wiki，方案 docs/20261019-01）
+
+- 内置 LLM Wiki：主进程把会话记录与自动长期记忆增量编译为互链 Markdown
+  页面，落盘 `<userData>/wiki/`（`pages/` 正文、`index.json` / `index.md`
+  索引、`log.md` 编译日志、`state.json` 增量指纹）；应用确定性拥有存储、
+  索引、反链与日志，LLM 独占正文写入，界面只读。
+- 编译流程：严格 JSON 协议校验（非法响应零写入、不推进指纹），单次最多
+  6 页 / 每页 12,000 字符，素材上限 10 个会话 + 40 条记忆 / 提示词总量
+  48,000 字符；按会话 `updatedAt:messageCount` 与记忆 `updated` 做增量，
+  无新素材时只更新检查时间。手动「立即编译」+ 每日批量（`lastCheckedAt`
+  24 小时到期，30 分钟检查一次，独立运行时会话）。
+- 召回与界面：新会话首条消息自动注入 Wiki 召回上下文（对话内
+  `wiki-recall` 卡片，可点击跳转页面）；右侧 dock 新增「Wiki」页签，
+  提供搜索、页面列表、Markdown 详情、反链跳转、lint 报告与编译状态；
+  编译完成经主动行为引擎推送 `wiki.compiled` 通知。
+- 测试：新增 14 个 wiki 单元测试（slug 安全、解析、增量、索引重建、
+  lint、检索召回等）。
+
+### Fixed（既有门禁问题）
+
+- 顺带修复既有门禁问题：memory 组件格式化、import 排序、懒加载
+  `require` 的 ESLint 注释与历史方案文档 markdownlint 违规。
+
 ## [0.2.0] - 2026-09-30
 
 ### Added（宏观洞察，方案 docs/20260918-01、docs/20260919-01）

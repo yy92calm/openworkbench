@@ -21,11 +21,13 @@
 **问题**：`runtime.ts` 直接 `new OpenCodeClient()`，绕过了 `createAgentRuntime` factory。`OpenCodeClient` 没有 `implements AgentRuntime`。
 
 **改动**：
+
 1. `OpenCodeClient` 加上 `implements AgentRuntime`
 2. `runtime.ts` 改用 `createAgentRuntime(kind, options)` factory
 3. 写 mock runtime 用于 renderer 层测试
 
 **文件**：
+
 - `packages/sdk/src/OpenCodeClient.ts` — 加 implements
 - `apps/desktop/src/renderer/lib/runtime.ts` — 改用 factory
 - `packages/sdk/src/agent-runtime/mock.ts` — 新增 mock 实现
@@ -35,11 +37,13 @@
 **问题**：scheduler 只支持 cron 触发，缺少事件驱动的主动行为。
 
 **改动**：
+
 1. **空闲时自动整理**：session.idle 时触发 auto-memory 提取（已有基础设施，需接入触发）
 2. **事件驱动触发器**：新增 `EventTrigger` 类型，支持文件变更、消息到达等事件
 3. **主动通知**：Agent 发现重要信息时主动推送通知到前端
 
 **文件**：
+
 - `apps/desktop/src/main/autoMemory.ts` — 接入 session.idle 触发
 - `apps/desktop/src/main/proactive.ts` — 新增：主动行为引擎
 - `apps/desktop/src/main/ipc.ts` — 注册触发器
@@ -49,11 +53,13 @@
 **问题**：当前只有关键词匹配召回，缺少语义相似度。
 
 **改动**：
+
 1. **重要性评分**：提取时由 Agent 评估 1-5 分，召回时加权
 2. **时间衰减**：ephemeral 记忆随时间降低权重
 3. **访问计数**：每次被召回时 +1，长期未访问的 ephemeral 记忆优先淘汰
 
 **文件**：
+
 - `packages/shared/src/index.ts` — ExtractedMemory 加 importance 字段
 - `apps/desktop/src/main/autoMemory.ts` — 评分 + 衰减逻辑
 
@@ -64,6 +70,7 @@
 **改动**：
 
 1. **AgentCard 类型定义**（`packages/shared/src/index.ts`）
+
    ```typescript
    interface AgentCard {
      name: string;              // agent ID（frontmatter name）
@@ -87,6 +94,7 @@
    - 提供 `getAgent(name)`、`listAgents()`、`searchAgents(query)` API
 
 4. **IPC 暴露**（`apps/desktop/src/main/ipc.ts`）
+
    ```typescript
    ipcMain.handle('agents-list', async () => listAgents());
    ipcMain.handle('agents-get', async (_e, name: string) => getAgent(name));
@@ -94,6 +102,7 @@
    ```
 
 5. **Preload 桥接**（`apps/desktop/src/preload/index.ts`）
+
    ```typescript
    agentsList: () => ipcRenderer.invoke('agents-list'),
    agentsGet: (name: string) => ipcRenderer.invoke('agents-get', name),
@@ -101,6 +110,7 @@
    ```
 
 **文件**：
+
 - `packages/shared/src/index.ts` — 加 AgentCard 类型
 - `apps/desktop/src/main/agentCard.ts` — 新增：解析 frontmatter
 - `apps/desktop/src/main/agentRegistry.ts` — 新增：注册表 + 缓存
@@ -109,6 +119,7 @@
 - `apps/desktop/src/renderer/electron.d.ts` — 类型声明
 
 **验证**：
+
 - 单元测试：解析 frontmatter → AgentCard
 - 集成测试：IPC 调用 agents-list 返回非空数组
 - 手动验证：前端设置页显示 agent 列表（可选 UI）
@@ -144,6 +155,7 @@
    - 提供 IPC API 手动触发清理
 
 **文件**：
+
 - `apps/desktop/src/renderer/lib/runtime.ts` — 记录 turn 开始时间、触发事件
 - `apps/desktop/src/main/proactive.ts` — 注册默认触发器
 - `apps/desktop/src/main/autoMemory.ts` — 添加标签提取、记忆整合
@@ -153,6 +165,7 @@
 - `apps/desktop/src/renderer/electron.d.ts` — 类型声明
 
 **验证**：
+
 - 类型检查通过
 - 单元测试通过（627 tests）
 - 手动验证：长时间任务完成后收到通知
@@ -194,6 +207,7 @@
    - 返回推荐 agent、置信度、原因和备选方案
 
 **文件**：
+
 - `packages/shared/src/index.ts` — AgentCard 增强 + AgentStatus 类型
 - `apps/desktop/src/main/agentCard.ts` — 解析新字段
 - `apps/desktop/src/main/agentRegistry.ts` — 搜索增强 + suggestAgent
@@ -204,6 +218,7 @@
 - `apps/desktop/src/renderer/electron.d.ts` — 类型声明
 
 **验证**：
+
 - 类型检查通过
 - 手动验证：agents-search 支持过滤、agents-suggest 返回推荐、agents-route 分析意图
 
@@ -214,12 +229,14 @@
 **方案选择**：
 
 **方案 A：扩展 Room 协议**（推荐）
+
 - 在现有 E2E room 中支持 agent 身份（agent peer）
 - 新增 `room.message` kind：`task-request`、`task-result`、`task-progress`
 - 优点：复用现有基础设施（room 管理、E2E 加密、文件传输）
 - 缺点：room 系统复杂度增加
 
-**方案 B：独立 A2A 协议**
+#### 方案 B：独立 A2A 协议
+
 - 在 relay 新增 `/api/a2a/*` HTTP 端点
 - Agent 通过 HTTP 直接调用其他 agent 的 task API
 - 优点：与 room 系统解耦
@@ -230,6 +247,7 @@
 **改动（方案 A）**：
 
 1. **Room 协议扩展**（`relay/src/protocol.ts`）
+
    ```typescript
    // 扩展 RoomMember
    interface RoomMember {
@@ -273,6 +291,7 @@
    - 支持 timeout、cancel
 
 **文件**：
+
 - `relay/src/protocol.ts` — 扩展 RoomMember、RoomMessageKind、RoomTaskMeta
 - `relay/src/room.ts` — 支持 agentCard、按 agent name 路由
 - `apps/desktop/src/main/a2aBridge.ts` — 新增：task 监听 + 执行
@@ -281,6 +300,7 @@
 - `apps/desktop/src/preload/index.ts` — 暴露 a2aSendTask
 
 **验证**：
+
 - 单元测试：解析 task-request/task-result 消息
 - 集成测试：两个 Workbench 实例通过 room 交换 task
 - 手动验证：agent A 请求 agent B 执行 code-review，B 返回结果

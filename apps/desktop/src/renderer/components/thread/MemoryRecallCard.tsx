@@ -29,9 +29,7 @@ export function MemoryRecallCard({
         aria-expanded={expanded}
       >
         <BookOpen size={13} className="shrink-0 text-accent/70" />
-        <span className="flex-1 truncate text-text-dim">
-          已注入 {count} 条相关记忆
-        </span>
+        <span className="flex-1 truncate text-text-dim">已注入 {count} 条相关记忆</span>
         <ChevronRight
           size={13}
           className={cn(
@@ -49,9 +47,7 @@ export function MemoryRecallCard({
               className="flex flex-col gap-0.5 rounded-md px-2 py-1 text-left transition-colors hover:bg-surface-2/60"
               onClick={() => onMemoryOpen?.(m.id)}
             >
-              <span className="text-[12px] font-medium text-text">
-                {m.title}
-              </span>
+              <span className="text-[12px] font-medium text-text">{m.title}</span>
               {m.summary && (
                 <span className="text-[11px] leading-snug text-text-dim line-clamp-2">
                   {m.summary}

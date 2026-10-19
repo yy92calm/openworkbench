@@ -93,6 +93,9 @@ export const relayHost = new RelayHost();
 /** The personal knowledge vault — app-private, next to the other userData state. */
 const knowledgeBaseDir = (): string => join(app.getPath('userData'), 'knowledge');
 
+/** LLM Wiki: compiled pages + generated index/log/state. */
+const wikiBaseDir = (): string => join(app.getPath('userData'), 'wiki');
+
 /** Where the sidecar actually reads skills from: the deployed profile's dir. */
 const deployedSkillsDir = (): string => join(deployedProfileDir(), 'skills');
 
@@ -806,6 +809,83 @@ export function registerIpcHandlers(): void {
     return consolidateMemories(knowledgeDir);
   });
 
+  // ---- LLM Wiki ----
+  ipcMain.handle('wiki-list', async () => {
+    const { listWikiPages } = await import('./wiki');
+    return listWikiPages(wikiBaseDir());
+  });
+
+  ipcMain.handle('wiki-get', async (_e, slug: string) => {
+    const { getWikiPage } = await import('./wiki');
+    return getWikiPage(wikiBaseDir(), slug);
+  });
+
+  ipcMain.handle('wiki-compile', async () => {
+    const { runWikiCompile } = await import('./wiki');
+    const serverUrl = getServerUrl();
+    if (!serverUrl) {
+      return {
+        ok: false,
+        trigger: 'manual' as const,
+        pages: 0,
+        created: 0,
+        updated: 0,
+        sources: 0,
+        skipped: 0,
+        reason: 'no-runtime',
+      };
+    }
+
+    const client = await createAgentRuntime({
+      kind: 'opencode',
+      baseUrl: serverUrl,
+      password: getServerPassword(),
+      directory: workspaceDir() ?? undefined,
+    });
+    try {
+      await client.connect();
+      const result = await runWikiCompile({
+        dir: wikiBaseDir(),
+        knowledgeDir: knowledgeBaseDir(),
+        client,
+        trigger: 'manual',
+      });
+      if (result.ok && result.reason !== 'no-new-sources') {
+        const { fireEvent } = await import('./proactive');
+        fireEvent('wiki.compiled', {
+          type: 'success',
+          title: 'Wiki 已更新',
+          message: `编译 ${result.sources} 条素材，触达 ${result.created + result.updated} 个页面。`,
+          created: result.created,
+          updated: result.updated,
+        });
+      }
+      return result;
+    } finally {
+      client.close();
+    }
+  });
+
+  ipcMain.handle('wiki-status', async () => {
+    const { getWikiStatus } = await import('./wiki');
+    return getWikiStatus(wikiBaseDir());
+  });
+
+  ipcMain.handle('wiki-lint', async () => {
+    const { lintWiki } = await import('./wiki');
+    return lintWiki(wikiBaseDir());
+  });
+
+  ipcMain.handle('wiki-search', async (_e, query: string, limit?: number) => {
+    const { searchWikiPages } = await import('./wiki');
+    return searchWikiPages(wikiBaseDir(), query, limit);
+  });
+
+  ipcMain.handle('wiki-recall', async (_e, query: string, limit?: number) => {
+    const { recallWiki } = await import('./wiki');
+    return recallWiki(wikiBaseDir(), query, limit);
+  });
+
   // ---- Session cleanup ----
   ipcMain.handle('session-cleanup-run', async () => {
     const serverUrl = getServerUrl();
@@ -928,11 +1008,14 @@ export function registerIpcHandlers(): void {
   });
 
   // ---- Workflow patterns ----
-  ipcMain.handle('workflow-patterns-record', async (_e, step: { type: string; detail?: string }) => {
-    const { recordWorkflowStep } = await import('./workflowPatterns');
-    recordWorkflowStep(step);
-    return { ok: true };
-  });
+  ipcMain.handle(
+    'workflow-patterns-record',
+    async (_e, step: { type: string; detail?: string }) => {
+      const { recordWorkflowStep } = await import('./workflowPatterns');
+      recordWorkflowStep(step);
+      return { ok: true };
+    },
+  );
   ipcMain.handle('workflow-patterns-top', async (_e, limit?: number) => {
     const { getTopPatterns } = await import('./workflowPatterns');
     return getTopPatterns(limit);
@@ -987,11 +1070,14 @@ export function registerIpcHandlers(): void {
     initRegistry(deployedProfileDir());
     return getAgent(name);
   });
-  ipcMain.handle('agents-search', async (_e, query: string, options?: import('./agentRegistry').AgentSearchOptions) => {
-    const { initRegistry, searchAgents } = await import('./agentRegistry');
-    initRegistry(deployedProfileDir());
-    return searchAgents(query, options);
-  });
+  ipcMain.handle(
+    'agents-search',
+    async (_e, query: string, options?: import('./agentRegistry').AgentSearchOptions) => {
+      const { initRegistry, searchAgents } = await import('./agentRegistry');
+      initRegistry(deployedProfileDir());
+      return searchAgents(query, options);
+    },
+  );
   ipcMain.handle('agents-suggest', async (_e, query: string) => {
     const { initRegistry, suggestAgent } = await import('./agentRegistry');
     initRegistry(deployedProfileDir());

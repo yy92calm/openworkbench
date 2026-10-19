@@ -4,9 +4,9 @@
 
 import type { ResearchDecision } from '@workbench/shared';
 
+import { getLogger } from './logging';
 import { fireEvent } from './proactive';
 import { listDecisions } from './research';
-import { getLogger } from './logging';
 import { getStore } from './store';
 
 const log = getLogger('decisionFollowup');

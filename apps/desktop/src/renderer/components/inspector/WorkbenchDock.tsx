@@ -10,6 +10,7 @@ import { MemoryDockPanel } from '@/components/inspector/MemoryDockPanel';
 import { MemoryPanel } from '@/components/inspector/MemoryPanel';
 import { TasksPanel } from '@/components/inspector/TasksPanel';
 import { TerminalPanel } from '@/components/inspector/TerminalPanel';
+import { WikiDockPanel } from '@/components/inspector/WikiDockPanel';
 import { fileInspectorFromBlock } from '@/lib/artifacts';
 import type { ThreadTodo } from '@/lib/threadTasks';
 import { useResizable } from '@/lib/useResizable';
@@ -21,6 +22,7 @@ import { useResizable } from '@/lib/useResizable';
 export function WorkbenchDock({
   artifact,
   memoryId,
+  wikiSlug,
   browserUrl,
   tab,
   dockVisible,
@@ -37,8 +39,9 @@ export function WorkbenchDock({
 }: {
   artifact: ArtifactBlock | null;
   memoryId: string | null;
+  wikiSlug: string | null;
   browserUrl: string;
-  tab: 'context' | 'tasks' | 'memory' | 'browser' | 'terminal' | 'files';
+  tab: 'context' | 'tasks' | 'memory' | 'wiki' | 'browser' | 'terminal' | 'files';
   dockVisible: boolean;
   /** The active session's captured todo list (see runtime's Thread.todos). */
   todos: readonly ThreadTodo[];
@@ -100,9 +103,7 @@ export function WorkbenchDock({
             />
           </div>
         )}
-        {showMemory && (
-          <MemoryPanel memoryId={memoryId!} onClose={onCloseMemory} />
-        )}
+        {showMemory && <MemoryPanel memoryId={memoryId!} onClose={onCloseMemory} />}
         {!showArtifact && !showMemory && (
           <>
             {/* Browser: mounted on first use (user switches to it or an MCP
@@ -131,6 +132,7 @@ export function WorkbenchDock({
               />
             )}
             {tab === 'memory' && <MemoryDockPanel />}
+            {tab === 'wiki' && <WikiDockPanel initialSlug={wikiSlug} />}
             {terminalEverOpened && (
               <div
                 className={tab === 'terminal' ? 'h-full' : 'hidden h-full'}

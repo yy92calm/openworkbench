@@ -168,6 +168,15 @@ const apiObject = {
     ipcRenderer.invoke('auto-memory-recall', query, limit),
   autoMemoryConsolidate: () => ipcRenderer.invoke('auto-memory-consolidate'),
 
+  // LLM Wiki (agent-compiled pages; read-only in the UI)
+  wikiList: () => ipcRenderer.invoke('wiki-list'),
+  wikiGet: (slug: string) => ipcRenderer.invoke('wiki-get', slug),
+  wikiCompile: () => ipcRenderer.invoke('wiki-compile'),
+  wikiStatus: () => ipcRenderer.invoke('wiki-status'),
+  wikiLint: () => ipcRenderer.invoke('wiki-lint'),
+  wikiSearch: (query: string, limit?: number) => ipcRenderer.invoke('wiki-search', query, limit),
+  wikiRecall: (query: string, limit?: number) => ipcRenderer.invoke('wiki-recall', query, limit),
+
   // Session tagging
   sessionExtractTags: (messages: unknown[]) => ipcRenderer.invoke('session-extract-tags', messages),
   sessionSaveTags: (sessionId: string, tags: string[]) =>
@@ -214,8 +223,7 @@ const apiObject = {
   // Workflow patterns
   workflowPatternsRecord: (step: { type: string; detail?: string }) =>
     ipcRenderer.invoke('workflow-patterns-record', step),
-  workflowPatternsTop: (limit?: number) =>
-    ipcRenderer.invoke('workflow-patterns-top', limit),
+  workflowPatternsTop: (limit?: number) => ipcRenderer.invoke('workflow-patterns-top', limit),
   workflowPatternsGet: () => ipcRenderer.invoke('workflow-patterns-get'),
   workflowPatternsConfigGet: () => ipcRenderer.invoke('workflow-patterns-config-get'),
   workflowPatternsConfigSet: (patch: unknown) =>

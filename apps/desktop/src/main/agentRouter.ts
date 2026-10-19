@@ -4,8 +4,8 @@
 
 import type { AgentCard } from '@workbench/shared';
 
-import { getLogger } from './logging';
 import { listAgents } from './agentRegistry';
+import { getLogger } from './logging';
 
 const log = getLogger('agentRouter');
 

@@ -25,12 +25,15 @@ import { ShellCard } from './ShellCard';
 import { StepSummaryRow } from './StepSummaryRow';
 import { ToolCallRow } from './ToolCallRow';
 import { TurnDivider } from './TurnDivider';
+import { WikiRecallCard } from './WikiRecallCard';
 
 export interface BlockHandlers {
   /** Open an artifact in the inspector (live session). */
   onArtifactOpen?: (a: ArtifactBlock) => void;
   /** Open a memory entry in the right panel (live session). */
   onMemoryOpen?: (id: string) => void;
+  /** Open a compiled wiki page in the right panel (live session). */
+  onWikiOpen?: (slug: string) => void;
   /** Forward a figure annotation to the agent (live session). */
   onFigureComment?: (annotation: FigureAnnotation, figureTitle: string) => void;
   /** Live one-line activity of the subagent a task tool spawned (live session). */
@@ -203,6 +206,12 @@ export function renderBlock(
       return (
         <div key={key} className={prevKind ? sp : ''}>
           <MemoryRecallCard block={block} onMemoryOpen={handlers?.onMemoryOpen} />
+        </div>
+      );
+    case 'wiki-recall':
+      return (
+        <div key={key} className={prevKind ? sp : ''}>
+          <WikiRecallCard block={block} onPageOpen={handlers?.onWikiOpen} />
         </div>
       );
   }
