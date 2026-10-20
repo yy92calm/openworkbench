@@ -8,6 +8,7 @@ import {
   decisionsToCsv,
   isReportFile,
   latestReportsPerTheme,
+  mergeReviewAttributions,
   parseDecisions,
   parseReports,
   removeDecision,
@@ -101,6 +102,39 @@ describe('updateDecision', () => {
   it('is a no-op for an unknown id', () => {
     const list = [decision()];
     expect(updateDecision(list, 'nope', { stance: 'watch' })).toEqual(list);
+  });
+});
+
+describe('mergeReviewAttributions', () => {
+  const reviewedAt = '2026-10-20T09:00:00.000Z';
+
+  it('reviews open decisions and leaves already-reviewed ones untouched', () => {
+    const manual = decision({
+      id: 'd2',
+      status: 'reviewed',
+      attribution: { outcome: 'partial', note: '手工归因', reviewedAt: '2026-09-20T00:00:00.000Z' },
+    });
+    const { list, applied } = mergeReviewAttributions(
+      [decision(), manual, decision({ id: 'd3', target: '银行', model: 'industry' })],
+      [
+        { id: 'd1', outcome: 'hit', note: ' 相对强度延续 ' },
+        { id: 'd2', outcome: 'miss', note: '不应覆盖' },
+        { id: 'unknown', outcome: 'hit', note: '不存在' },
+      ],
+      reviewedAt,
+    );
+    expect(applied).toBe(1);
+    expect(list[0]).toMatchObject({
+      status: 'reviewed',
+      attribution: { outcome: 'hit', note: '相对强度延续', reviewedAt },
+    });
+    expect(list[1]).toEqual(manual);
+    expect(list[2].status).toBe('open');
+  });
+
+  it('is a no-op with no updates', () => {
+    const list = [decision()];
+    expect(mergeReviewAttributions(list, [], reviewedAt)).toEqual({ list, applied: 0 });
   });
 });
 

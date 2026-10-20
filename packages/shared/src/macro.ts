@@ -397,6 +397,28 @@ export interface ResearchContext {
   digest: string | null;
 }
 
+/** One review attribution returned by the model (validated before applying). */
+export interface ResearchAttributionUpdate {
+  id: string;
+  outcome: ResearchOutcome;
+  note: string;
+}
+
+/** Parsed review output: human report + machine-applicable updates. */
+export interface ResearchReviewParse {
+  /** The report with the machine blocks removed. */
+  report: string;
+  attributions: ResearchAttributionUpdate[];
+  /** New knowledge.md body, or null when the model omitted/emptied it. */
+  knowledge: string | null;
+}
+
+/** Evidence lines attached to one open decision in the review prompt. */
+export interface ResearchEvidence {
+  decisionId: string;
+  lines: string[];
+}
+
 // ---- Background-generated reports (workspace reports dir) ----
 
 /** One generated report artifact under `<workspace>/.workbench/research/reports/`. */
@@ -788,6 +810,110 @@ export function formatResearchContext(research: ResearchContext | null | undefin
   if (open.length > 0) parts.push(`【未归因决策】\n${open.map(decisionLine).join('\n')}`);
   if (reviewed.length > 0) parts.push(`【已归因决策】\n${reviewed.map(decisionLine).join('\n')}`);
   return parts.join('\n\n');
+}
+
+/** Review-only block: open decisions carry the market evidence after them. */
+export function formatReviewContext(
+  research: ResearchContext | null | undefined,
+  evidence: readonly ResearchEvidence[] = [],
+): string {
+  if (!research) return '';
+  const parts: string[] = [];
+  const stats = researchStats(research.decisions);
+  if (stats.reviewed > 0) {
+    parts.push(
+      `【台账胜率】命中 ${stats.hit} · 部分 ${stats.partial} · 偏离 ${stats.miss} · 胜率 ${
+        stats.winRate ?? 0
+      }%`,
+    );
+  }
+  if (research.digest && research.digest.trim()) {
+    parts.push(`【知识资产摘要】\n${research.digest.trim().slice(0, 4000)}`);
+  }
+  const evidenceById = new Map(evidence.map((e) => [e.decisionId, e.lines]));
+  const open = research.decisions.filter((d) => d.status === 'open').slice(0, 10);
+  if (open.length > 0) {
+    const lines = open.flatMap((d) => {
+      const head = decisionLine(d).replace(/^- /, `- id=${d.id} `);
+      const evidenceLines = (evidenceById.get(d.id) ?? []).map((line) => `  - ${line}`);
+      return [head, ...evidenceLines];
+    });
+    parts.push(`【未归因决策与决策后证据】\n${lines.join('\n')}`);
+  }
+  const reviewed = research.decisions.filter((d) => d.status === 'reviewed').slice(0, 3);
+  if (reviewed.length > 0) parts.push(`【已归因决策】\n${reviewed.map(decisionLine).join('\n')}`);
+  return parts.join('\n\n');
+}
+
+const REVIEW_ATTRIBUTION_BLOCK = /<research-attributions>([\s\S]*?)<\/research-attributions>/i;
+const REVIEW_KNOWLEDGE_BLOCK = /<research-knowledge>([\s\S]*?)<\/research-knowledge>/i;
+const REVIEW_OUTCOMES: readonly ResearchOutcome[] = ['hit', 'partial', 'miss'];
+export const MAX_REVIEW_NOTE_CHARS = 500;
+export const MAX_REVIEW_KNOWLEDGE_CHARS = 20_000;
+
+function stripOuterFence(text: string): string {
+  const trimmed = text.trim();
+  const fenced = trimmed.match(/^```[a-z]*\n([\s\S]*?)\n```$/i);
+  return (fenced ? fenced[1] : trimmed).trim();
+}
+
+function attributionUpdate(
+  item: unknown,
+  allowed: ReadonlySet<string>,
+): ResearchAttributionUpdate | null {
+  if (!item || typeof item !== 'object') return null;
+  const raw = item as Record<string, unknown>;
+  const id = typeof raw.id === 'string' ? raw.id.trim() : '';
+  const outcome = raw.outcome;
+  const note = typeof raw.note === 'string' ? raw.note.trim() : '';
+  if (!allowed.has(id) || !REVIEW_OUTCOMES.includes(outcome as ResearchOutcome) || !note) {
+    return null;
+  }
+  return {
+    id,
+    outcome: outcome as ResearchOutcome,
+    note: note.slice(0, MAX_REVIEW_NOTE_CHARS),
+  };
+}
+
+/**
+ * Parse the review model's marker blocks. Unknown decision ids, illegal
+ * outcomes and empty notes are dropped; a missing/malformed block means "no
+ * change" rather than an error, so a bad response can never corrupt the ledger
+ * or the knowledge asset.
+ */
+export function parseResearchReview(
+  markdown: string,
+  openIds: readonly string[],
+): ResearchReviewParse {
+  const text = typeof markdown === 'string' ? markdown : '';
+  const allowed = new Set(openIds);
+  const attributions: ResearchAttributionUpdate[] = [];
+  const attrMatch = text.match(REVIEW_ATTRIBUTION_BLOCK);
+  if (attrMatch) {
+    try {
+      const raw = JSON.parse(stripOuterFence(attrMatch[1]));
+      if (Array.isArray(raw)) {
+        const byId = new Map<string, ResearchAttributionUpdate>();
+        for (const item of raw) {
+          const update = attributionUpdate(item, allowed);
+          if (update) byId.set(update.id, update);
+        }
+        attributions.push(...byId.values());
+      }
+    } catch {
+      /* malformed JSON behaves like a missing block */
+    }
+  }
+  const knowledgeMatch = text.match(REVIEW_KNOWLEDGE_BLOCK);
+  const knowledgeText = stripOuterFence(knowledgeMatch?.[1] ?? '');
+  const knowledge = knowledgeText ? knowledgeText.slice(0, MAX_REVIEW_KNOWLEDGE_CHARS) : null;
+  const report = text
+    .replace(REVIEW_ATTRIBUTION_BLOCK, '')
+    .replace(REVIEW_KNOWLEDGE_BLOCK, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+  return { report, attributions, knowledge };
 }
 
 /** Core reference lines for the dashboard's "引用核心指标" action. */
@@ -1207,17 +1333,29 @@ export function buildIndustryPrompt(
   return parts.filter(Boolean).join('\n\n');
 }
 
-export function buildReviewPrompt(research?: ResearchContext | null): string {
-  const block = formatResearchContext(research) || '（暂无决策与知识资产记录）';
+export function buildReviewPrompt(
+  research?: ResearchContext | null,
+  evidence?: readonly ResearchEvidence[],
+): string {
+  const block = formatReviewContext(research, evidence ?? []) || '（暂无决策与知识资产记录）';
   return [
     '请做一次「投研复盘与再训练」。',
     block,
     [
       '【要求】',
-      '1. 逐条复盘未归因决策：当时依据是否成立、偏差来源（数据/模型/执行）；',
+      '1. 逐条复盘「未归因决策」：结合决策后证据判断当时依据是否成立、偏差来源（数据/模型/执行）；证据不足或决策不足 2 个交易日时不要强行归因，保留在未归因列表；',
       '2. 提炼可复用经验，并指出需要修订的旧条目；',
-      '3. 使用 write 工具更新 `.workbench/research/knowledge.md`（新增/修订条目，保持精炼，保留仍有效的结论）；',
-      '4. 输出「修改摘要 + 下一步跟踪清单」。',
+      '3. 不要使用 write/edit 工具修改工作区文件（.workbench 受保护）；应用会从下面的标记块自动落盘；',
+      '4. 输出「修改摘要 + 下一步跟踪清单」；',
+      '5. 最后原样输出两个标记块（缺少标记块时该部分不会生效；没有未归因决策时归因数组输出 []）：',
+      '<research-attributions>',
+      '[{"id":"决策 id","outcome":"hit|partial|miss","note":"一句话复盘（≤200字）"}]',
+      '</research-attributions>',
+      '<research-knowledge>',
+      '# 投研知识资产',
+      '',
+      '（保留仍有效的旧结论，新增/修订本次经验；精炼，≤4000字）',
+      '</research-knowledge>',
     ].join('\n'),
   ].join('\n\n');
 }
@@ -1231,6 +1369,7 @@ export function buildMacroPrompt(
   themeId: MacroThemeId,
   snapshot: MacroDashboardSnapshot | null,
   research?: ResearchContext | null,
+  evidence?: readonly ResearchEvidence[],
 ): string {
   switch (themeId) {
     case 'rotation-daily':
@@ -1238,7 +1377,7 @@ export function buildMacroPrompt(
     case 'rotation-weekly':
       return buildRotationPrompt(snapshot, research);
     case 'review-weekly':
-      return buildReviewPrompt(research);
+      return buildReviewPrompt(research, evidence);
     default:
       return '';
   }

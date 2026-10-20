@@ -18,7 +18,6 @@ import {
   buildIndustryPrompt,
   buildMacroReportMarkdown,
   buildMacroSignalView,
-  buildReviewPrompt,
   buildRotationPrompt,
   buildSwConclusion,
   digestCharCount,
@@ -45,6 +44,7 @@ import {
   macroIndustry,
   macroRegenerate,
   macroSeries,
+  onResearchUpdated,
   researchDecisions,
   researchDigest,
 } from '@/lib/electron';
@@ -247,6 +247,10 @@ export function MacroInsightsPage() {
     void reloadResearch();
   }, [reloadResearch]);
 
+  // A finished review writes attributions + knowledge.md in the main process;
+  // refresh the ledger and digest without making the user reload the page.
+  useEffect(() => onResearchUpdated(() => void reloadResearch()), [reloadResearch]);
+
   /** The research context injected into every model prompt (state-backed). */
   const researchCtx = (): ResearchContext => ({ decisions, digest });
 
@@ -270,8 +274,6 @@ export function MacroInsightsPage() {
     if (!industry) return;
     openSession(buildIndustryPrompt(industry, snapshot, researchCtx()));
   };
-
-  const reviewLoop = async () => openSession(buildReviewPrompt(researchCtx()));
 
   /** Re-run a theme's background task (generation belongs to the backend). */
   const regenerate = async (themeId: MacroThemeId) => {
@@ -1140,7 +1142,6 @@ export function MacroInsightsPage() {
             decisions={decisions}
             onChanged={() => void reloadResearch()}
             onRegenerate={() => void regenerate('review-weekly')}
-            onReview={() => void reviewLoop()}
           />
         </section>
 

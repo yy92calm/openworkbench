@@ -5,6 +5,7 @@ import type {
   MacroReportMeta,
   MacroThemeId,
   ResearchAttribution,
+  ResearchAttributionUpdate,
   ResearchDecision,
   ResearchStance,
 } from '@workbench/shared';
@@ -49,6 +50,35 @@ export function applyAttribution(
   attribution: ResearchAttribution,
 ): ResearchDecision[] {
   return list.map((d) => (d.id === id ? { ...d, status: 'reviewed' as const, attribution } : d));
+}
+
+/**
+ * Apply a batch of review attributions. Only open decisions are touched, so a
+ * manual attribution (or a concurrent edit) is never overwritten.
+ */
+export function mergeReviewAttributions(
+  list: ResearchDecision[],
+  updates: readonly ResearchAttributionUpdate[],
+  reviewedAt: string,
+): { list: ResearchDecision[]; applied: number } {
+  if (updates.length === 0) return { list, applied: 0 };
+  const byId = new Map(updates.map((u) => [u.id, u]));
+  let applied = 0;
+  const next = list.map((d) => {
+    const update = byId.get(d.id);
+    if (!update || d.status !== 'open') return d;
+    applied++;
+    return {
+      ...d,
+      status: 'reviewed' as const,
+      attribution: {
+        outcome: update.outcome,
+        note: update.note.trim(),
+        reviewedAt,
+      },
+    };
+  });
+  return { list: applied > 0 ? next : list, applied };
 }
 
 /** Edit target / stance / thesis; attribution and status stay untouched. */

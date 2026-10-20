@@ -15,6 +15,7 @@ import {
   type MacroReportMeta,
   macroTheme,
   type MacroThemeId,
+  parseResearchReview,
   type ResearchOutcome,
   type ResearchStance,
 } from '@workbench/shared';
@@ -42,6 +43,7 @@ import * as provenance from './provenance';
 import { RelayHost, type RelayHostConfig } from './relayHost';
 import {
   addDecision,
+  applyReviewAttributions,
   attributeDecision,
   deleteDecision,
   exportDecisionsCsv,
@@ -51,9 +53,11 @@ import {
   listMacroReports,
   readKnowledgeDigest,
   readMacroReport,
+  saveKnowledgeDigest,
   saveMacroReport,
   updateDecision,
 } from './research';
+import { buildDecisionEvidence } from './researchEvidence';
 import { roomPeer } from './roomPeer';
 import { getSandboxStatus } from './sandbox/manager';
 import {
@@ -126,27 +130,47 @@ function messageText(message: AgentHistoryMessage): string {
  * tell the renderers. Runs in the background task path, so failures only log —
  * the briefing notification still goes out either way.
  */
+interface CapturedReport {
+  meta: MacroReportMeta | null;
+  /** Present for review runs: what the app applied from the marker blocks. */
+  review?: { attributions: number; knowledgeChars: number };
+}
+
 async function captureMacroReport(
   client: AgentRuntime,
   themeId: MacroThemeId,
   sessionId: string,
-): Promise<MacroReportMeta | null> {
+): Promise<CapturedReport> {
   try {
     const messages = await client.getMessages(sessionId);
     const answers = messages
       .filter((m) => m.role === 'assistant')
       .map(messageText)
       .filter(Boolean);
-    const markdown = answers[answers.length - 1];
-    if (!markdown) return null;
+    let markdown = answers[answers.length - 1];
+    if (!markdown) return { meta: null };
+
+    let review: CapturedReport['review'];
+    if (themeId === 'review-weekly') {
+      const openIds = listDecisions()
+        .filter((d) => d.status === 'open')
+        .map((d) => d.id);
+      const parsed = parseResearchReview(markdown, openIds);
+      const { applied } = applyReviewAttributions(parsed.attributions);
+      const knowledge = parsed.knowledge ? saveKnowledgeDigest(parsed.knowledge) : null;
+      if (parsed.report) markdown = parsed.report;
+      review = { attributions: applied, knowledgeChars: knowledge?.chars ?? 0 };
+      if (applied > 0 || knowledge) broadcast('research-updated');
+    }
+
     const meta = saveMacroReport({ themeId, sessionId, markdown });
     if (meta) broadcast('macro-reports-updated');
-    return meta;
+    return { meta, review };
   } catch (err) {
     getLogger().warn(
       `[macro] report capture failed for ${themeId}: ${err instanceof Error ? err.message : String(err)}`,
     );
-    return null;
+    return { meta: null };
   }
 }
 
@@ -207,7 +231,12 @@ export function registerIpcHandlers(): void {
           let prompt = task.prompt;
           if (task.macroTheme) {
             const snapshot = await macroStore.refreshAndWait();
-            const built = buildMacroPrompt(task.macroTheme, snapshot, getResearchContext());
+            const research = getResearchContext();
+            const evidence =
+              task.macroTheme === 'review-weekly'
+                ? await buildDecisionEvidence(research.decisions)
+                : [];
+            const built = buildMacroPrompt(task.macroTheme, snapshot, research, evidence);
             if (built) prompt = built;
           }
           const sessionId = await client.createSession();
@@ -231,12 +260,21 @@ export function registerIpcHandlers(): void {
           if (task.macroTheme) {
             // Persist the report first: the page lists it and the briefing
             // notification points back at the session it was generated in.
-            const saved = await captureMacroReport(client, task.macroTheme, sessionId);
+            const captured = await captureMacroReport(client, task.macroTheme, sessionId);
             const theme = macroTheme(task.macroTheme);
+            const reviewNote =
+              captured.review &&
+              (captured.review.attributions > 0 || captured.review.knowledgeChars > 0)
+                ? ` · 自动归因 ${captured.review.attributions} 条${
+                    captured.review.knowledgeChars > 0 ? ' · 知识资产已更新' : ''
+                  }`
+                : '';
             const notification = pushBriefing({
               themeId: task.macroTheme,
               sessionId,
-              title: `${theme?.title ?? '宏观洞察'} · ${saved ? '报告已生成' : '简报已生成'}`,
+              title: `${theme?.title ?? '宏观洞察'} · ${
+                captured.meta ? '报告已生成' : '简报已生成'
+              }${reviewNote}`,
             });
             broadcast('macro-notification', notification);
           }

@@ -510,6 +510,8 @@ export interface ElectronAPI {
     themeId: MacroThemeId,
   ) => Promise<{ ok: true; taskId: string } | { ok: false; reason: string }>;
   onMacroReports: (callback: () => void) => () => void;
+  /** Review finished and the ledger / knowledge asset changed on disk. */
+  onResearchUpdated: (callback: () => void) => () => void;
 
   /** Fetch page content from a URL (browser service). */
   browserFetch: (url: string) => Promise<string | null>;

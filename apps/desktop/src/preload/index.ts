@@ -320,6 +320,11 @@ const apiObject = {
     ipcRenderer.on('macro-reports-updated', handler);
     return () => ipcRenderer.removeListener('macro-reports-updated', handler);
   },
+  onResearchUpdated: (callback: () => void) => {
+    const handler = () => callback();
+    ipcRenderer.on('research-updated', handler);
+    return () => ipcRenderer.removeListener('research-updated', handler);
+  },
   onMacroDashboard: (callback: (snapshot: unknown) => void) => {
     const handler = (_event: Electron.IpcRendererEvent, snapshot: unknown) => callback(snapshot);
     ipcRenderer.on('macro-dashboard-updated', handler);

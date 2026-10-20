@@ -67,12 +67,10 @@ export function DecisionLedger({
   decisions,
   onChanged,
   onRegenerate,
-  onReview,
 }: {
   decisions: ResearchDecision[];
   onChanged: () => void;
   onRegenerate: () => void;
-  onReview: () => void;
 }) {
   const [target, setTarget] = useState<ResearchDecision | null>(null);
   const [outcome, setOutcome] = useState<ResearchOutcome>('hit');
@@ -163,6 +161,7 @@ export function DecisionLedger({
           </span>
           · 工作区 decisions.jsonl
         </span>
+        <span className="text-[11px] text-muted/80">复盘任务完成后自动回填归因并更新知识资产</span>
         <span className="flex-1" />
         <span className="hidden items-center gap-2 group-hover:flex">
           <button
@@ -187,17 +186,10 @@ export function DecisionLedger({
           <button
             type="button"
             onClick={onRegenerate}
-            title="立即在后台重跑「复盘周报」"
+            title="立即在后台运行复盘，完成后自动回填归因并更新知识资产"
             className="rounded-input border border-border px-2.5 py-1 text-[12px] text-text hover:bg-surface-2"
           >
-            重新生成
-          </button>
-          <button
-            type="button"
-            onClick={onReview}
-            className="rounded-input border border-border px-2.5 py-1 text-[12px] text-text hover:bg-surface-2"
-          >
-            交给对话解析
+            后台复盘并回填
           </button>
         </span>
       </div>

@@ -1,5 +1,6 @@
 // Research loop IO: the decision ledger + knowledge asset live in the
-// workspace (they are organizational assets the agent can also read/write).
+// workspace (organizational assets the agent may read). Writes stay in the
+// main process because the sandbox protects `.workbench` from the agent.
 //   <workspace>/.workbench/research/decisions.jsonl
 //   <workspace>/.workbench/research/knowledge.md
 //   <workspace>/.workbench/research/reports/   (background-generated reports)
@@ -11,6 +12,7 @@ import { dirname, join } from 'node:path';
 import type {
   MacroReportMeta,
   MacroThemeId,
+  ResearchAttributionUpdate,
   ResearchContext,
   ResearchDecision,
   ResearchOutcome,
@@ -24,6 +26,7 @@ import {
   decisionsToCsv,
   isReportFile,
   latestReportsPerTheme,
+  mergeReviewAttributions,
   parseDecisions,
   parseReports,
   removeDecision,
@@ -43,6 +46,8 @@ const REPORTS_INDEX = 'index.json';
 /** Index cap only: old report files stay on disk. */
 const REPORTS_INDEX_CAP = 100;
 const DIGEST_CAP = 4000;
+/** Hard cap for the persisted knowledge asset (prompts still take 4000). */
+const KNOWLEDGE_CAP = 20_000;
 
 function decisionsPath(): string {
   return join(workspaceDir(), RESEARCH_DIR, DECISIONS_FILE);
@@ -133,7 +138,7 @@ export function exportDecisionsCsv(): { path: string; count: number } | null {
   if (list.length === 0) return null;
   const path = researchFilePath('decisions.csv');
   mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, decisionsToCsv(list), 'utf-8');
+  atomicWriteFile(path, decisionsToCsv(list));
   return { path: `${RESEARCH_DIR}/decisions.csv`, count: list.length };
 }
 
@@ -151,7 +156,7 @@ export function exportMacroReport(markdown: string): { path: string } | null {
   const name = `macro-report-${fileStamp()}.md`;
   const path = researchFilePath(name);
   mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, `${text}\n`, 'utf-8');
+  atomicWriteFile(path, `${text}\n`);
   return { path: `${RESEARCH_DIR}/${name}` };
 }
 
@@ -217,6 +222,39 @@ export function readKnowledgeDigest(): string | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * Persist the knowledge asset produced by the review model. This is the only
+ * writer: the agent cannot write under `.workbench` (sandbox-protected), so the
+ * review prompt returns a marker block and the main process owns the file.
+ * Empty input is a no-op that keeps the existing asset intact.
+ */
+export function saveKnowledgeDigest(markdown: string): { chars: number; path: string } | null {
+  const text = markdown.trim();
+  if (!text) return null;
+  const clipped = text.length > KNOWLEDGE_CAP ? text.slice(0, KNOWLEDGE_CAP) : text;
+  const path = knowledgePath();
+  mkdirSync(dirname(path), { recursive: true });
+  atomicWriteFile(path, `${clipped}\n`);
+  return { chars: digestCharCount(clipped), path: `${RESEARCH_DIR}/${KNOWLEDGE_FILE}` };
+}
+
+/**
+ * Apply validated review attributions to the ledger. Only open decisions are
+ * touched; unknown ids and already-reviewed entries are ignored by the merge.
+ */
+export function applyReviewAttributions(updates: readonly ResearchAttributionUpdate[]): {
+  applied: number;
+} {
+  if (updates.length === 0) return { applied: 0 };
+  const { list, applied } = mergeReviewAttributions(
+    listDecisions(),
+    updates,
+    new Date().toISOString(),
+  );
+  if (applied > 0) writeDecisions(list);
+  return { applied };
 }
 
 /** Everything the model prompts inject from the loop. */

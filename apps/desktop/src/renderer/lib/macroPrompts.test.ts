@@ -20,14 +20,17 @@ import {
   buildSwConclusion,
   computeRotation,
   emptyMacroSnapshot,
+  formatReviewContext,
   type MacroBoard,
   type MacroDashboardSnapshot,
   type MacroIndustryDetail,
   type MacroKlinePoint,
   type MacroMarginPoint,
   type MacroQuote,
+  parseResearchReview,
   type ResearchContext,
   type ResearchDecision,
+  type ResearchEvidence,
   researchStats,
   type RotationRow,
   type RotationSignal,
@@ -649,15 +652,110 @@ describe('buildIndustryPrompt', () => {
 });
 
 describe('buildReviewPrompt', () => {
-  it('asks the agent to update the knowledge asset', () => {
+  it('returns a marker-block protocol instead of asking the agent to write files', () => {
     const prompt = buildReviewPrompt(research);
     expect(prompt).toContain('复盘与再训练');
-    expect(prompt).toContain('.workbench/research/knowledge.md');
-    expect(prompt).toContain('轮动口径');
+    expect(prompt).toContain('<research-attributions>');
+    expect(prompt).toContain('<research-knowledge>');
+    expect(prompt).toContain('不要使用 write/edit 工具');
+  });
+
+  it('attaches decision ids and evidence lines', () => {
+    const evidence: ResearchEvidence[] = [
+      { decisionId: research.decisions[0].id, lines: ['决策日至今：行业 +2.00%'] },
+    ];
+    const prompt = buildReviewPrompt(research, evidence);
+    expect(prompt).toContain(`id=${research.decisions[0].id}`);
+    expect(prompt).toContain('决策日至今：行业 +2.00%');
   });
 
   it('works with no research context', () => {
     expect(buildReviewPrompt(null)).toContain('暂无决策与知识资产记录');
+  });
+});
+
+describe('parseResearchReview', () => {
+  const reviewed = { id: 'd1', outcome: 'hit' as const, note: '相对强度延续' };
+
+  it('extracts attributions and knowledge, and strips both blocks from the report', () => {
+    const raw = [
+      '修改摘要：维持信息超配。',
+      '<research-attributions>',
+      JSON.stringify([reviewed]),
+      '</research-attributions>',
+      '<research-knowledge>',
+      '# 投研知识资产',
+      '## 有效经验',
+      '- 相对强度延续时不要过早止盈。',
+      '</research-knowledge>',
+    ].join('\n');
+    const parsed = parseResearchReview(raw, ['d1']);
+    expect(parsed.report).toBe('修改摘要：维持信息超配。');
+    expect(parsed.attributions).toEqual([reviewed]);
+    expect(parsed.knowledge).toContain('相对强度延续时不要过早止盈');
+  });
+
+  it('drops unknown ids, illegal outcomes and empty notes', () => {
+    const raw = [
+      '<research-attributions>',
+      JSON.stringify([
+        { ...reviewed, id: 'nope' },
+        { ...reviewed, outcome: 'maybe' },
+        { ...reviewed, note: '   ' },
+        { ...reviewed, id: 'd2', note: '有效' },
+      ]),
+      '</research-attributions>',
+    ].join('\n');
+    const parsed = parseResearchReview(raw, ['d1', 'd2']);
+    expect(parsed.attributions).toEqual([{ ...reviewed, id: 'd2', note: '有效' }]);
+    expect(parsed.knowledge).toBeNull();
+  });
+
+  it('keeps the last duplicate and ignores malformed JSON', () => {
+    const raw = [
+      '<research-attributions>',
+      JSON.stringify([reviewed, { ...reviewed, outcome: 'miss', note: '修订后' }]),
+      '</research-attributions>',
+    ].join('\n');
+    expect(parseResearchReview(raw, ['d1']).attributions).toEqual([
+      { ...reviewed, outcome: 'miss', note: '修订后' },
+    ]);
+    const broken = '<research-attributions>[not json</research-attributions>';
+    expect(parseResearchReview(broken, ['d1']).attributions).toEqual([]);
+  });
+
+  it('accepts fenced code inside the marker blocks', () => {
+    const raw = [
+      '<research-attributions>',
+      '```json',
+      JSON.stringify([reviewed]),
+      '```',
+      '</research-attributions>',
+      '<research-knowledge>',
+      '```markdown',
+      '# 投研知识资产',
+      '```',
+      '</research-knowledge>',
+    ].join('\n');
+    const parsed = parseResearchReview(raw, ['d1']);
+    expect(parsed.attributions).toEqual([reviewed]);
+    expect(parsed.knowledge).toBe('# 投研知识资产');
+  });
+
+  it('returns the original text when no marker blocks are present', () => {
+    const parsed = parseResearchReview('普通复盘报告', ['d1']);
+    expect(parsed.report).toBe('普通复盘报告');
+    expect(parsed.attributions).toEqual([]);
+    expect(parsed.knowledge).toBeNull();
+  });
+});
+
+describe('formatReviewContext', () => {
+  it('lists only open decisions with evidence, plus recent reviewed ones', () => {
+    const text = formatReviewContext(research, [{ decisionId: 'd1', lines: ['超额 +1.20%'] }]);
+    expect(text).toContain('id=d1');
+    expect(text).toContain('超额 +1.20%');
+    expect(text).toContain('【已归因决策】');
   });
 });
 

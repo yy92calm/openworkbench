@@ -499,6 +499,14 @@ export function onMacroReports(cb: () => void): () => void {
   }
 }
 
+export function onResearchUpdated(cb: () => void): () => void {
+  try {
+    return api().onResearchUpdated(cb);
+  } catch {
+    return () => {};
+  }
+}
+
 /** Industry model: on-demand board detail (constituent valuation + history). */
 export async function macroIndustry(board: MacroBoard): Promise<MacroIndustryDetail | null> {
   try {
