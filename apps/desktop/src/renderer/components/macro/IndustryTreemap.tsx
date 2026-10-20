@@ -12,8 +12,8 @@ import { squarify } from '@/lib/treemap';
 const HEIGHT = 380;
 
 /** Static opacity buckets (Tailwind needs the literals). */
-const RISE_LEVELS = ['bg-rise/10', 'bg-rise/25', 'bg-rise/40', 'bg-rise/60'] as const;
-const FALL_LEVELS = ['bg-fall/10', 'bg-fall/25', 'bg-fall/40', 'bg-fall/60'] as const;
+const RISE_LEVELS = ['bg-rise/20', 'bg-rise/40', 'bg-rise/60', 'bg-rise/80'] as const;
+const FALL_LEVELS = ['bg-fall/20', 'bg-fall/40', 'bg-fall/60', 'bg-fall/80'] as const;
 
 function level(pct: number): number {
   const abs = Math.abs(pct);
