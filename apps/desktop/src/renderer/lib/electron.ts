@@ -9,6 +9,7 @@ import type {
   MacroKlinePoint,
   MacroNotification,
   MacroReportMeta,
+  MacroReportSubject,
   MacroThemeId,
   ResearchDecision,
   ResearchOutcome,
@@ -475,6 +476,39 @@ export async function macroReportRead(
 ): Promise<{ file: string; markdown: string } | null> {
   try {
     return (await api().macroReportRead(file)) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** One saved industry/board report (meta + body). */
+export interface SubjectReportView {
+  meta: MacroReportMeta;
+  markdown: string;
+}
+
+/** The newest saved report for one industry/board; null when it has none. */
+export async function macroSubjectReport(
+  subject: MacroReportSubject,
+): Promise<SubjectReportView | null> {
+  try {
+    return (await api().macroSubjectReport(subject)) ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Persist the finished session's answer as this subject's report. Called by the
+ * renderer when the generation turn goes idle; main reads the session so the
+ * saved body is the authoritative answer, not renderer-held thread state.
+ */
+export async function macroSubjectReportCapture(
+  subject: MacroReportSubject,
+  sessionId: string,
+): Promise<SubjectReportView | null> {
+  try {
+    return (await api().macroSubjectReportCapture(subject, sessionId)) ?? null;
   } catch {
     return null;
   }

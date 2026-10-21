@@ -419,11 +419,50 @@ export interface ResearchEvidence {
   lines: string[];
 }
 
-// ---- Background-generated reports (workspace reports dir) ----
+// ---- Generated reports (workspace reports dir) ----
 
-/** One generated report artifact under `<workspace>/.workbench/research/reports/`. */
+/** Which industry table a subject report came from. */
+export type MacroReportSubjectKind = 'board' | 'sw' | 'csi';
+
+/** One industry/board a report was generated for. */
+export interface MacroReportSubject {
+  kind: MacroReportSubjectKind;
+  /** Eastmoney board code (BK0448) / Shenwan code (801080) / CSI secid (2.931052). */
+  code: string;
+  name: string;
+}
+
+export const SUBJECT_KIND_LABEL: Record<MacroReportSubjectKind, string> = {
+  board: '东财板块',
+  sw: '申万一级',
+  csi: '中证行业',
+};
+
+/** Identity of a subject report (the index may hold several kinds per name). */
+export function subjectKey(subject: MacroReportSubject): string {
+  return `${subject.kind}:${subject.code}`;
+}
+
+/** Validate renderer-supplied subject input; null when it is not usable. */
+export function asReportSubject(value: unknown): MacroReportSubject | null {
+  if (!value || typeof value !== 'object') return null;
+  const v = value as Partial<MacroReportSubject>;
+  if (v.kind !== 'board' && v.kind !== 'sw' && v.kind !== 'csi') return null;
+  if (typeof v.code !== 'string' || !v.code.trim()) return null;
+  if (typeof v.name !== 'string' || !v.name.trim()) return null;
+  return { kind: v.kind, code: v.code.trim(), name: v.name.trim() };
+}
+
+/**
+ * One generated report artifact under `<workspace>/.workbench/research/reports/`.
+ * Exactly one family applies: a theme task report (`themeId`) or an
+ * industry/board report (`subject`).
+ */
 export interface MacroReportMeta {
-  themeId: MacroThemeId;
+  /** Background macro theme task; absent for subject reports. */
+  themeId?: MacroThemeId;
+  /** Industry/board the report is about; absent for theme reports. */
+  subject?: MacroReportSubject;
   /** File name inside the reports directory (validated again on read). */
   file: string;
   createdAt: string;
@@ -1289,6 +1328,10 @@ export function buildRotationPrompt(
   return rotationBody('行业轮动周报', snapshot, research);
 }
 
+/** Shared tail rule: the app owns report persistence, the model must not write. */
+const REPORT_OUTPUT_RULE =
+  '直接在回答里输出报告正文，不要调用 write/edit 等写文件工具（.workbench 受保护，报告由应用自动落盘）。';
+
 export function buildIndustryPrompt(
   detail: MacroIndustryDetail,
   snapshot: MacroDashboardSnapshot | null,
@@ -1327,10 +1370,87 @@ export function buildIndustryPrompt(
       '2. 给出估值区间判断与关键假设；数据缺失或口径近似时明确说明；',
       '3. 与最近决策及知识摘要保持口径一致，冲突处说明理由；',
       '4. 输出结构：定价结论 → 三要素依据 → 估值区间与风险 → 跟踪指标；',
-      '5. 篇幅约 500–800 字，可用 markdown 表格。',
+      '5. 篇幅约 500–800 字，可用 markdown 表格；',
+      `6. ${REPORT_OUTPUT_RULE}`,
     ].join('\n'),
   ];
   return parts.filter(Boolean).join('\n\n');
+}
+
+/** Report body for one industry subject (Shenwan level-1 / CSI rotation row). */
+function subjectReportBody(
+  title: string,
+  name: string,
+  code: string,
+  metricLines: readonly string[],
+  snapshot: MacroDashboardSnapshot | null,
+  research?: ResearchContext | null,
+): string {
+  const macro = snapshot ? buildMacroContextLines(snapshot) : [];
+  const researchBlock = formatResearchContext(research);
+  const parts = [
+    `请生成一份「${title}」：${name}（${code}）。`,
+    `【标的数据】\n${metricLines.join('\n')}`,
+    macro.length > 0 ? `【宏观输入】\n${macro.join('\n')}` : '【宏观输入】（未就绪）',
+    researchBlock,
+    [
+      '【要求】',
+      '1. 只讨论这一个行业，不要泛泛罗列全市场；',
+      '2. 输出结构：配置结论（超配/低配/观望）→ 信号依据 → 风险与失效条件 → 跟踪指标；',
+      '3. 依据要引用上面给出的评分、动量、相对强度、估值与资金数据；数据缺失时明确说明，不要编造；',
+      '4. 与最近决策及知识摘要保持口径一致，冲突处说明理由；',
+      '5. 篇幅约 400–700 字，可用 markdown 表格；',
+      `6. ${REPORT_OUTPUT_RULE}`,
+    ].join('\n'),
+  ];
+  return parts.filter(Boolean).join('\n\n');
+}
+
+/** One Shenwan level-1 industry: rotation metrics + valuation as of `asOf`. */
+export function buildSwReportPrompt(
+  row: SwIndustryRow,
+  snapshot: MacroDashboardSnapshot | null,
+  research?: ResearchContext | null,
+): string {
+  const lines = [
+    `- 行情（今日实时）：涨跌 ${fmtPct(row.changePct)}，换手 ${fmtPct(row.turnover)}，成交额占比 ${fmtPct(row.amountShare)}`,
+    `- 估值与基本面（截止 ${row.asOf}）：PE ${fmtNum(row.pe)}，PB ${fmtNum(row.pb)}，股息率 ${fmtPct(row.dividend)}，流通市值 ${fmtNum(row.mcap, 0)} 亿`,
+    `- 轮动口径（截止 ${row.asOf}）：60 日 ${fmtPct01(row.ret60)}，相对沪深300 ${fmtPct01(row.rs60)}，趋势 ${trendText(row.trend)}，年化波动 ${fmtPct01(row.vol60)}`,
+    `- 评分：${scoreText(row.score, row.signal, row.scoreDelta ?? null)}（申万一级行业内百分位）`,
+  ];
+  return subjectReportBody('申万一级行业报告', row.name, row.code, lines, snapshot, research);
+}
+
+/** One CSI top-10 industry index row of the rotation model. */
+export function buildRotationReportPrompt(
+  row: RotationRow,
+  snapshot: MacroDashboardSnapshot | null,
+  research?: ResearchContext | null,
+): string {
+  const history = row.scoreHistory.filter((n) => Number.isFinite(n));
+  const lines = [
+    `- 动量与相对强度：60 日 ${fmtPct01(row.ret60)}，相对沪深300 ${fmtPct01(row.rs60)}，趋势 ${trendText(row.trend)}，年化波动 ${fmtPct01(row.vol60)}`,
+    `- 评分：${scoreText(row.score, row.signal, row.scoreDelta)}（中证十大行业内百分位）`,
+    history.length > 1
+      ? `- 近 ${history.length} 日评分走势（旧 → 新）：${history.join(' → ')}`
+      : '- 近 20 日评分走势：历史数据未就绪',
+  ];
+  return subjectReportBody('中证行业报告', row.name, row.secid, lines, snapshot, research);
+}
+
+function trendText(trend: boolean | null): string {
+  if (trend === null) return '数据不足';
+  return trend ? '20 日线上' : '20 日线下';
+}
+
+function scoreText(
+  score: number | null,
+  signal: RotationSignal | null,
+  delta: number | null,
+): string {
+  if (score === null || signal === null) return '历史数据不足，未参与评分';
+  const deltaText = delta ? `，较上一交易日 ${delta > 0 ? '+' : ''}${delta}` : '';
+  return `${score}（${signalLabel(signal)}）${deltaText}`;
 }
 
 export function buildReviewPrompt(

@@ -1,8 +1,10 @@
-import type { RotationRow, RotationSignal } from '@workbench/shared';
+import type { MacroReportSubject, RotationRow, RotationSignal } from '@workbench/shared';
+import { useState } from 'react';
 
 import { cn } from '@/lib/cn';
 
 import { Sparkline } from './IndicatorCard';
+import { SubjectReportDialog } from './SubjectReportDialog';
 
 function pct(v: number | null): string {
   return v === null ? '—' : `${(v * 100).toFixed(2)}%`;
@@ -72,106 +74,147 @@ function ScoreCell({ row }: { row: RotationRow }) {
 
 const GRID = 'grid-cols-[1.2fr_0.7fr_0.8fr_0.6fr_0.55fr_0.6fr_0.9fr_1.1fr]';
 
-/** Rotation model table: transparent signals per CSI top-10 industry. */
+function csiSubject(row: RotationRow): MacroReportSubject {
+  return { kind: 'csi', code: row.secid, name: row.name };
+}
+
+/** One-line metrics recap shown under the report dialog title. */
+function rowSummary(r: RotationRow): string {
+  const bits = [
+    `60 日 ${pct(r.ret60)}`,
+    `相对沪深300 ${pct(r.rs60)}`,
+    `波动 ${fmtVol(r.vol60)}`,
+    r.trend === null ? '趋势 —' : `趋势 ${r.trend ? '20 日线上' : '20 日线下'}`,
+    r.score === null || r.signal === null
+      ? '未参与评分'
+      : `评分 ${r.score}（${SIGNAL_LABEL[r.signal]}）`,
+  ];
+  return bits.join('，');
+}
+
+/** Rotation model table: transparent signals per CSI top-10 industry. Row click → its report. */
 export function RotationTable({
   rows,
   onDecision,
+  buildReportPrompt,
+  onOpenSession,
 }: {
   rows: RotationRow[];
   onDecision: (row: RotationRow) => void;
+  /** Report prompt for one row; null when the snapshot is not ready. */
+  buildReportPrompt: (row: RotationRow) => string | null;
+  onOpenSession: (sessionId: string) => void;
 }) {
+  const [detail, setDetail] = useState<RotationRow | null>(null);
   return (
-    <div className="overflow-x-auto rounded-card border border-border bg-surface">
-      <div className="min-w-[840px]">
-        <div
-          className={cn(
-            'grid gap-2 border-b border-border-soft px-3 py-1.5 text-[11px] text-muted',
-            GRID,
-          )}
-        >
-          <span>行业</span>
-          <span className="text-right">60 日</span>
-          <span className="text-right">相对沪深300</span>
-          <span className="text-right">波动</span>
-          <span className="text-right">趋势</span>
-          <span className="text-right">评分</span>
-          <span className="text-right">近 20 日</span>
-          <span className="text-right">信号 / 操作</span>
-        </div>
-        {rows.map((r) => (
+    <>
+      <div className="overflow-x-auto rounded-card border border-border bg-surface">
+        <div className="min-w-[840px]">
           <div
-            key={r.secid}
             className={cn(
-              'group grid items-center gap-2 border-b border-border-soft px-3 py-1.5 last:border-b-0 hover:bg-surface-2',
+              'grid gap-2 border-b border-border-soft px-3 py-1.5 text-[11px] text-muted',
               GRID,
             )}
           >
-            <span className="truncate text-[13px] text-text">{r.name}</span>
-            <span className={cn('text-right font-mono text-[12px]', tone(r.ret60))}>
-              {pct(r.ret60)}
-            </span>
-            <span className={cn('text-right font-mono text-[12px]', tone(r.rs60))}>
-              {pct(r.rs60)}
-            </span>
-            <span className="text-right">
-              <span className="font-mono text-[12px] text-muted">{fmtVol(r.vol60)}</span>
-              {r.vol60 !== null && r.vol60 >= HIGH_VOL && (
-                <span
-                  className="ml-1 rounded-full bg-warn/10 px-1 py-0.5 text-[10px] text-warn ring-1 ring-warn/30"
-                  title="年化 60 日波动 ≥45%，配置需控制仓位与回撤"
-                >
-                  高波动
-                </span>
-              )}
-            </span>
-            <span className="text-right text-[12px] text-muted">
-              {r.trend === null ? (
-                '—'
-              ) : (
-                <span className="inline-flex items-center gap-1">
-                  <span
-                    className={cn(
-                      'h-1.5 w-1.5 rounded-full',
-                      r.trend ? 'bg-rise/70' : 'bg-fall/70',
-                    )}
-                  />
-                  {r.trend ? '线上' : '线下'}
-                </span>
-              )}
-            </span>
-            <span className="text-right">
-              <ScoreCell row={r} />
-            </span>
-            <span className="flex items-center justify-end">
-              {r.scoreHistory.length > 1 ? (
-                <Sparkline values={r.scoreHistory} className="h-3.5 w-14" aria-hidden="true" />
-              ) : (
-                <span className="text-[11px] text-muted">—</span>
-              )}
-            </span>
-            <span className="flex items-center justify-end gap-2">
-              {r.signal === null ? (
-                <span className="rounded-full bg-surface-2 px-1.5 py-0.5 text-[11px] text-muted ring-1 ring-border">
-                  数据不足
-                </span>
-              ) : (
-                <span
-                  className={cn('rounded-full px-1.5 py-0.5 text-[11px]', SIGNAL_STYLE[r.signal])}
-                >
-                  {SIGNAL_LABEL[r.signal]}
-                </span>
-              )}
-              <button
-                type="button"
-                onClick={() => onDecision(r)}
-                className="hidden text-[11px] text-muted hover:text-text group-hover:inline"
-              >
-                记录决策
-              </button>
-            </span>
+            <span>行业</span>
+            <span className="text-right">60 日</span>
+            <span className="text-right">相对沪深300</span>
+            <span className="text-right">波动</span>
+            <span className="text-right">趋势</span>
+            <span className="text-right">评分</span>
+            <span className="text-right">近 20 日</span>
+            <span className="text-right">信号 / 操作</span>
           </div>
-        ))}
+          {rows.map((r) => (
+            <div
+              key={r.secid}
+              onClick={() => setDetail(r)}
+              title="点击查看行业报告（查看 / 生成）"
+              className={cn(
+                'group grid cursor-pointer items-center gap-2 border-b border-border-soft px-3 py-1.5 last:border-b-0 hover:bg-surface-2',
+                GRID,
+              )}
+            >
+              <span className="truncate text-[13px] text-text">{r.name}</span>
+              <span className={cn('text-right font-mono text-[12px]', tone(r.ret60))}>
+                {pct(r.ret60)}
+              </span>
+              <span className={cn('text-right font-mono text-[12px]', tone(r.rs60))}>
+                {pct(r.rs60)}
+              </span>
+              <span className="text-right">
+                <span className="font-mono text-[12px] text-muted">{fmtVol(r.vol60)}</span>
+                {r.vol60 !== null && r.vol60 >= HIGH_VOL && (
+                  <span
+                    className="ml-1 rounded-full bg-warn/10 px-1 py-0.5 text-[10px] text-warn ring-1 ring-warn/30"
+                    title="年化 60 日波动 ≥45%，配置需控制仓位与回撤"
+                  >
+                    高波动
+                  </span>
+                )}
+              </span>
+              <span className="text-right text-[12px] text-muted">
+                {r.trend === null ? (
+                  '—'
+                ) : (
+                  <span className="inline-flex items-center gap-1">
+                    <span
+                      className={cn(
+                        'h-1.5 w-1.5 rounded-full',
+                        r.trend ? 'bg-rise/70' : 'bg-fall/70',
+                      )}
+                    />
+                    {r.trend ? '线上' : '线下'}
+                  </span>
+                )}
+              </span>
+              <span className="text-right">
+                <ScoreCell row={r} />
+              </span>
+              <span className="flex items-center justify-end">
+                {r.scoreHistory.length > 1 ? (
+                  <Sparkline values={r.scoreHistory} className="h-3.5 w-14" aria-hidden="true" />
+                ) : (
+                  <span className="text-[11px] text-muted">—</span>
+                )}
+              </span>
+              <span className="flex items-center justify-end gap-2">
+                {r.signal === null ? (
+                  <span className="rounded-full bg-surface-2 px-1.5 py-0.5 text-[11px] text-muted ring-1 ring-border">
+                    数据不足
+                  </span>
+                ) : (
+                  <span
+                    className={cn('rounded-full px-1.5 py-0.5 text-[11px]', SIGNAL_STYLE[r.signal])}
+                  >
+                    {SIGNAL_LABEL[r.signal]}
+                  </span>
+                )}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDecision(r);
+                  }}
+                  className="hidden text-[11px] text-muted hover:text-text group-hover:inline"
+                >
+                  记录决策
+                </button>
+              </span>
+            </div>
+          ))}
+        </div>
       </div>
-    </div>
+
+      {detail && (
+        <SubjectReportDialog
+          subject={csiSubject(detail)}
+          subtitle={rowSummary(detail)}
+          buildPrompt={() => buildReportPrompt(detail)}
+          onClose={() => setDetail(null)}
+          onOpenSession={onOpenSession}
+        />
+      )}
+    </>
   );
 }

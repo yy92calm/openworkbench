@@ -11,6 +11,7 @@ import { dirname, join } from 'node:path';
 
 import type {
   MacroReportMeta,
+  MacroReportSubject,
   MacroThemeId,
   ResearchAttributionUpdate,
   ResearchContext,
@@ -26,13 +27,16 @@ import {
   decisionsToCsv,
   isReportFile,
   latestReportsPerTheme,
+  latestSubjectReport,
   mergeReviewAttributions,
   parseDecisions,
   parseReports,
+  pruneReports,
   removeDecision,
   reportFileName,
   serializeDecisions,
   serializeReports,
+  subjectReportFileName,
   updateDecision as updateDecisionInList,
   upsertDecision,
 } from './researchData';
@@ -43,8 +47,6 @@ const DECISIONS_FILE = 'decisions.jsonl';
 const KNOWLEDGE_FILE = 'knowledge.md';
 const REPORTS_DIR = 'reports';
 const REPORTS_INDEX = 'index.json';
-/** Index cap only: old report files stay on disk. */
-const REPORTS_INDEX_CAP = 100;
 const DIGEST_CAP = 4000;
 /** Hard cap for the persisted knowledge asset (prompts still take 4000). */
 const KNOWLEDGE_CAP = 20_000;
@@ -190,10 +192,36 @@ export function saveMacroReport(input: {
     chars: digestCharCount(text),
     sessionId: input.sessionId,
   };
+  return writeReport(meta, text);
+}
+
+/** Persist one industry/board report; null on empty markdown. */
+export function saveSubjectReport(input: {
+  subject: MacroReportSubject;
+  sessionId?: string;
+  markdown: string;
+}): MacroReportMeta | null {
+  const text = input.markdown.trim();
+  if (!text) return null;
+  const at = new Date();
+  const meta: MacroReportMeta = {
+    subject: input.subject,
+    file: subjectReportFileName(input.subject, at),
+    createdAt: at.toISOString(),
+    chars: digestCharCount(text),
+    sessionId: input.sessionId,
+  };
+  return writeReport(meta, text);
+}
+
+/** Body + index write shared by both report families. */
+function writeReport(meta: MacroReportMeta, text: string): MacroReportMeta {
   const dir = reportsDir();
   mkdirSync(dir, { recursive: true });
   atomicWriteFile(join(dir, meta.file), `${text}\n`);
-  const next = [meta, ...readReportsIndex()].slice(0, REPORTS_INDEX_CAP);
+  // Index caps are per family so a burst of industry reports cannot evict the
+  // background briefings the page lists.
+  const next = pruneReports([meta, ...readReportsIndex()]);
   atomicWriteFile(join(dir, REPORTS_INDEX), serializeReports(next));
   return meta;
 }
@@ -201,6 +229,16 @@ export function saveMacroReport(input: {
 /** Latest report per theme, newest first (what the page renders). */
 export function listMacroReports(): MacroReportMeta[] {
   return latestReportsPerTheme(readReportsIndex());
+}
+
+/** The newest report for one industry/board, body included; null when none. */
+export function readSubjectReport(
+  subject: MacroReportSubject,
+): { meta: MacroReportMeta; markdown: string } | null {
+  const meta = latestSubjectReport(readReportsIndex(), subject);
+  if (!meta) return null;
+  const markdown = readMacroReport(meta.file);
+  return markdown === null ? null : { meta, markdown };
 }
 
 /** Report body by file name; null when the name is invalid or the file is gone. */

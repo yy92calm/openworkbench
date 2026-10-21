@@ -3,12 +3,14 @@
 
 import type {
   MacroReportMeta,
+  MacroReportSubject,
   MacroThemeId,
   ResearchAttribution,
   ResearchAttributionUpdate,
   ResearchDecision,
   ResearchStance,
 } from '@workbench/shared';
+import { asReportSubject, subjectKey } from '@workbench/shared';
 
 /** Parse the JSONL ledger; malformed lines are skipped (append-only file). */
 export function parseDecisions(raw: string): ResearchDecision[] {
@@ -144,19 +146,44 @@ export function decisionsToCsv(list: readonly ResearchDecision[]): string {
   return `\uFEFF${CSV_HEADER.join(',')}\n${body}`;
 }
 
-// ---- Background-generated reports (pure: naming + index parsing) ----
+// ---- Generated reports (pure: naming + index parsing) ----
 
 /** Report file name: `YYYYMMDD-HHmm-<themeId>.md`. */
 export function reportFileName(themeId: MacroThemeId, at: Date): string {
+  return `${fileStamp(at)}-${themeId}.md`;
+}
+
+/** Subject report file name: `YYYYMMDD-HHmm-<kind>-<slug>.md`. */
+export function subjectReportFileName(subject: MacroReportSubject, at: Date): string {
+  return `${fileStamp(at)}-${subject.kind}-${reportSlug(subject.code)}.md`;
+}
+
+function fileStamp(at: Date): string {
   const p = (n: number) => String(n).padStart(2, '0');
   return `${at.getFullYear()}${p(at.getMonth() + 1)}${p(at.getDate())}-${p(at.getHours())}${p(
     at.getMinutes(),
-  )}-${themeId}.md`;
+  )}`;
+}
+
+/**
+ * File-name safe form of a board / Shenwan / CSI code: lower-case, every run of
+ * other characters folded to one dash (`BK0448` → `bk0448`, `2.931052` →
+ * `2-931052`). This is what keeps a renderer-supplied code out of the path.
+ */
+export function reportSlug(code: string): string {
+  return code
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
 }
 
 /** Only report names we generate may be read back (path traversal guard). */
 export function isReportFile(name: string): boolean {
-  return /^[0-9]{8}-[0-9]{4}-[a-z-]+\.md$/.test(name);
+  return /^[0-9]{8}-[0-9]{4}-[a-z0-9-]+\.md$/.test(name);
+}
+
+function isSubject(value: unknown): value is MacroReportSubject {
+  return asReportSubject(value) !== null;
 }
 
 /** Parse the reports index; malformed entries are dropped. */
@@ -167,7 +194,7 @@ export function parseReports(raw: string): MacroReportMeta[] {
     return list.filter(
       (r) =>
         r &&
-        typeof r.themeId === 'string' &&
+        (typeof r.themeId === 'string' || isSubject(r.subject)) &&
         typeof r.file === 'string' &&
         typeof r.createdAt === 'string' &&
         typeof r.chars === 'number',
@@ -181,12 +208,57 @@ export function serializeReports(list: readonly MacroReportMeta[]): string {
   return `${JSON.stringify(list, null, 2)}\n`;
 }
 
+/** Index caps per family: subject reports must never evict theme reports. */
+export const REPORT_INDEX_CAPS = { theme: 50, subject: 200 } as const;
+
+/**
+ * Trim a newest-first index to the per-family caps. Entries belonging to
+ * neither family (both discriminators missing) are dropped: no reader can
+ * address them. Old report files stay on disk — only the index shrinks.
+ */
+export function pruneReports(
+  list: readonly MacroReportMeta[],
+  caps: { theme: number; subject: number } = REPORT_INDEX_CAPS,
+): MacroReportMeta[] {
+  const out: MacroReportMeta[] = [];
+  let theme = 0;
+  let subject = 0;
+  for (const report of list) {
+    if (isSubject(report.subject)) {
+      if (subject >= caps.subject) continue;
+      subject++;
+    } else if (typeof report.themeId === 'string') {
+      if (theme >= caps.theme) continue;
+      theme++;
+    } else {
+      continue;
+    }
+    out.push(report);
+  }
+  return out;
+}
+
 /** Latest report per theme, newest first (the page shows one row per theme). */
 export function latestReportsPerTheme(list: readonly MacroReportMeta[]): MacroReportMeta[] {
   const best = new Map<string, MacroReportMeta>();
   for (const report of list) {
+    if (typeof report.themeId !== 'string') continue;
     const current = best.get(report.themeId);
     if (!current || report.createdAt > current.createdAt) best.set(report.themeId, report);
   }
   return [...best.values()].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+}
+
+/** The newest report for one industry/board; null when it has none. */
+export function latestSubjectReport(
+  list: readonly MacroReportMeta[],
+  subject: MacroReportSubject,
+): MacroReportMeta | null {
+  const key = subjectKey(subject);
+  let best: MacroReportMeta | null = null;
+  for (const report of list) {
+    if (!isSubject(report.subject) || subjectKey(report.subject) !== key) continue;
+    if (!best || report.createdAt > best.createdAt) best = report;
+  }
+  return best;
 }

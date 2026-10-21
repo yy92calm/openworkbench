@@ -13,8 +13,12 @@ import {
   addDecision,
   applyReviewAttributions,
   listDecisions,
+  listMacroReports,
   readKnowledgeDigest,
+  readSubjectReport,
   saveKnowledgeDigest,
+  saveMacroReport,
+  saveSubjectReport,
 } from './research';
 
 let dir: string;
@@ -77,5 +81,36 @@ describe('applyReviewAttributions', () => {
       applyReviewAttributions([{ id: rotation.id, outcome: 'miss', note: '不应覆盖' }]).applied,
     ).toBe(0);
     expect(listDecisions().find((d) => d.id === rotation.id)?.attribution?.outcome).toBe('hit');
+  });
+});
+
+describe('saveSubjectReport', () => {
+  const subject = { kind: 'board' as const, code: 'BK0448', name: '电子' };
+
+  it('writes the body under reports/ and reads it back by subject', () => {
+    const meta = saveSubjectReport({
+      subject,
+      sessionId: 's1',
+      markdown: '# 电子行业报告\n\n超配。',
+    });
+    expect(meta?.file).toMatch(/^[0-9]{8}-[0-9]{4}-board-bk0448\.md$/);
+    const body = readSubjectReport(subject);
+    expect(body?.markdown).toContain('超配');
+    expect(body?.meta.sessionId).toBe('s1');
+    expect(
+      readFileSync(join(dir, '.workbench/research/reports', body?.meta.file ?? ''), 'utf-8'),
+    ).toContain('# 电子行业报告');
+  });
+
+  it('keeps theme reports listed while subject reports pile up', () => {
+    saveMacroReport({ themeId: 'rotation-daily', markdown: '# 轮动日报' });
+    for (let i = 0; i < 3; i++) saveSubjectReport({ subject, markdown: `# 电子 ${i}` });
+    expect(listMacroReports().map((r) => r.themeId)).toEqual(['rotation-daily']);
+    expect(readSubjectReport(subject)?.markdown).toContain('电子');
+  });
+
+  it('refuses an empty body and reports no report for an unseen subject', () => {
+    expect(saveSubjectReport({ subject, markdown: '   ' })).toBeNull();
+    expect(readSubjectReport(subject)).toBeNull();
   });
 });

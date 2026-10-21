@@ -43,6 +43,8 @@ export type {
   MacroPoint,
   MacroQuote,
   MacroReportMeta,
+  MacroReportSubject,
+  MacroReportSubjectKind,
   MacroSignalView,
   MacroSnapshotData,
   MacroSourceId,
@@ -68,6 +70,7 @@ export type {
 export {
   applyCanonicalGlobalNames,
   applyCanonicalIndexNames,
+  asReportSubject,
   attachRotationDeltas,
   attachScoreHistory,
   boardPePercentile,
@@ -82,8 +85,10 @@ export {
   buildMacroSummarySentence,
   buildReviewPrompt,
   buildRotationPrompt,
+  buildRotationReportPrompt,
   buildSignalFlips,
   buildSwConclusion,
+  buildSwReportPrompt,
   computeRotation,
   CSI_INDUSTRY_NAMES,
   CSI_INDUSTRY_SECIDS,
@@ -101,6 +106,8 @@ export {
   researchStats,
   SIGNAL_THRESHOLDS,
   signalOf,
+  SUBJECT_KIND_LABEL,
+  subjectKey,
 } from './macro';
 
 // ---- Sandbox runtime status (main-process DTO shared with the renderer) ----

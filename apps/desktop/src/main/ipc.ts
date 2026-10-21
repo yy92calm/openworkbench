@@ -9,6 +9,7 @@ import {
   createAgentRuntime,
 } from '@workbench/sdk/agent-runtime';
 import {
+  asReportSubject,
   buildMacroPrompt,
   type KnowledgeInput,
   type MacroBoard,
@@ -53,8 +54,10 @@ import {
   listMacroReports,
   readKnowledgeDigest,
   readMacroReport,
+  readSubjectReport,
   saveKnowledgeDigest,
   saveMacroReport,
+  saveSubjectReport,
   updateDecision,
 } from './research';
 import { buildDecisionEvidence } from './researchEvidence';
@@ -136,18 +139,23 @@ interface CapturedReport {
   review?: { attributions: number; knowledgeChars: number };
 }
 
+/** The session's last assistant answer; null when it produced no text. */
+async function readFinalAnswer(client: AgentRuntime, sessionId: string): Promise<string | null> {
+  const messages = await client.getMessages(sessionId);
+  const answers = messages
+    .filter((m) => m.role === 'assistant')
+    .map(messageText)
+    .filter(Boolean);
+  return answers[answers.length - 1] ?? null;
+}
+
 async function captureMacroReport(
   client: AgentRuntime,
   themeId: MacroThemeId,
   sessionId: string,
 ): Promise<CapturedReport> {
   try {
-    const messages = await client.getMessages(sessionId);
-    const answers = messages
-      .filter((m) => m.role === 'assistant')
-      .map(messageText)
-      .filter(Boolean);
-    let markdown = answers[answers.length - 1];
+    let markdown = await readFinalAnswer(client, sessionId);
     if (!markdown) return { meta: null };
 
     let review: CapturedReport['review'];
@@ -1302,6 +1310,44 @@ export function registerIpcHandlers(): void {
     const markdown = readMacroReport(file);
     return markdown === null ? null : { file, markdown };
   });
+  // Industry/board reports (macro panel dialogs). The renderer runs the
+  // generation in a real session so the dialog can preview it live; the app
+  // captures the final answer here because renderer thread state can be
+  // dropped (closed tab / reload) before the turn ends.
+  ipcMain.handle('macro-subject-report', (_e, subject: unknown) => {
+    const parsed = asReportSubject(subject);
+    return parsed ? readSubjectReport(parsed) : null;
+  });
+  ipcMain.handle(
+    'macro-subject-report-capture',
+    async (_e, subject: unknown, sessionId: unknown) => {
+      const parsed = asReportSubject(subject);
+      const serverUrl = getServerUrl();
+      if (!parsed || typeof sessionId !== 'string' || !sessionId || !serverUrl) return null;
+      const client = await createAgentRuntime({
+        kind: 'opencode',
+        baseUrl: serverUrl,
+        password: getServerPassword(),
+        directory: workspaceDir() ?? undefined,
+      });
+      try {
+        const answer = await readFinalAnswer(client, sessionId);
+        if (!answer) return null;
+        const markdown = answer.trim();
+        const meta = saveSubjectReport({ subject: parsed, sessionId, markdown });
+        if (!meta) return null;
+        broadcast('macro-reports-updated');
+        return { meta, markdown };
+      } catch (err) {
+        log.warn(
+          `[macro] subject report capture failed: ${err instanceof Error ? err.message : String(err)}`,
+        );
+        return null;
+      } finally {
+        client.close();
+      }
+    },
+  );
   ipcMain.handle(
     'macro-regenerate',
     (_e, themeId: MacroThemeId): { ok: true; taskId: string } | { ok: false; reason: string } => {

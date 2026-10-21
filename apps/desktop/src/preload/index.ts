@@ -314,6 +314,9 @@ const apiObject = {
   macroExportReport: (markdown: string) => ipcRenderer.invoke('macro-export-report', markdown),
   macroReports: () => ipcRenderer.invoke('macro-reports'),
   macroReportRead: (file: string) => ipcRenderer.invoke('macro-report-read', file),
+  macroSubjectReport: (subject: unknown) => ipcRenderer.invoke('macro-subject-report', subject),
+  macroSubjectReportCapture: (subject: unknown, sessionId: string) =>
+    ipcRenderer.invoke('macro-subject-report-capture', subject, sessionId),
   macroRegenerate: (themeId: string) => ipcRenderer.invoke('macro-regenerate', themeId),
   onMacroReports: (callback: () => void) => {
     const handler = () => callback();

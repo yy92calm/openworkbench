@@ -19,7 +19,9 @@ import {
   buildMacroReportMarkdown,
   buildMacroSignalView,
   buildRotationPrompt,
+  buildRotationReportPrompt,
   buildSwConclusion,
+  buildSwReportPrompt,
   digestCharCount,
   researchStats,
 } from '@workbench/shared';
@@ -267,6 +269,9 @@ export function MacroInsightsPage() {
     const id = await useRuntimeStore.getState().sendPrompt(prompt);
     if (id) navigate(`/live/${id}`);
   };
+
+  /** Report panels own their generation session; this only jumps to it. */
+  const openReportSession = (sessionId: string) => navigate(`/live/${sessionId}`);
 
   const generateRotation = async () => openSession(buildRotationPrompt(snapshot, researchCtx()));
 
@@ -1006,6 +1011,8 @@ export function MacroInsightsPage() {
             <RotationTable
               rows={rotation}
               onDecision={(r) => setRecord({ model: 'rotation', target: r.name })}
+              buildReportPrompt={(r) => buildRotationReportPrompt(r, snapshot, researchCtx())}
+              onOpenSession={openReportSession}
             />
           )}
 
@@ -1013,7 +1020,8 @@ export function MacroInsightsPage() {
             <div className="mt-1.5 text-[11px] leading-relaxed text-muted">
               口径：评分 = 0.45×相对强度 + 0.35×动量 + 0.20×趋势（行业内百分位）；
               评分旁数字为较上一交易日变化；年化波动 ≥45% 标注高波动；历史不足的行不计分。 「近 20
-              日」为每日综合评分走势（本地留存 60 个交易日，首日为空）。
+              日」为每日综合评分走势（本地留存 60
+              个交易日，首日为空）。点击行业行可查看或生成该行业的独立报告。
             </div>
           )}
 
@@ -1101,11 +1109,13 @@ export function MacroInsightsPage() {
                 onDecision={(r) => setRecord({ model: 'rotation', target: `申万·${r.name}` })}
                 onQuote={(r) => quoteSw(r)}
                 onAnalyze={(r) => void analyzeSw(r)}
+                buildReportPrompt={(r) => buildSwReportPrompt(r, snapshot, researchCtx())}
+                onOpenSession={openReportSession}
               />
             )}
             {swRows.length > 0 && (
               <div className="mt-1.5 text-[11px] leading-relaxed text-muted">
-                {`口径：评分沿用轮动模型（0.45×相对强度 + 0.35×动量 + 0.20×趋势，申万一级行业内百分位）；行情为申万官网实时，估值 / 换手 / 成交占比为截止日（${swRows[0].asOf.slice(5)}）收盘数据；点击行查看约 85 个交易日走势与明细。`}
+                {`口径：评分沿用轮动模型（0.45×相对强度 + 0.35×动量 + 0.20×趋势，申万一级行业内百分位）；行情为申万官网实时，估值 / 换手 / 成交占比为截止日（${swRows[0].asOf.slice(5)}）收盘数据；点击行查看约 85 个交易日走势、明细与行业报告。`}
               </div>
             )}
           </div>
@@ -1132,7 +1142,7 @@ export function MacroInsightsPage() {
           {boards.length > 0 && (
             <div className="mt-1.5 text-[11px] leading-relaxed text-muted">
               口径：面积为东财板块总市值（TOP100
-              按市值去重）；红涨绿跌、颜色深浅随涨跌幅；点击方块查看估值、走势与成分股明细。
+              按市值去重）；红涨绿跌、颜色深浅随涨跌幅；点击方块查看估值、走势、成分股明细与板块报告。
             </div>
           )}
         </section>
@@ -1185,6 +1195,11 @@ export function MacroInsightsPage() {
           }}
           onAnalyze={() => void generateIndustry()}
           onDecision={() => setRecord({ model: 'industry', target: selectedBoard.name })}
+          reportSubject={{ kind: 'board', code: selectedBoard.code, name: selectedBoard.name }}
+          buildReportPrompt={() =>
+            industry ? buildIndustryPrompt(industry, snapshot, researchCtx()) : null
+          }
+          onOpenSession={openReportSession}
         />
       )}
 

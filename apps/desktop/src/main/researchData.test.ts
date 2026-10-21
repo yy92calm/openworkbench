@@ -1,6 +1,6 @@
 // @vitest-environment node
 
-import type { ResearchDecision } from '@workbench/shared';
+import type { MacroReportMeta, ResearchDecision } from '@workbench/shared';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -8,13 +8,17 @@ import {
   decisionsToCsv,
   isReportFile,
   latestReportsPerTheme,
+  latestSubjectReport,
   mergeReviewAttributions,
   parseDecisions,
   parseReports,
+  pruneReports,
   removeDecision,
   reportFileName,
+  reportSlug,
   serializeDecisions,
   serializeReports,
+  subjectReportFileName,
   updateDecision,
   upsertDecision,
 } from './researchData';
@@ -220,5 +224,97 @@ describe('report helpers', () => {
       '2026-09-18T16:02:00.000Z',
     ]);
     expect(out[0].file).toBe('20260921-0800-rotation-daily.md');
+  });
+});
+
+describe('subject report helpers', () => {
+  const at = new Date(2026, 8, 21, 8, 31, 5);
+  /** Newest-first timestamps: n = 0 is the most recent. */
+  const stamp = (n: number) => new Date(Date.UTC(2026, 8, 21, 8, 31) - n * 60_000).toISOString();
+
+  function themeMeta(n: number): MacroReportMeta {
+    return {
+      themeId: 'rotation-daily',
+      file: `20260921-0831-rotation-daily-${n}.md`,
+      createdAt: stamp(n),
+      chars: 10,
+    };
+  }
+
+  function subjectMeta(n: number, code = 'BK0448'): MacroReportMeta {
+    return {
+      subject: { kind: 'board', code, name: '电子' },
+      file: `20260921-0831-board-${reportSlug(code)}-${n}.md`,
+      createdAt: stamp(n),
+      chars: 10,
+    };
+  }
+
+  it('names subject files with a slugified code', () => {
+    expect(subjectReportFileName({ kind: 'board', code: 'BK0448', name: '电子' }, at)).toBe(
+      '20260921-0831-board-bk0448.md',
+    );
+    expect(subjectReportFileName({ kind: 'csi', code: '2.931052', name: '中证信息' }, at)).toBe(
+      '20260921-0831-csi-2-931052.md',
+    );
+  });
+
+  it('keeps a hostile code out of the path', () => {
+    const name = subjectReportFileName({ kind: 'board', code: '../../etc/passwd', name: 'x' }, at);
+    expect(name).toBe('20260921-0831-board-etc-passwd.md');
+    expect(isReportFile(name)).toBe(true);
+    expect(reportSlug('..')).toBe('');
+  });
+
+  it('accepts both families in the index and drops invalid subjects', () => {
+    const list = [subjectMeta(0), themeMeta(0)];
+    expect(parseReports(serializeReports(list))).toEqual(list);
+    const bad = { ...subjectMeta(0), subject: { kind: 'nope', code: 'a', name: 'b' } };
+    expect(parseReports(serializeReports([bad] as MacroReportMeta[]))).toEqual([]);
+  });
+
+  it('caps each family separately', () => {
+    const list = [
+      subjectMeta(0),
+      themeMeta(0),
+      subjectMeta(1),
+      themeMeta(1),
+      subjectMeta(2),
+      themeMeta(2),
+    ];
+    expect(pruneReports(list, { theme: 2, subject: 1 }).map((r) => r.file)).toEqual([
+      subjectMeta(0).file,
+      themeMeta(0).file,
+      themeMeta(1).file,
+    ]);
+  });
+
+  it('keeps theme reports when subject reports pile up', () => {
+    const many = Array.from({ length: 250 }, (_, i) => subjectMeta(i));
+    const pruned = pruneReports([themeMeta(0), ...many]);
+    expect(pruned.filter((r) => r.themeId)).toHaveLength(1);
+    expect(pruned.filter((r) => r.subject)).toHaveLength(200);
+  });
+
+  it('drops entries that belong to neither family', () => {
+    expect(pruneReports([{ file: 'x.md', createdAt: stamp(0), chars: 1 }])).toEqual([]);
+  });
+
+  it('lists themes without the subject reports', () => {
+    expect(latestReportsPerTheme([subjectMeta(0), themeMeta(1)])).toEqual([themeMeta(1)]);
+  });
+
+  it('picks the newest report of exactly that subject', () => {
+    const list = [
+      subjectMeta(0),
+      { ...subjectMeta(1), subject: { kind: 'sw' as const, code: 'BK0448', name: '电子' } },
+      subjectMeta(2),
+      subjectMeta(3, 'BK0473'),
+    ];
+    const found = latestSubjectReport(list, { kind: 'board', code: 'BK0448', name: '电子' });
+    expect(found?.file).toBe(subjectMeta(0).file);
+    expect(
+      latestSubjectReport(list, { kind: 'csi', code: '1.000935', name: '中证信息' }),
+    ).toBeNull();
   });
 });

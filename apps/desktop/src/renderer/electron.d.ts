@@ -11,6 +11,7 @@ import type {
   MacroKlinePoint,
   MacroNotification,
   MacroReportMeta,
+  MacroReportSubject,
   MacroThemeId,
   ResearchDecision,
   SandboxStatus,
@@ -505,6 +506,14 @@ export interface ElectronAPI {
   /** Background-generated reports: latest per theme + body reads. */
   macroReports: () => Promise<MacroReportMeta[]>;
   macroReportRead: (file: string) => Promise<{ file: string; markdown: string } | null>;
+  /** Industry/board reports: latest saved one, and the capture after a run. */
+  macroSubjectReport: (
+    subject: MacroReportSubject,
+  ) => Promise<{ meta: MacroReportMeta; markdown: string } | null>;
+  macroSubjectReportCapture: (
+    subject: MacroReportSubject,
+    sessionId: string,
+  ) => Promise<{ meta: MacroReportMeta; markdown: string } | null>;
   /** Re-run a theme's background task; resolves immediately (fire and forget). */
   macroRegenerate: (
     themeId: MacroThemeId,

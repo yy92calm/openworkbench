@@ -16,8 +16,10 @@ import {
   buildMacroSummarySentence,
   buildReviewPrompt,
   buildRotationPrompt,
+  buildRotationReportPrompt,
   buildSignalFlips,
   buildSwConclusion,
+  buildSwReportPrompt,
   computeRotation,
   emptyMacroSnapshot,
   formatReviewContext,
@@ -648,6 +650,46 @@ describe('buildIndustryPrompt', () => {
     expect(prompt).toContain('工商银行');
     expect(prompt).toContain('盈利 → 估值 → 情绪');
     expect(prompt).toContain('【未归因决策】');
+    expect(prompt).toContain('不要调用 write/edit 等写文件工具');
+  });
+});
+
+describe('buildSwReportPrompt', () => {
+  const row = () => filledSnapshot().data.swIndustries[0];
+
+  it('carries the row metrics, the output structure and the no-write rule', () => {
+    const prompt = buildSwReportPrompt(row(), filledSnapshot(), research);
+    expect(prompt).toContain('申万一级行业报告」：电子（801080）');
+    expect(prompt).toContain('涨跌 0.86%，换手 6.04%，成交额占比 28.46%');
+    expect(prompt).toContain('（截止 2026-09-18）：PE 64.13，PB 6.56，股息率 0.34%');
+    expect(prompt).toContain('评分：88（超配），较上一交易日 +5（申万一级行业内百分位）');
+    expect(prompt).toContain('配置结论（超配/低配/观望）→ 信号依据 → 风险与失效条件 → 跟踪指标');
+    expect(prompt).toContain('【宏观输入】');
+    expect(prompt).toContain('【知识资产摘要】');
+    expect(prompt).toContain('不要调用 write/edit 等写文件工具');
+  });
+
+  it('says so when the row was not scored', () => {
+    const unscored = { ...row(), score: null, signal: null };
+    expect(buildSwReportPrompt(unscored, null, null)).toContain('历史数据不足，未参与评分');
+  });
+});
+
+describe('buildRotationReportPrompt', () => {
+  it('carries momentum, score and the score trail', () => {
+    const row = { ...filledSnapshot().data.rotation[0], scoreHistory: [80, 86, 92] };
+    const prompt = buildRotationReportPrompt(row, null, research);
+    expect(prompt).toContain('中证行业报告」：中证信息（1.000935）');
+    expect(prompt).toContain('60 日 12.00%，相对沪深300 8.00%，趋势 20 日线上');
+    expect(prompt).toContain('评分：92（超配）（中证十大行业内百分位）');
+    expect(prompt).toContain('近 3 日评分走势（旧 → 新）：80 → 86 → 92');
+    expect(prompt).toContain('不要调用 write/edit 等写文件工具');
+  });
+
+  it('marks a missing score trail instead of inventing one', () => {
+    expect(buildRotationReportPrompt(filledSnapshot().data.rotation[0], null, null)).toContain(
+      '近 20 日评分走势：历史数据未就绪',
+    );
   });
 });
 

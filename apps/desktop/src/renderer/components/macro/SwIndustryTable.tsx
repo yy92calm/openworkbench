@@ -2,15 +2,17 @@
 // the same transparent rotation score as the CSI table. Rows are grouped by
 // signal and carry a score bar / turnover-share bar / change chip so the
 // strongest, weakest and money-magnet industries read at a glance. Clicking a
-// row opens the detail dialog (~85 trading days of closes + metrics + actions).
+// row opens the detail dialog (~85 trading days of closes + metrics + the
+// industry report panel + actions).
 
-import type { RotationSignal, SwIndustryRow } from '@workbench/shared';
+import type { MacroReportSubject, RotationSignal, SwIndustryRow } from '@workbench/shared';
 import { useEffect, useState } from 'react';
 
 import { cn } from '@/lib/cn';
 
 import { type MacroSeriesPoint, TrendChart } from './IndicatorDialog';
 import { SIGNAL_LABEL, SIGNAL_STYLE } from './RotationTable';
+import { SubjectReportPanel } from './SubjectReportPanel';
 
 function num(v: number | null, digits = 2): string {
   return v === null ? '—' : v.toFixed(digits);
@@ -73,16 +75,24 @@ function Metric({ label, value, toneClass }: { label: string; value: string; ton
   );
 }
 
+function swSubject(row: SwIndustryRow): MacroReportSubject {
+  return { kind: 'sw', code: row.code, name: row.name };
+}
+
 function SwIndustryDialog({
   row,
   onClose,
   onQuote,
   onAnalyze,
+  buildReportPrompt,
+  onOpenSession,
 }: {
   row: SwIndustryRow;
   onClose: () => void;
   onQuote: (row: SwIndustryRow) => void;
   onAnalyze: (row: SwIndustryRow) => void;
+  buildReportPrompt: (row: SwIndustryRow) => string | null;
+  onOpenSession: (sessionId: string) => void;
 }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -103,7 +113,7 @@ function SwIndustryDialog({
       <div
         role="dialog"
         aria-label={`${row.name} 明细`}
-        className="w-[620px] max-w-[92vw] rounded-card border border-border bg-surface p-4 shadow-card"
+        className="flex max-h-[85vh] w-[620px] max-w-[92vw] flex-col rounded-card border border-border bg-surface p-4 shadow-card"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-baseline gap-2">
@@ -116,40 +126,50 @@ function SwIndustryDialog({
           <span className="text-[11px] text-muted">截止 {row.asOf}</span>
         </div>
 
-        <div className="mt-3 rounded-card border border-border-soft bg-bg/40 p-3">
-          {series.length > 1 ? (
-            <TrendChart points={series} />
-          ) : (
-            <div className="flex h-36 items-center justify-center text-[12px] text-muted">
-              暂无历史走势
-            </div>
-          )}
-        </div>
+        <div className="mt-3 min-h-0 flex-1 overflow-y-auto pr-0.5">
+          <div className="rounded-card border border-border-soft bg-bg/40 p-3">
+            {series.length > 1 ? (
+              <TrendChart points={series} />
+            ) : (
+              <div className="flex h-36 items-center justify-center text-[12px] text-muted">
+                暂无历史走势
+              </div>
+            )}
+          </div>
 
-        <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-4">
-          <Metric label="收盘" value={num(row.close)} />
-          <Metric label="成交额占比" value={pct(row.amountShare)} />
-          <Metric label="换手率" value={pct(row.turnover)} />
-          <Metric label="流通市值" value={row.mcap === null ? '—' : `${num(row.mcap, 0)} 亿`} />
-          <Metric label="PE" value={num(row.pe)} />
-          <Metric label="PB" value={num(row.pb)} />
-          <Metric label="股息率" value={pct(row.dividend)} />
-          <Metric label="60 日" value={signedRatio(row.ret60)} toneClass={tone(row.ret60)} />
-          <Metric label="相对沪深300" value={signedRatio(row.rs60)} toneClass={tone(row.rs60)} />
-          <Metric label="波动（年化）" value={row.vol60 === null ? '—' : pct(row.vol60 * 100)} />
-          <Metric label="趋势" value={trend} />
-          <Metric
-            label="评分"
-            value={
-              row.score === null
-                ? '—'
-                : `${row.score}${row.signal ? `（${SIGNAL_LABEL[row.signal]}）` : ''}${
-                    row.scoreDelta
-                      ? ` 较上日 ${row.scoreDelta >= 0 ? '+' : ''}${row.scoreDelta}`
-                      : ''
-                  }`
-            }
-          />
+          <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-4">
+            <Metric label="收盘" value={num(row.close)} />
+            <Metric label="成交额占比" value={pct(row.amountShare)} />
+            <Metric label="换手率" value={pct(row.turnover)} />
+            <Metric label="流通市值" value={row.mcap === null ? '—' : `${num(row.mcap, 0)} 亿`} />
+            <Metric label="PE" value={num(row.pe)} />
+            <Metric label="PB" value={num(row.pb)} />
+            <Metric label="股息率" value={pct(row.dividend)} />
+            <Metric label="60 日" value={signedRatio(row.ret60)} toneClass={tone(row.ret60)} />
+            <Metric label="相对沪深300" value={signedRatio(row.rs60)} toneClass={tone(row.rs60)} />
+            <Metric label="波动（年化）" value={row.vol60 === null ? '—' : pct(row.vol60 * 100)} />
+            <Metric label="趋势" value={trend} />
+            <Metric
+              label="评分"
+              value={
+                row.score === null
+                  ? '—'
+                  : `${row.score}${row.signal ? `（${SIGNAL_LABEL[row.signal]}）` : ''}${
+                      row.scoreDelta
+                        ? ` 较上日 ${row.scoreDelta >= 0 ? '+' : ''}${row.scoreDelta}`
+                        : ''
+                    }`
+              }
+            />
+          </div>
+
+          <div className="mt-3">
+            <SubjectReportPanel
+              subject={swSubject(row)}
+              buildPrompt={() => buildReportPrompt(row)}
+              onOpenSession={onOpenSession}
+            />
+          </div>
         </div>
 
         <div className="mt-4 flex justify-end gap-2">
@@ -194,11 +214,16 @@ export function SwIndustryTable({
   onDecision,
   onQuote,
   onAnalyze,
+  buildReportPrompt,
+  onOpenSession,
 }: {
   rows: SwIndustryRow[];
   onDecision: (row: SwIndustryRow) => void;
   onQuote: (row: SwIndustryRow) => void;
   onAnalyze: (row: SwIndustryRow) => void;
+  /** Report prompt for one row; null when the snapshot is not ready. */
+  buildReportPrompt: (row: SwIndustryRow) => string | null;
+  onOpenSession: (sessionId: string) => void;
 }) {
   const [detail, setDetail] = useState<SwIndustryRow | null>(null);
   const maxShare = Math.max(...rows.map((r) => r.amountShare ?? 0), 0.1);
@@ -242,7 +267,7 @@ export function SwIndustryTable({
                   <div
                     key={r.code}
                     onClick={() => setDetail(r)}
-                    title="点击查看走势与明细"
+                    title="点击查看走势、明细与行业报告"
                     className={cn(
                       'group grid cursor-pointer items-center gap-2 border-b border-border-soft px-3 py-1.5 last:border-b-0 hover:bg-surface-2',
                       GRID,
@@ -349,6 +374,8 @@ export function SwIndustryTable({
             setDetail(null);
             onAnalyze(r);
           }}
+          buildReportPrompt={buildReportPrompt}
+          onOpenSession={onOpenSession}
         />
       )}
     </>
